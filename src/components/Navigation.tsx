@@ -17,7 +17,7 @@ const Navigation = () => {
           <Link to="/" className="flex items-center space-x-2">
             <Building2 className="h-8 w-8 text-blue-600" />
             <span className="text-xl font-semibold text-gray-900">
-              Business Directory
+              BizHunter
             </span>
           </Link>
 
