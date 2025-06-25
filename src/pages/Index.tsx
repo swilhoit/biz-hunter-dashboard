@@ -1,65 +1,77 @@
 
-import React, { useState, useMemo } from 'react';
-import Navigation from '@/components/Navigation';
-import { BusinessCard } from '@/components/BusinessCard';
-import { DashboardFilters } from '@/components/DashboardFilters';
-import { useBusinessListings } from '@/hooks/useBusinessListings';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState } from "react";
+import Navigation from "@/components/Navigation";
+import { BusinessCard } from "@/components/BusinessCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { MultiSelect } from "@/components/MultiSelect";
+import { useBusinessListings } from "@/hooks/useBusinessListings";
+import { Search, Filter, SlidersHorizontal } from "lucide-react";
 
 const Index = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedSource, setSelectedSource] = useState('all');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000000]);
+  const { data: listings = [], isLoading, error } = useBusinessListings();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [priceRange, setPriceRange] = useState([0, 10000000]);
+  const [revenueRange, setRevenueRange] = useState([0, 5000000]);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const { data: listings, isLoading, error } = useBusinessListings();
+  // Get unique industries from listings
+  const uniqueIndustries = [...new Set(listings.map(listing => listing.industry))];
 
-  // Extract unique categories and sources for filters
-  const categories = useMemo(() => {
-    if (!listings) return [];
-    return Array.from(new Set(listings.map(listing => listing.industry))).sort();
-  }, [listings]);
-
-  const sources = useMemo(() => {
-    if (!listings) return [];
-    return Array.from(new Set(listings.map(listing => listing.source))).sort();
-  }, [listings]);
-
-  // Filter listings based on current filters
-  const filteredListings = useMemo(() => {
-    if (!listings) return [];
+  // Filter listings based on search and filters
+  const filteredListings = listings.filter(listing => {
+    const matchesSearch = listing.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         listing.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         listing.industry.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return listings.filter(listing => {
-      const matchesSearch = searchTerm === '' || 
-        listing.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (listing.description && listing.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        listing.industry.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesIndustry = selectedIndustries.length === 0 || 
+                           selectedIndustries.includes(listing.industry);
+    
+    const matchesPrice = listing.asking_price >= priceRange[0] && 
+                        listing.asking_price <= priceRange[1];
+    
+    const matchesRevenue = listing.annual_revenue >= revenueRange[0] && 
+                          listing.annual_revenue <= revenueRange[1];
 
-      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(listing.industry);
-      const matchesSource = selectedSource === 'all' || listing.source === selectedSource;
-      const matchesPrice = listing.asking_price >= priceRange[0] && listing.asking_price <= priceRange[1];
+    return matchesSearch && matchesIndustry && matchesPrice && matchesRevenue;
+  });
 
-      return matchesSearch && matchesCategory && matchesSource && matchesPrice;
-    });
-  }, [listings, searchTerm, selectedCategories, selectedSource, priceRange]);
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setSelectedCategories([]);
-    setSelectedSource('all');
-    setPriceRange([0, 10000000]);
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `$${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `$${(amount / 1000).toFixed(0)}K`;
+    }
+    return `$${amount.toLocaleString()}`;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading business listings...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to load business listings. Please try again later.
-            </AlertDescription>
-          </Alert>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-600">Error loading business listings</p>
+            <p className="text-gray-600 mt-2">Please try again later</p>
+          </div>
         </div>
       </div>
     );
@@ -68,86 +80,177 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 mb-4 leading-tight">
-            Discover businesses for sale
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl">
-            Find your next investment opportunity from trusted platforms
-          </p>
+      
+      {/* Hero Section */}
+      <section className="bg-gradient-to-r from-blue-600 to-purple-700 text-white py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+              Find Your Next Business Opportunity
+            </h1>
+            <p className="text-xl md:text-2xl mb-8 text-blue-100">
+              Discover profitable businesses for sale from trusted brokers and marketplaces
+            </p>
+            
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto relative">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  type="text"
+                  placeholder="Search businesses by name, industry, or location..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-12 pr-4 py-4 text-lg rounded-full border-0 shadow-lg"
+                />
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        {/* Filters */}
-        <DashboardFilters
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedCategories={selectedCategories}
-          onCategoriesChange={setSelectedCategories}
-          selectedSource={selectedSource}
-          onSourceChange={setSelectedSource}
-          priceRange={priceRange}
-          onPriceRangeChange={setPriceRange}
-          onClearFilters={handleClearFilters}
-          categories={categories}
-          sources={sources}
-        />
+      {/* Filters Section */}
+      <section className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              <span>Filters</span>
+              <Filter className="h-4 w-4" />
+            </Button>
 
-        {/* Results */}
-        <div className="mt-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl md:text-3xl font-light text-gray-900">
-              {isLoading ? 'Loading...' : `${filteredListings.length} businesses found`}
+            {selectedIndustries.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedIndustries.map(industry => (
+                  <Badge key={industry} variant="secondary" className="flex items-center space-x-1">
+                    <span>{industry}</span>
+                    <button
+                      onClick={() => setSelectedIndustries(prev => prev.filter(i => i !== industry))}
+                      className="ml-1 hover:text-red-600"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {showFilters && (
+            <Card className="mt-4">
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Industries
+                    </label>
+                    <MultiSelect
+                      options={uniqueIndustries}
+                      selected={selectedIndustries}
+                      onChange={setSelectedIndustries}
+                      placeholder="Select industries..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Asking Price Range
+                    </label>
+                    <div className="px-2">
+                      <Slider
+                        value={priceRange}
+                        onValueChange={setPriceRange}
+                        max={10000000}
+                        min={0}
+                        step={50000}
+                        className="mb-2"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>{formatCurrency(priceRange[0])}</span>
+                        <span>{formatCurrency(priceRange[1])}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Annual Revenue Range
+                    </label>
+                    <div className="px-2">
+                      <Slider
+                        value={revenueRange}
+                        onValueChange={setRevenueRange}
+                        max={5000000}
+                        min={0}
+                        step={25000}
+                        className="mb-2"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>{formatCurrency(revenueRange[0])}</span>
+                        <span>{formatCurrency(revenueRange[1])}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedIndustries([]);
+                        setPriceRange([0, 10000000]);
+                        setRevenueRange([0, 5000000]);
+                        setSearchTerm("");
+                      }}
+                      className="w-full"
+                    >
+                      Clear All Filters
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </section>
+
+      {/* Results Section */}
+      <section className="py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Available Businesses ({filteredListings.length})
             </h2>
           </div>
 
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-                  <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-2/3 mb-4"></div>
-                  <div className="h-6 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              ))}
-            </div>
-          ) : filteredListings.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-gray-400 mb-4">
-                <svg className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-light text-gray-900 mb-2">No businesses found</h3>
-              <p className="text-gray-600">Try adjusting your search criteria or clearing filters.</p>
+          {filteredListings.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No businesses match your current filters.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectedIndustries([]);
+                  setPriceRange([0, 10000000]);
+                  setRevenueRange([0, 5000000]);
+                  setSearchTerm("");
+                }}
+                className="mt-4"
+              >
+                Clear Filters
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredListings.map((listing) => (
-                <BusinessCard 
-                  key={listing.id} 
-                  listing={{
-                    id: listing.id,
-                    name: listing.name,
-                    description: listing.description || '',
-                    askingPrice: listing.asking_price,
-                    annualRevenue: listing.annual_revenue,
-                    industry: listing.industry,
-                    location: listing.location,
-                    source: listing.source,
-                    highlights: listing.highlights,
-                    imageUrl: listing.image_url
-                  }} 
-                />
+                <BusinessCard key={listing.id} listing={listing} />
               ))}
             </div>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 };

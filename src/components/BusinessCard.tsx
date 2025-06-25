@@ -9,13 +9,13 @@ interface BusinessListing {
   id: string;
   name: string;
   description: string;
-  askingPrice: number;
-  annualRevenue: number;
+  asking_price: number;
+  annual_revenue: number;
   industry: string;
   location: string;
   source: string;
   highlights: string[];
-  imageUrl?: string;
+  image_url?: string;
 }
 
 interface BusinessCardProps {
@@ -32,20 +32,34 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
     return `$${amount.toLocaleString()}`;
   };
 
+  // Convert Supabase data to match original interface
+  const businessData = {
+    id: listing.id,
+    name: listing.name,
+    description: listing.description || '',
+    askingPrice: listing.asking_price,
+    annualRevenue: listing.annual_revenue,
+    industry: listing.industry,
+    location: listing.location,
+    source: listing.source,
+    highlights: listing.highlights || [],
+    imageUrl: listing.image_url
+  };
+
   return (
-    <Link to={`/listing/${listing.id}`}>
+    <Link to={`/listing/${businessData.id}`}>
       <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start mb-2">
             <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 pr-2">
-              {listing.name}
+              {businessData.name}
             </CardTitle>
             <Badge variant="outline" className="text-xs whitespace-nowrap">
-              {listing.source}
+              {businessData.source}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground line-clamp-3">
-            {listing.description}
+            {businessData.description}
           </p>
         </CardHeader>
         
@@ -56,7 +70,7 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
               <div>
                 <p className="text-xs text-muted-foreground">Asking Price</p>
                 <p className="font-semibold text-green-600">
-                  {formatCurrency(listing.askingPrice)}
+                  {formatCurrency(businessData.askingPrice)}
                 </p>
               </div>
             </div>
@@ -66,7 +80,7 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
               <div>
                 <p className="text-xs text-muted-foreground">Annual Revenue</p>
                 <p className="font-semibold text-blue-600">
-                  {formatCurrency(listing.annualRevenue)}
+                  {formatCurrency(businessData.annualRevenue)}
                 </p>
               </div>
             </div>
@@ -75,19 +89,19 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
             <div className="flex items-center space-x-1">
               <Building2 className="h-4 w-4" />
-              <span>{listing.industry}</span>
+              <span>{businessData.industry}</span>
             </div>
             <div className="flex items-center space-x-1">
               <MapPin className="h-4 w-4" />
-              <span>{listing.location}</span>
+              <span>{businessData.location}</span>
             </div>
           </div>
 
-          {listing.highlights.length > 0 && (
+          {businessData.highlights.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Key Highlights:</p>
               <div className="flex flex-wrap gap-1">
-                {listing.highlights.slice(0, 3).map((highlight, index) => (
+                {businessData.highlights.slice(0, 3).map((highlight, index) => (
                   <Badge key={index} variant="secondary" className="text-xs">
                     {highlight}
                   </Badge>
