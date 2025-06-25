@@ -49,12 +49,12 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
+        {/* Page Header - Updated with consistent hero styling */}
         <div className="mb-8">
-          <h1 className="text-3xl font-light text-gray-900 mb-2">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-light text-gray-900 mb-4 leading-tight">
             Discover businesses for sale
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-xl text-gray-600 max-w-3xl">
             Find your next investment opportunity from trusted platforms
           </p>
         </div>
@@ -77,7 +77,7 @@ const Index = () => {
         {/* Results */}
         <div className="mt-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-light text-gray-900">
+            <h2 className="text-2xl md:text-3xl font-light text-gray-900">
               {filteredListings.length} businesses found
             </h2>
           </div>
@@ -89,7 +89,7 @@ const Index = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-light text-gray-900 mb-2">No businesses found</h3>
+              <h3 className="text-xl font-light text-gray-900 mb-2">No businesses found</h3>
               <p className="text-gray-600">Try adjusting your search criteria or clearing filters.</p>
             </div>
           ) : (
