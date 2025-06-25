@@ -1,57 +1,62 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Building2, PlusCircle, User, LogIn } from 'lucide-react';
+import { Building2, PlusCircle, User, Menu } from 'lucide-react';
 
 const Navigation = () => {
   return (
-    <nav className="bg-white border-b border-gray-200 shadow-sm">
+    <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-20">
           {/* Logo */}
           <div className="flex items-center space-x-2">
-            <Building2 className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">BizHunter</span>
+            <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              BizHunter
+            </span>
           </div>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center space-x-6">
-            <a href="/" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
-              Browse Listings
+          <div className="hidden lg:flex items-center space-x-8">
+            <a href="/" className="text-gray-700 hover:text-gray-900 transition-colors font-medium">
+              Browse
             </a>
-            <a href="/sell" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
-              Sell Your Business
+            <a href="/sell" className="text-gray-700 hover:text-gray-900 transition-colors font-medium">
+              Sell
             </a>
-            <a href="/resources" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+            <a href="/resources" className="text-gray-700 hover:text-gray-900 transition-colors font-medium">
               Resources
             </a>
-            <a href="/about" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+            <a href="/about" className="text-gray-700 hover:text-gray-900 transition-colors font-medium">
               About
             </a>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
-            <Button variant="outline" size="sm" className="hidden sm:flex items-center space-x-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="hidden sm:flex items-center space-x-2 rounded-full px-4 py-2 hover:bg-gray-50"
+            >
               <PlusCircle className="h-4 w-4" />
               <span>List Business</span>
             </Button>
-            <Button variant="ghost" size="sm" className="hidden sm:flex items-center space-x-2">
-              <LogIn className="h-4 w-4" />
-              <span>Sign In</span>
-            </Button>
-            <Button size="sm" className="flex items-center space-x-2">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign Up</span>
-            </Button>
-          </div>
+            
+            <div className="hidden sm:flex items-center space-x-2 border border-gray-300 rounded-full p-1">
+              <Button variant="ghost" size="sm" className="rounded-full px-4 py-2 h-auto">
+                <span className="text-sm">Sign In</span>
+              </Button>
+              <Button size="sm" className="rounded-full px-4 py-2 h-auto bg-gray-900 hover:bg-gray-800">
+                <span className="text-sm">Sign Up</span>
+              </Button>
+            </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden">
-            <Button variant="ghost" size="sm">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+            {/* Mobile menu button */}
+            <Button variant="ghost" size="sm" className="lg:hidden rounded-full p-2">
+              <Menu className="h-5 w-5" />
             </Button>
           </div>
         </div>
