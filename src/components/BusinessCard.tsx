@@ -3,7 +3,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, DollarSign, TrendingUp, Building2 } from 'lucide-react';
+import { MapPin, DollarSign, TrendingUp, Building2, ExternalLink } from 'lucide-react';
+import { extractOriginalUrl } from '../utils/extractOriginalUrl';
 
 interface BusinessListing {
   id: string;
@@ -16,6 +17,7 @@ interface BusinessListing {
   source: string;
   highlights: string[];
   image_url?: string;
+  original_url?: string;
 }
 
 interface BusinessCardProps {
@@ -32,18 +34,23 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
     return `$${amount.toLocaleString()}`;
   };
 
+  // Extract original URL from description and clean the description
+  const originalUrl = extractOriginalUrl(listing.description);
+  const cleanDescription = listing.description?.replace(/🔗 Original listing:.*$/m, '').trim() || '';
+
   // Convert Supabase data to match original interface
   const businessData = {
     id: listing.id,
     name: listing.name,
-    description: listing.description || '',
+    description: cleanDescription,
     askingPrice: listing.asking_price,
     annualRevenue: listing.annual_revenue,
     industry: listing.industry,
     location: listing.location,
     source: listing.source,
     highlights: listing.highlights || [],
-    imageUrl: listing.image_url
+    imageUrl: listing.image_url,
+    originalUrl: originalUrl || listing.original_url
   };
 
   return (
@@ -54,9 +61,24 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
             <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 pr-2">
               {businessData.name}
             </CardTitle>
-            <Badge variant="outline" className="text-xs whitespace-nowrap">
-              {businessData.source}
-            </Badge>
+            {businessData.originalUrl ? (
+              <a 
+                href={businessData.originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="group"
+              >
+                <Badge variant="outline" className="text-xs whitespace-nowrap hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                  {businessData.source}
+                  <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
+                </Badge>
+              </a>
+            ) : (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                {businessData.source}
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground line-clamp-3">
             {businessData.description}

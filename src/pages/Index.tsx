@@ -9,16 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { MultiSelect } from "@/components/MultiSelect";
 import { useBusinessListings } from "@/hooks/useBusinessListings";
-import { Search, Filter, SlidersHorizontal, Grid2X2, List } from "lucide-react";
+import { AdminClear } from "@/components/AdminClear";
+import { Search, Filter, SlidersHorizontal, Grid2X2, List, Settings, AlertTriangle, CheckCircle } from "lucide-react";
+import { useScrapingStatus } from "@/hooks/useScrapingStatus";
 
 const Index = () => {
   const { data: listings = [], isLoading, error } = useBusinessListings();
+  const scrapingStatus = useScrapingStatus();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [revenueRange, setRevenueRange] = useState([0, 5000000]);
   const [showFilters, setShowFilters] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [isScrapingReal, setIsScrapingReal] = useState(false);
+  const [scrapingResult, setScrapingResult] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearResult, setClearResult] = useState<string | null>(null);
 
   // Get unique industries from listings
   const uniqueIndustries = [...new Set(listings.map(listing => listing.industry))];
@@ -50,6 +58,56 @@ const Index = () => {
     return `$${amount.toLocaleString()}`;
   };
 
+  const handleRealScraping = async () => {
+    setIsScrapingReal(true);
+    setScrapingResult(null);
+    
+    try {
+      // Dynamic import to avoid build issues
+      const { performRealScraping } = await import('../api/realDataScraper');
+      const result = await performRealScraping();
+      
+      if (result.success) {
+        setScrapingResult(`✅ ${result.message}`);
+        // Refresh the listings data
+        window.location.reload();
+      } else {
+        setScrapingResult(`❌ ${result.message}`);
+      }
+    } catch (error) {
+      setScrapingResult(`❌ Scraping failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsScrapingReal(false);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    if (!confirm('Are you sure you want to delete ALL business listings? This cannot be undone.')) {
+      return;
+    }
+    
+    setIsClearing(true);
+    setClearResult(null);
+    
+    try {
+      const { clearAllListings } = await import('../api/realDataScraper');
+      const result = await clearAllListings();
+      
+      if (result.success) {
+        setClearResult(`✅ ${result.message}`);
+        // Refresh the page to show empty state
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        setClearResult(`❌ ${result.message}`);
+      }
+    } catch (error) {
+      setClearResult(`❌ Clear failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -58,6 +116,9 @@ const Index = () => {
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading business listings...</p>
+            {scrapingStatus.apiRunning && (
+              <p className="mt-2 text-sm text-blue-600">Auto-scraping may be populating fresh data...</p>
+            )}
           </div>
         </div>
       </div>
@@ -114,15 +175,26 @@ const Index = () => {
       <section className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              <span>Filters</span>
-              <Filter className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center space-x-2"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                <span>Filters</span>
+                <Filter className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => setShowAdminPanel(!showAdminPanel)}
+                className="flex items-center space-x-2"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Admin</span>
+              </Button>
+            </div>
 
             {selectedIndustries.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -214,6 +286,75 @@ const Index = () => {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {showAdminPanel && (
+            <div className="mt-4 space-y-4">
+              {/* Scraping Status */}
+              <div className={`p-4 border rounded-lg ${scrapingStatus.apiRunning ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {scrapingStatus.apiRunning ? (
+                    <>
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                      <span className="font-semibold text-green-900">Scraper API Running</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <span className="font-semibold text-red-900">Scraper API Not Running</span>
+                    </>
+                  )}
+                </div>
+                {!scrapingStatus.apiRunning && (
+                  <p className="text-red-700 text-sm">
+                    Run: <code className="bg-red-100 px-1 rounded">./start-scraper.sh</code> to start the scraper API
+                  </p>
+                )}
+              </div>
+
+              {/* Scraping Section */}
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">🔥 REAL Data Scraper with ScraperAPI</h3>
+                <p className="text-blue-700 mb-4">
+                  Powered by ScraperAPI to bypass blocking. Auto-scrapes every minute with duplicate prevention.
+                </p>
+                <button 
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  onClick={handleRealScraping}
+                  disabled={isScrapingReal || isClearing || !scrapingStatus.apiRunning}
+                >
+                  {isScrapingReal ? 'Scraping REAL Data...' : 'Scrape Fresh Data Now'}
+                </button>
+                {scrapingResult && (
+                  <p className="mt-2 text-sm">
+                    {scrapingResult}
+                  </p>
+                )}
+              </div>
+
+              {/* Emergency Clear */}
+              <AdminClear />
+
+              {/* Data Management Section */}
+              <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+                <h3 className="text-lg font-semibold text-red-900 mb-2">🗑️ Data Management</h3>
+                <p className="text-red-700 mb-4">
+                  Clear all listings to start fresh with only real scraped data.
+                </p>
+                <button 
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                  onClick={handleClearAllData}
+                  disabled={isClearing || isScrapingReal}
+                >
+                  {isClearing ? 'Clearing...' : 'Clear ALL Data'}
+                </button>
+                {clearResult && (
+                  <p className="mt-2 text-sm">
+                    {clearResult}
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </section>

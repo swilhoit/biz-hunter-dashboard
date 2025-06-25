@@ -13,6 +13,7 @@ export interface BusinessListing {
   source: string;
   highlights: string[];
   image_url: string | null;
+  original_url: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -27,6 +28,7 @@ export const useBusinessListings = () => {
         .from('business_listings')
         .select('*')
         .eq('status', 'active')
+        .in('source', ['BizBuySell'])
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -44,6 +46,7 @@ export const useBusinessListing = (id: string) => {
         .select('*')
         .eq('id', id)
         .eq('status', 'active')
+        .in('source', ['BizBuySell'])
         .single();
       
       if (error) throw error;

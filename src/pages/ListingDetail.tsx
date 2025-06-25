@@ -18,6 +18,7 @@ import {
   Mail,
   Phone
 } from "lucide-react";
+import { extractOriginalUrl } from "../utils/extractOriginalUrl";
 
 const ListingDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,6 +73,10 @@ const ListingDetail = () => {
     });
   };
 
+  // Extract original URL and clean description
+  const originalUrl = extractOriginalUrl(listing.description);
+  const cleanDescription = listing.description?.replace(/🔗 Original listing:.*$/m, '').trim();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -114,10 +119,24 @@ const ListingDetail = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="flex items-center space-x-1">
-                      <ExternalLink className="h-3 w-3" />
-                      <span>{listing.source}</span>
-                    </Badge>
+                    {originalUrl ? (
+                      <a 
+                        href={originalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <Badge variant="outline" className="flex items-center space-x-1 hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                          <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                          <span>{listing.source}</span>
+                        </Badge>
+                      </a>
+                    ) : (
+                      <Badge variant="outline" className="flex items-center space-x-1">
+                        <ExternalLink className="h-3 w-3" />
+                        <span>{listing.source}</span>
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -164,8 +183,22 @@ const ListingDetail = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-700 leading-relaxed">
-                  {listing.description}
+                  {cleanDescription}
                 </p>
+                {originalUrl && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700 mb-2 font-medium">View Original Listing:</p>
+                    <a 
+                      href={originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span className="underline">Visit {listing.source}</span>
+                    </a>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -233,7 +266,19 @@ const ListingDetail = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Source:</span>
-                  <span className="font-medium">{listing.source}</span>
+                  {originalUrl ? (
+                    <a 
+                      href={originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center space-x-1"
+                    >
+                      <span>{listing.source}</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="font-medium">{listing.source}</span>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Listed:</span>

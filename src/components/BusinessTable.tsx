@@ -10,7 +10,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Building2 } from 'lucide-react';
+import { MapPin, Building2, ExternalLink } from 'lucide-react';
+import { extractOriginalUrl } from '../utils/extractOriginalUrl';
 
 interface BusinessListing {
   id: string;
@@ -23,6 +24,7 @@ interface BusinessListing {
   source: string;
   highlights: string[];
   image_url?: string;
+  original_url?: string;
 }
 
 interface BusinessTableProps {
@@ -62,7 +64,7 @@ export const BusinessTable: React.FC<BusinessTableProps> = ({ listings }) => {
                       {listing.name}
                     </div>
                     <div className="text-sm text-gray-500 line-clamp-2 mt-1">
-                      {listing.description}
+                      {listing.description?.replace(/🔗 Original listing:.*$/m, '').trim()}
                     </div>
                   </div>
                 </Link>
@@ -90,9 +92,28 @@ export const BusinessTable: React.FC<BusinessTableProps> = ({ listings }) => {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant="outline" className="text-xs">
-                  {listing.source}
-                </Badge>
+                {(() => {
+                  const originalUrl = extractOriginalUrl(listing.description) || listing.original_url;
+                  
+                  return originalUrl ? (
+                    <a 
+                      href={originalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="group inline-block"
+                    >
+                      <Badge variant="outline" className="text-xs hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                        {listing.source}
+                        <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
+                      </Badge>
+                    </a>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      {listing.source}
+                    </Badge>
+                  );
+                })()}
               </TableCell>
             </TableRow>
           ))}

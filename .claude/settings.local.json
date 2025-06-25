@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx playwright:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run lint)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(npx supabase:*)",
+      "Bash(chmod:*)",
+      "Bash(rm:*)",
+      "Bash(./start-scraper.sh:*)",
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(node:*)",
+      "Bash(npm run scrape:*)"
+    ],
+    "deny": []
+  }
+}

@@ -19,4 +19,13 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    exclude: ['playwright', 'playwright-core'],
+  },
+  ssr: {
+    noExternal: ['playwright', 'playwright-core'],
+  },
 }));
