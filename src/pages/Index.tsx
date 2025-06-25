@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Navigation from "@/components/Navigation";
 import { BusinessCard } from "@/components/BusinessCard";
+import { BusinessTable } from "@/components/BusinessTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { MultiSelect } from "@/components/MultiSelect";
 import { useBusinessListings } from "@/hooks/useBusinessListings";
-import { Search, Filter, SlidersHorizontal } from "lucide-react";
+import { Search, Filter, SlidersHorizontal, Grid2X2, List } from "lucide-react";
 
 const Index = () => {
   const { data: listings = [], isLoading, error } = useBusinessListings();
@@ -17,6 +18,7 @@ const Index = () => {
   const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [revenueRange, setRevenueRange] = useState([0, 5000000]);
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
   // Get unique industries from listings
   const uniqueIndustries = [...new Set(listings.map(listing => listing.industry))];
@@ -223,6 +225,28 @@ const Index = () => {
             <h2 className="text-2xl font-light text-gray-900">
               Available Businesses ({filteredListings.length})
             </h2>
+            
+            {/* View Toggle */}
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={viewMode === 'card' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('card')}
+                className="flex items-center space-x-2"
+              >
+                <Grid2X2 className="h-4 w-4" />
+                <span>Cards</span>
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="flex items-center space-x-2"
+              >
+                <List className="h-4 w-4" />
+                <span>Table</span>
+              </Button>
+            </div>
           </div>
 
           {filteredListings.length === 0 ? (
@@ -242,11 +266,17 @@ const Index = () => {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredListings.map((listing) => (
-                <BusinessCard key={listing.id} listing={listing} />
-              ))}
-            </div>
+            <>
+              {viewMode === 'card' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredListings.map((listing) => (
+                    <BusinessCard key={listing.id} listing={listing} />
+                  ))}
+                </div>
+              ) : (
+                <BusinessTable listings={filteredListings} />
+              )}
+            </>
           )}
         </div>
       </section>
