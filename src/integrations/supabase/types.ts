@@ -9,16 +9,197 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      business_listings: {
+        Row: {
+          annual_revenue: number
+          asking_price: number
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          highlights: string[] | null
+          id: string
+          image_url: string | null
+          industry: string
+          location: string
+          name: string
+          source: string
+          status: Database["public"]["Enums"]["listing_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          annual_revenue: number
+          asking_price: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          highlights?: string[] | null
+          id?: string
+          image_url?: string | null
+          industry: string
+          location: string
+          name: string
+          source: string
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          annual_revenue?: number
+          asking_price?: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          highlights?: string[] | null
+          id?: string
+          image_url?: string | null
+          industry?: string
+          location?: string
+          name?: string
+          source?: string
+          status?: Database["public"]["Enums"]["listing_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      favorites: {
+        Row: {
+          created_at: string | null
+          id: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "business_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inquiries: {
+        Row: {
+          contact_email: string
+          contact_phone: string | null
+          created_at: string | null
+          id: string
+          listing_id: string
+          message: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          contact_email: string
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          message: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          contact_email?: string
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          message?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inquiries_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "business_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          company: string | null
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user" | "broker"
+      listing_status: "active" | "pending" | "sold" | "withdrawn"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +314,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user", "broker"],
+      listing_status: ["active", "pending", "sold", "withdrawn"],
+    },
   },
 } as const

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Navigation from '@/components/Navigation';
@@ -6,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   MapPin, 
   DollarSign, 
@@ -25,22 +25,58 @@ import {
   Shield,
   Clock
 } from 'lucide-react';
-import { mockListings } from '@/data/mockListings';
+import { useBusinessListing, useBusinessListings, useToggleFavorite } from '@/hooks/useBusinessListings';
+import { useAuth } from '@/hooks/useAuth';
 
 const ListingDetail = () => {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('overview');
+  const { user } = useAuth();
   
-  // Find the listing by id (in a real app, this would be an API call)
-  const listing = mockListings.find(listing => listing.id === id);
+  const { data: listing, isLoading, error } = useBusinessListing(id!);
+  const { data: allListings } = useBusinessListings();
+  const toggleFavoriteMutation = useToggleFavorite();
 
-  if (!listing) {
+  const handleToggleFavorite = () => {
+    if (!user || !listing) return;
+    toggleFavoriteMutation.mutate({
+      listingId: listing.id,
+      userId: user.id
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
+            <div className="h-12 bg-gray-200 rounded w-3/4 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2">
+                <div className="h-64 bg-gray-200 rounded"></div>
+              </div>
+              <div className="h-96 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !listing) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-          <h1 className="text-3xl md:text-4xl font-light text-gray-900 mb-4">Business not found</h1>
-          <Link to="/" className="text-blue-600 hover:text-blue-700">
+          <Alert variant="destructive" className="max-w-md mx-auto">
+            <AlertDescription>
+              Business listing not found or failed to load.
+            </AlertDescription>
+          </Alert>
+          <Link to="/" className="text-blue-600 hover:text-blue-700 mt-4 inline-block">
             ← Back to listings
           </Link>
         </div>
@@ -56,6 +92,10 @@ const ListingDetail = () => {
     }
     return `$${amount.toLocaleString()}`;
   };
+
+  const similarListings = allListings?.filter(l => 
+    l.id !== listing.id && l.industry === listing.industry
+  ).slice(0, 3) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -74,10 +114,18 @@ const ListingDetail = () => {
             </Link>
             
             <div className="flex items-center space-x-3">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <Heart className="h-4 w-4" />
-                <span>Save</span>
-              </Button>
+              {user && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="flex items-center space-x-2"
+                  onClick={handleToggleFavorite}
+                  disabled={toggleFavoriteMutation.isPending}
+                >
+                  <Heart className="h-4 w-4" />
+                  <span>Save</span>
+                </Button>
+              )}
               <Button variant="ghost" size="sm" className="flex items-center space-x-2">
                 <Share2 className="h-4 w-4" />
                 <span>Share</span>
@@ -94,11 +142,13 @@ const ListingDetail = () => {
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Business Header - Updated with consistent hero styling */}
+            {/* Business Header */}
             <div>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h1 className="text-3xl md:text-4xl lg:text-5xl font-light text-gray-900 mb-4 leading-tight">{listing.name}</h1>
+                  <h1 className="text-3xl md:text-4xl lg:text-5xl font-light text-gray-900 mb-4 leading-tight">
+                    {listing.name}
+                  </h1>
                   <div className="flex items-center space-x-4 text-gray-600">
                     <div className="flex items-center space-x-1">
                       <Building2 className="h-4 w-4" />
@@ -143,7 +193,7 @@ const ListingDetail = () => {
                           <span className="text-sm text-gray-600">Asking Price</span>
                         </div>
                         <p className="text-2xl font-bold text-green-600">
-                          {formatCurrency(listing.askingPrice)}
+                          {formatCurrency(listing.asking_price)}
                         </p>
                       </div>
                       
@@ -153,7 +203,7 @@ const ListingDetail = () => {
                           <span className="text-sm text-gray-600">Annual Revenue</span>
                         </div>
                         <p className="text-2xl font-bold text-blue-600">
-                          {formatCurrency(listing.annualRevenue)}
+                          {formatCurrency(listing.annual_revenue)}
                         </p>
                       </div>
                       
@@ -239,21 +289,21 @@ const ListingDetail = () => {
                       <div className="text-center p-4 bg-green-50 rounded-lg">
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">Net Profit</h4>
                         <p className="text-2xl font-bold text-green-600">
-                          {formatCurrency(listing.annualRevenue * 0.15)}
+                          {formatCurrency(listing.annual_revenue * 0.15)}
                         </p>
                         <p className="text-sm text-gray-600">15% margin</p>
                       </div>
                       <div className="text-center p-4 bg-blue-50 rounded-lg">
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">EBITDA</h4>
                         <p className="text-2xl font-bold text-blue-600">
-                          {formatCurrency(listing.annualRevenue * 0.22)}
+                          {formatCurrency(listing.annual_revenue * 0.22)}
                         </p>
                         <p className="text-sm text-gray-600">22% margin</p>
                       </div>
                       <div className="text-center p-4 bg-purple-50 rounded-lg">
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">Cash Flow</h4>
                         <p className="text-2xl font-bold text-purple-600">
-                          {formatCurrency(listing.annualRevenue * 0.18)}
+                          {formatCurrency(listing.annual_revenue * 0.18)}
                         </p>
                         <p className="text-sm text-gray-600">18% of revenue</p>
                       </div>
@@ -273,21 +323,21 @@ const ListingDetail = () => {
                           <tbody>
                             <tr className="border-b">
                               <td className="py-2">2023</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.22)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.15)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.22)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.15)}</td>
                             </tr>
                             <tr className="border-b">
                               <td className="py-2">2022</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.9)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.9 * 0.20)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.9 * 0.13)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.9)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.9 * 0.20)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.9 * 0.13)}</td>
                             </tr>
                             <tr>
                               <td className="py-2">2021</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.8)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.8 * 0.18)}</td>
-                              <td className="text-right py-2">{formatCurrency(listing.annualRevenue * 0.8 * 0.12)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.8)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.8 * 0.18)}</td>
+                              <td className="text-right py-2">{formatCurrency(listing.annual_revenue * 0.8 * 0.12)}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -446,15 +496,28 @@ const ListingDetail = () => {
                 <CardTitle className="text-2xl font-light">Contact Seller</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button className="w-full" size="lg">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Request Information
-                </Button>
-                
-                <Button variant="outline" className="w-full" size="lg">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Send Message
-                </Button>
+                {user ? (
+                  <>
+                    <Button className="w-full" size="lg">
+                      <Phone className="h-4 w-4 mr-2" />
+                      Request Information
+                    </Button>
+                    
+                    <Button variant="outline" className="w-full" size="lg">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Message
+                    </Button>
+                  </>
+                ) : (
+                  <div className="text-center space-y-4">
+                    <p className="text-sm text-gray-600">Sign in to contact the seller</p>
+                    <Link to="/auth">
+                      <Button className="w-full" size="lg">
+                        Sign In to Contact
+                      </Button>
+                    </Link>
+                  </div>
+                )}
                 
                 <Button variant="outline" className="w-full" size="lg">
                   <ExternalLink className="h-4 w-4 mr-2" />
@@ -479,26 +542,23 @@ const ListingDetail = () => {
                 <CardTitle className="text-xl font-light">Similar Businesses</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {mockListings
-                  .filter(l => l.id !== listing.id && l.industry === listing.industry)
-                  .slice(0, 3)
-                  .map((similarListing) => (
-                    <Link 
-                      key={similarListing.id}
-                      to={`/listing/${similarListing.id}`}
-                      className="block p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                    >
-                      <h4 className="font-medium text-gray-900 mb-1 line-clamp-1">
-                        {similarListing.name}
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                        {similarListing.description}
-                      </p>
-                      <p className="text-sm font-semibold text-green-600">
-                        {formatCurrency(similarListing.askingPrice)}
-                      </p>
-                    </Link>
-                  ))}
+                {similarListings.map((similarListing) => (
+                  <Link 
+                    key={similarListing.id}
+                    to={`/listing/${similarListing.id}`}
+                    className="block p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                  >
+                    <h4 className="font-medium text-gray-900 mb-1 line-clamp-1">
+                      {similarListing.name}
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                      {similarListing.description}
+                    </p>
+                    <p className="text-sm font-semibold text-green-600">
+                      {formatCurrency(similarListing.asking_price)}
+                    </p>
+                  </Link>
+                ))}
               </CardContent>
             </Card>
           </div>
