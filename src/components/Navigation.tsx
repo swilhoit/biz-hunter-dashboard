@@ -37,9 +37,7 @@ const Navigation = () => {
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
             <Button 
-              variant="ghost" 
-              size="sm" 
-              className="hidden sm:flex items-center space-x-2 rounded-full px-4 py-2 hover:bg-gray-50"
+              className="hidden sm:flex items-center space-x-2 rounded-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0"
             >
               <PlusCircle className="h-4 w-4" />
               <span>List Business</span>

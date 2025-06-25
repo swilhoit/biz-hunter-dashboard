@@ -43,15 +43,6 @@ const Index = () => {
     setPriceRange([0, 10000000]);
   };
 
-  const formatCurrency = (amount: number) => {
-    if (amount >= 1000000) {
-      return `$${(amount / 1000000).toFixed(1)}M`;
-    } else if (amount >= 1000) {
-      return `$${(amount / 1000).toFixed(0)}K`;
-    }
-    return `$${amount.toLocaleString()}`;
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -86,7 +77,7 @@ const Index = () => {
         {/* Results */}
         <div className="mt-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-medium text-gray-900">
+            <h2 className="text-xl font-light text-gray-900">
               {filteredListings.length} businesses found
             </h2>
           </div>
@@ -98,7 +89,7 @@ const Index = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No businesses found</h3>
+              <h3 className="text-lg font-light text-gray-900 mb-2">No businesses found</h3>
               <p className="text-gray-600">Try adjusting your search criteria or clearing filters.</p>
             </div>
           ) : (

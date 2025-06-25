@@ -37,7 +37,7 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
       <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start mb-2">
-            <CardTitle className="text-lg font-semibold line-clamp-2 pr-2">
+            <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 pr-2">
               {listing.name}
             </CardTitle>
             <Badge variant="outline" className="text-xs whitespace-nowrap">
