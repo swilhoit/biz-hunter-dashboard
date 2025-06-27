@@ -38,6 +38,8 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
   const originalUrl = extractOriginalUrl(listing.description);
   const cleanDescription = listing.description?.replace(/🔗 Original listing:.*$/m, '').trim() || '';
 
+  const validOriginalUrl = originalUrl || listing.original_url;
+
   // Convert Supabase data to match original interface
   const businessData = {
     id: listing.id,
@@ -50,42 +52,46 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
     source: listing.source,
     highlights: listing.highlights || [],
     imageUrl: listing.image_url,
-    originalUrl: originalUrl || listing.original_url
+    originalUrl: validOriginalUrl
   };
 
   return (
-    <Link to={`/listing/${businessData.id}`}>
-      <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-start mb-2">
-            <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 pr-2">
+    <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start mb-2">
+          <Link to={`/listing/${businessData.id}`} className="flex-1 pr-2">
+            <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 hover:text-blue-600 transition-colors">
               {businessData.name}
             </CardTitle>
-            {businessData.originalUrl ? (
-              <a 
-                href={businessData.originalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="group"
-              >
-                <Badge variant="outline" className="text-xs whitespace-nowrap hover:bg-blue-50 hover:border-blue-300 transition-colors">
-                  {businessData.source}
-                  <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
-                </Badge>
-              </a>
-            ) : (
-              <Badge variant="outline" className="text-xs whitespace-nowrap">
+          </Link>
+          {businessData.originalUrl ? (
+            <a 
+              href={businessData.originalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="group"
+            >
+              <Badge variant="outline" className="text-xs whitespace-nowrap hover:bg-blue-50 hover:border-blue-300 transition-colors">
                 {businessData.source}
+                <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
               </Badge>
-            )}
+            </a>
+          ) : (
+            <Badge variant="outline" className="text-xs whitespace-nowrap">
+              {businessData.source}
+            </Badge>
+          )}
           </div>
-          <p className="text-sm text-muted-foreground line-clamp-3">
-            {businessData.description}
-          </p>
+          <Link to={`/listing/${businessData.id}`}>
+            <p className="text-sm text-muted-foreground line-clamp-3 hover:text-gray-700 transition-colors">
+              {businessData.description}
+            </p>
+          </Link>
         </CardHeader>
         
-        <CardContent className="space-y-4">
+        <Link to={`/listing/${businessData.id}`}>
+          <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center space-x-2">
               <DollarSign className="h-4 w-4 text-green-600" />
@@ -131,8 +137,8 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
               </div>
             </div>
           )}
-        </CardContent>
+          </CardContent>
+        </Link>
       </Card>
-    </Link>
   );
 };

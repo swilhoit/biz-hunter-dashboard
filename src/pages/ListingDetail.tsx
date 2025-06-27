@@ -74,7 +74,8 @@ const ListingDetail = () => {
   };
 
   // Extract original URL and clean description
-  const originalUrl = extractOriginalUrl(listing.description);
+  const extractedUrl = extractOriginalUrl(listing.description);
+  const originalUrl = extractedUrl || listing.original_url;
   const cleanDescription = listing.description?.replace(/🔗 Original listing:.*$/m, '').trim();
 
   return (
