@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, DollarSign, TrendingUp, Building2, ExternalLink } from 'lucide-react';
 import { extractOriginalUrl } from '../utils/extractOriginalUrl';
+import { SaveButton } from './SaveButton';
+import { StatusBadge } from './StatusBadge';
 
 interface BusinessListing {
   id: string;
@@ -18,6 +20,10 @@ interface BusinessListing {
   highlights: string[];
   image_url?: string;
   original_url?: string;
+  is_active?: boolean;
+  last_verified_at?: string;
+  verification_status?: 'live' | 'removed' | 'pending';
+  is_saved?: boolean;
 }
 
 interface BusinessCardProps {
@@ -64,24 +70,30 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
               {businessData.name}
             </CardTitle>
           </Link>
-          {businessData.originalUrl ? (
-            <a 
-              href={businessData.originalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="group"
-            >
-              <Badge variant="outline" className="text-xs whitespace-nowrap hover:bg-blue-50 hover:border-blue-300 transition-colors">
+          <div className="flex items-center space-x-2">
+            <SaveButton 
+              listingId={businessData.id} 
+              isSaved={listing.is_saved}
+            />
+            {businessData.originalUrl ? (
+              <a 
+                href={businessData.originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="group"
+              >
+                <Badge variant="outline" className="text-xs whitespace-nowrap hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                  {businessData.source}
+                  <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
+                </Badge>
+              </a>
+            ) : (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
                 {businessData.source}
-                <ExternalLink className="inline h-3 w-3 ml-1 opacity-60 group-hover:opacity-100" />
               </Badge>
-            </a>
-          ) : (
-            <Badge variant="outline" className="text-xs whitespace-nowrap">
-              {businessData.source}
-            </Badge>
-          )}
+            )}
+          </div>
           </div>
           <Link to={`/listing/${businessData.id}`}>
             <p className="text-sm text-muted-foreground line-clamp-3 hover:text-gray-700 transition-colors">
@@ -137,6 +149,14 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
               </div>
             </div>
           )}
+          
+          {/* Status Badge */}
+          <div className="flex justify-end mt-2">
+            <StatusBadge 
+              status={listing.verification_status || 'live'}
+              lastVerified={listing.last_verified_at}
+            />
+          </div>
           </CardContent>
         </Link>
       </Card>

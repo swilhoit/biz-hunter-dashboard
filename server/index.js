@@ -7,6 +7,12 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: '../.env' });
 
+// Log environment variables for debugging
+console.log('🔧 Environment check:');
+console.log('VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? 'Set' : 'Missing');
+console.log('VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing');
+console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'Set' : 'Missing');
+
 const app = express();
 const PORT = 3001;
 
@@ -15,12 +21,25 @@ app.use(cors());
 app.use(express.json());
 
 // Supabase configuration
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ueemtnohgkovwzodzxdr.supabase.co';
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+console.log('🔧 Server Supabase Config:');
+console.log('URL:', supabaseUrl);
+console.log('Key present:', !!supabaseKey);
 
 // ScraperAPI configuration
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+
+// Cache configuration
+const scraperCache = new Map();
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+const SCRAPING_COOLDOWN = 30 * 1000; // 30 seconds between scrapes for testing
+let lastScrapeTime = 0;
+
+// Permanent storage configuration - no expiration
+// Data stored permanently unless manually cleared
 
 // Utility functions
 function extractPrice(priceText) {
@@ -71,11 +90,40 @@ async function fetchPageWithScraperAPI(url) {
     throw new Error('SCRAPER_API_KEY not configured');
   }
 
-  const scraperApiUrl = new URL('http://api.scraperapi.com/');
+  // Check permanent database storage first - no expiration
+  const { data: storedPage } = await supabase
+    .from('scraped_pages')
+    .select('html_content, scraped_at')
+    .eq('url', url)
+    .single();
+
+  if (storedPage) {
+    const age = Date.now() - new Date(storedPage.scraped_at).getTime();
+    const ageInHours = Math.round(age / 1000 / 60 / 60);
+    console.log(`🗄️ Using permanently stored content for: ${url} (${ageInHours}h old)`);
+    
+    // Update last_used timestamp
+    await supabase
+      .from('scraped_pages')
+      .update({ last_used: new Date().toISOString() })
+      .eq('url', url);
+    
+    return storedPage.html_content;
+  }
+
+  // Check memory cache as fallback
+  const cacheKey = url;
+  const cached = scraperCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`💾 Using cached data for: ${url}`);
+    return cached.html;
+  }
+
+  const scraperApiUrl = new URL('https://api.scraperapi.com/');
   scraperApiUrl.searchParams.append('api_key', SCRAPER_API_KEY);
   scraperApiUrl.searchParams.append('url', url);
-  scraperApiUrl.searchParams.append('render', 'true');
-  scraperApiUrl.searchParams.append('premium', 'true');
+  // Remove premium=true to save credits
+  scraperApiUrl.searchParams.append('render', 'false'); // Try without JS rendering first
   scraperApiUrl.searchParams.append('country_code', 'us');
   
   console.log(`📡 Fetching via ScraperAPI: ${url}`);
@@ -99,7 +147,30 @@ async function fetchPageWithScraperAPI(url) {
       throw new Error('Received blocked or error page');
     }
     
-    console.log(`✅ Successfully fetched ${html.length} characters`);
+    // Store in permanent database
+    const { error: dbError } = await supabase
+      .from('scraped_pages')
+      .upsert({
+        url,
+        html_content: html,
+        scraped_at: new Date().toISOString(),
+        last_used: new Date().toISOString(),
+        status: 'active'
+      });
+    
+    if (dbError) {
+      console.warn('⚠️ Failed to store in database:', dbError.message);
+    } else {
+      console.log(`💾 Stored permanently in database`);
+    }
+    
+    // Cache successful response in memory as backup
+    scraperCache.set(cacheKey, {
+      html,
+      timestamp: Date.now()
+    });
+    
+    console.log(`✅ Successfully fetched ${html.length} characters (stored permanently)`);
     return html;
     
   } catch (error) {
@@ -114,13 +185,14 @@ function extractListingsFromHTML(html, pageUrl) {
   const listings = [];
   const seenNames = new Set();
   
-  // BizBuySell listing selectors
+  // BizBuySell listing selectors - target the individual listing components
   const selectors = [
-    'div[data-testid*="listing"]',
-    'article[data-testid*="listing"]',
+    'app-listing-diamond',
+    'app-listing-auction', 
+    'div[class*="listing"]:not(.listing-container)',
     '.listing-card',
-    'div[class*="listing"]',
-    'div[class*="business"]'
+    'div[data-testid*="listing"]',
+    'article[data-testid*="listing"]'
   ];
   
   let found = false;
@@ -132,7 +204,7 @@ function extractListingsFromHTML(html, pageUrl) {
       found = true;
       
       elements.each((index, element) => {
-        if (index >= 20) return false; // Limit per page
+        if (index >= 50) return false; // Increased limit per page
         
         try {
           const $el = $(element);
@@ -149,8 +221,8 @@ function extractListingsFromHTML(html, pageUrl) {
             }
           }
           
-          // Skip duplicates
-          if (!name || seenNames.has(name)) return;
+          // Skip duplicates and ensure quality
+          if (!name || seenNames.has(name) || name.length < 10) return;
           
           // Extract price
           const priceSelectors = ['[data-testid*="price"]', '.price', '[class*="price"]'];
@@ -179,11 +251,20 @@ function extractListingsFromHTML(html, pageUrl) {
           // Extract description
           const description = $el.find('p').first().text().trim() || 'Business for sale';
           
-          // Extract URL
-          const linkEl = $el.find('a[href*="business-for-sale"]').first();
-          const href = linkEl.attr('href');
-          const originalUrl = href ? 
-            (href.startsWith('http') ? href : `https://www.bizbuysell.com${href}`) : pageUrl;
+          // Extract URL - since we're targeting individual components, should be simpler
+          let originalUrl = null;
+          
+          // Look for business links in this specific component
+          const businessLink = $el.find('a[href*="business-opportunity"], a[href*="business-auction"], a[href*="business-for-sale"]').first();
+          const href = businessLink.attr('href');
+          
+          if (href) {
+            originalUrl = href.startsWith('http') ? href : `https://www.bizbuysell.com${href}`;
+            console.log(`✅ Found URL for "${name?.substring(0, 30)}...": ${originalUrl.substring(0, 60)}...`);
+          } else {
+            console.log(`⚠️ No URL found for: ${name?.substring(0, 30)}...`);
+            return; // Skip listings without URLs
+          }
           
           const askingPrice = extractPrice(priceText);
           
@@ -201,12 +282,13 @@ function extractListingsFromHTML(html, pageUrl) {
               highlights: extractHighlights(description + ' ' + name),
               status: 'active',
               original_url: originalUrl,
-              scraped_at: new Date().toISOString()
+              created_at: new Date().toISOString()
             };
             
             listings.push(listing);
             const priceDisplay = askingPrice ? `$${askingPrice.toLocaleString()}` : priceText;
             console.log(`📋 ${name.substring(0, 50)}... - ${priceDisplay}`);
+            console.log(`🔗 URL: ${originalUrl.substring(0, 80)}...`);
           }
         } catch (error) {
           console.warn(`⚠️ Error extracting listing ${index}:`, error.message);
@@ -232,7 +314,17 @@ async function scrapeBizBuySellReal() {
     throw new Error('SCRAPER_API_KEY not configured in environment variables');
   }
   
-  const maxPages = 3;
+  // Check cooldown to prevent excessive API usage
+  const timeSinceLastScrape = Date.now() - lastScrapeTime;
+  if (timeSinceLastScrape < SCRAPING_COOLDOWN) {
+    const waitTime = Math.ceil((SCRAPING_COOLDOWN - timeSinceLastScrape) / 1000);
+    console.log(`⏸️ Cooldown active. Wait ${waitTime}s before scraping again.`);
+    return [];
+  }
+  
+  lastScrapeTime = Date.now();
+  
+  const maxPages = 5; // Increased to get more listings
   const allListings = [];
   
   try {
@@ -289,21 +381,23 @@ async function scrapeWithDuplicatePrevention() {
       return { success: false, count: 0, message: 'No listings found' };
     }
     
-    // Prevent duplicates by checking original_url
+    // Prevent duplicates by checking business name
     const uniqueListings = [];
     
     for (const listing of listings) {
-      if (!listing.original_url) continue;
+      if (!listing.name) continue;
       
-      // Check if this URL already exists
+      // Check if this name already exists
       const { data: existing } = await supabase
         .from('business_listings')
         .select('id')
-        .eq('original_url', listing.original_url)
+        .eq('name', listing.name)
         .limit(1);
       
       if (!existing || existing.length === 0) {
         uniqueListings.push(listing);
+      } else {
+        console.log(`🔄 Skipping duplicate: ${listing.name}`);
       }
     }
     
@@ -329,6 +423,30 @@ async function scrapeWithDuplicatePrevention() {
   } catch (error) {
     console.error('❌ Background scraping failed:', error.message);
     return { success: false, count: 0, message: error.message };
+  }
+}
+
+// Manual cleanup of stored pages (no automatic expiration)
+async function manualCleanupStoredPages() {
+  try {
+    console.log('🧹 Manual cleanup of stored pages requested');
+    
+    const { data, error } = await supabase
+      .from('scraped_pages')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
+      .select();
+    
+    if (error) {
+      console.warn('⚠️ Failed to cleanup stored pages:', error.message);
+      return { success: false, message: error.message };
+    } else {
+      console.log(`🧹 Manually cleaned up ${data?.length || 0} stored pages`);
+      return { success: true, count: data?.length || 0 };
+    }
+  } catch (error) {
+    console.warn('⚠️ Manual cleanup error:', error.message);
+    return { success: false, message: error.message };
   }
 }
 
@@ -360,9 +478,10 @@ async function autoScrapeOnStartup() {
 
 // Background scraping interval
 let scrapingInterval;
+let verificationInterval;
 
 function startBackgroundScraping() {
-  console.log('⏱️ Starting background scraping every 60 seconds...');
+  console.log('⏱️ Starting background scraping every 1 hour...');
   
   scrapingInterval = setInterval(async () => {
     const result = await scrapeWithDuplicatePrevention();
@@ -370,7 +489,95 @@ function startBackgroundScraping() {
     if (result.success && result.count > 0) {
       console.log(`🆕 Background: ${result.count} new listings added`);
     }
-  }, 60000); // Every 60 seconds
+  }, 3600000); // Every 1 hour (was 10 minutes)
+}
+
+function startBackgroundVerification() {
+  console.log('🔍 Starting background verification every 6 hours...');
+  
+  verificationInterval = setInterval(async () => {
+    try {
+      console.log('🔍 Running background verification...');
+      
+      const { data: listings, error } = await supabase
+        .from('business_listings')
+        .select('id, original_url, name, last_verified_at')
+        .not('original_url', 'is', null)
+        .or('last_verified_at.is.null,last_verified_at.lt.' + new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .limit(20); // Limit to prevent API overuse
+
+      if (error) {
+        console.error('Error fetching listings for verification:', error);
+        return;
+      }
+
+      if (!listings || listings.length === 0) {
+        console.log('✅ All listings are up to date');
+        return;
+      }
+
+      let verifiedCount = 0;
+      let activeCount = 0;
+      
+      for (const listing of listings) {
+        try {
+          const html = await fetchPageWithScraperAPI(listing.original_url);
+          
+          const isRemoved = html.includes('listing has been removed') || 
+                           html.includes('no longer available') ||
+                           html.includes('404') ||
+                           html.includes('Page Not Found') ||
+                           html.length < 1000;
+          
+          let isActive = false;
+          let verificationStatus = 'removed';
+          
+          if (!isRemoved) {
+            const hasListingContent = html.includes(listing.name.substring(0, 20)) ||
+                                     html.includes('asking price') ||
+                                     html.includes('business for sale');
+            
+            if (hasListingContent) {
+              isActive = true;
+              verificationStatus = 'live';
+              activeCount++;
+            }
+          }
+
+          await supabase
+            .from('business_listings')
+            .update({
+              is_active: isActive,
+              last_verified_at: new Date().toISOString(),
+              verification_status: verificationStatus
+            })
+            .eq('id', listing.id);
+
+          verifiedCount++;
+          
+          // Delay to avoid overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+        } catch (error) {
+          console.log(`Failed to verify ${listing.original_url}: ${error.message}`);
+          
+          // Mark as pending if verification failed
+          await supabase
+            .from('business_listings')
+            .update({
+              last_verified_at: new Date().toISOString(),
+              verification_status: 'pending'
+            })
+            .eq('id', listing.id);
+        }
+      }
+
+      console.log(`🔍 Background verification complete: ${verifiedCount} verified, ${activeCount} active`);
+      
+    } catch (error) {
+      console.error('Background verification error:', error);
+    }
+  }, 6 * 60 * 60 * 1000); // Every 6 hours
 }
 
 function stopBackgroundScraping() {
@@ -379,6 +586,259 @@ function stopBackgroundScraping() {
     console.log('⏹️ Background scraping stopped');
   }
 }
+
+function stopBackgroundVerification() {
+  if (verificationInterval) {
+    clearInterval(verificationInterval);
+    console.log('⏹️ Background verification stopped');
+  }
+}
+
+// Favorites/Saved Listings API Routes
+app.post('/api/favorites', async (req, res) => {
+  try {
+    const { listingId, userId } = req.body;
+    
+    if (!listingId || !userId) {
+      return res.status(400).json({ success: false, message: 'Missing listingId or userId' });
+    }
+
+    const { data, error } = await supabase
+      .from('favorites')
+      .insert([{ listing_id: listingId, user_id: userId }])
+      .select();
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(409).json({ success: false, message: 'Listing already saved' });
+      }
+      throw error;
+    }
+
+    res.json({ success: true, data: data[0] });
+  } catch (error) {
+    console.error('Error saving listing:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.delete('/api/favorites/:listingId', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Missing userId' });
+    }
+
+    const { error } = await supabase
+      .from('favorites')
+      .delete()
+      .eq('listing_id', listingId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing favorite:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/favorites/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data, error } = await supabase
+      .from('favorites')
+      .select(`
+        id,
+        created_at,
+        business_listings (
+          id,
+          name,
+          description,
+          asking_price,
+          annual_revenue,
+          industry,
+          location,
+          source,
+          highlights,
+          image_url,
+          original_url,
+          status,
+          is_active,
+          last_verified_at,
+          verification_status
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching favorites:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Listing verification API Routes
+app.post('/api/verify-listing/:listingId', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    
+    // Get the listing URL
+    const { data: listing, error: fetchError } = await supabase
+      .from('business_listings')
+      .select('original_url, name')
+      .eq('id', listingId)
+      .single();
+
+    if (fetchError || !listing) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
+
+    if (!listing.original_url) {
+      return res.status(400).json({ success: false, message: 'No URL to verify' });
+    }
+
+    // Verify the listing by fetching its page
+    let isActive = false;
+    let verificationStatus = 'removed';
+    
+    try {
+      const html = await fetchPageWithScraperAPI(listing.original_url);
+      
+      // Check if the page contains indicators it's still active
+      const isRemoved = html.includes('listing has been removed') || 
+                       html.includes('no longer available') ||
+                       html.includes('404') ||
+                       html.includes('Page Not Found') ||
+                       html.length < 1000;
+      
+      if (!isRemoved) {
+        // Further check if listing content is present
+        const hasListingContent = html.includes(listing.name.substring(0, 20)) ||
+                                 html.includes('asking price') ||
+                                 html.includes('business for sale');
+        
+        if (hasListingContent) {
+          isActive = true;
+          verificationStatus = 'live';
+        }
+      }
+    } catch (error) {
+      console.log(`Could not verify ${listing.original_url}: ${error.message}`);
+      verificationStatus = 'pending';
+    }
+
+    // Update the listing verification status
+    const { error: updateError } = await supabase
+      .from('business_listings')
+      .update({
+        is_active: isActive,
+        last_verified_at: new Date().toISOString(),
+        verification_status: verificationStatus
+      })
+      .eq('id', listingId);
+
+    if (updateError) throw updateError;
+
+    res.json({ 
+      success: true, 
+      isActive, 
+      verificationStatus,
+      lastVerified: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error verifying listing:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Bulk verification endpoint
+app.post('/api/verify-all-listings', async (req, res) => {
+  try {
+    const { data: listings, error: fetchError } = await supabase
+      .from('business_listings')
+      .select('id, original_url, name')
+      .not('original_url', 'is', null)
+      .limit(50); // Limit to prevent API overuse
+
+    if (fetchError) throw fetchError;
+
+    let verifiedCount = 0;
+    let activeCount = 0;
+    
+    for (const listing of listings) {
+      try {
+        const html = await fetchPageWithScraperAPI(listing.original_url);
+        
+        const isRemoved = html.includes('listing has been removed') || 
+                         html.includes('no longer available') ||
+                         html.includes('404') ||
+                         html.includes('Page Not Found') ||
+                         html.length < 1000;
+        
+        let isActive = false;
+        let verificationStatus = 'removed';
+        
+        if (!isRemoved) {
+          const hasListingContent = html.includes(listing.name.substring(0, 20)) ||
+                                   html.includes('asking price') ||
+                                   html.includes('business for sale');
+          
+          if (hasListingContent) {
+            isActive = true;
+            verificationStatus = 'live';
+            activeCount++;
+          }
+        }
+
+        await supabase
+          .from('business_listings')
+          .update({
+            is_active: isActive,
+            last_verified_at: new Date().toISOString(),
+            verification_status: verificationStatus
+          })
+          .eq('id', listing.id);
+
+        verifiedCount++;
+        
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error) {
+        console.log(`Failed to verify ${listing.original_url}: ${error.message}`);
+        
+        // Mark as pending if verification failed
+        await supabase
+          .from('business_listings')
+          .update({
+            last_verified_at: new Date().toISOString(),
+            verification_status: 'pending'
+          })
+          .eq('id', listing.id);
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      verifiedCount,
+      activeCount,
+      totalProcessed: listings.length
+    });
+    
+  } catch (error) {
+    console.error('Error in bulk verification:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // API Routes
 app.get('/api/health', (req, res) => {
@@ -473,9 +933,10 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/scraping/status - Check background status`);
   console.log(`🔑 ScraperAPI: ${SCRAPER_API_KEY ? 'Configured' : 'NOT CONFIGURED'}`);
   
-  // Start auto-scraping and background interval
+  // Start auto-scraping and background intervals
   autoScrapeOnStartup().then(() => {
     startBackgroundScraping();
+    startBackgroundVerification();
   });
 });
 
@@ -483,5 +944,6 @@ app.listen(PORT, () => {
 process.on('SIGINT', () => {
   console.log('\\n🛑 Shutting down gracefully...');
   stopBackgroundScraping();
+  stopBackgroundVerification();
   process.exit(0);
 });
