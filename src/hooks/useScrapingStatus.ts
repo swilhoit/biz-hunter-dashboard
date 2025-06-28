@@ -13,31 +13,23 @@ export const useScrapingStatus = () => {
     isAutoScraping: false,
   });
 
-  useEffect(() => {
-    const checkApiStatus = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/api/health', {
-          method: 'GET',
-        });
-        
-        if (response.ok) {
-          setStatus(prev => ({ ...prev, apiRunning: true }));
-        } else {
-          setStatus(prev => ({ ...prev, apiRunning: false }));
-        }
-      } catch (error) {
+  // Remove automatic polling to prevent hitting scraper on page visits
+  const checkApiStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/health', {
+        method: 'GET',
+      });
+      
+      if (response.ok) {
+        setStatus(prev => ({ ...prev, apiRunning: true }));
+      } else {
         setStatus(prev => ({ ...prev, apiRunning: false }));
       }
-    };
+    } catch (error) {
+      setStatus(prev => ({ ...prev, apiRunning: false }));
+    }
+  };
 
-    // Check immediately
-    checkApiStatus();
-    
-    // Check every 10 seconds
-    const interval = setInterval(checkApiStatus, 10000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  return status;
+  // Only return the check function, no automatic polling
+  return { ...status, checkApiStatus };
 };
