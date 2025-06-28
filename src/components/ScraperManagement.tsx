@@ -20,7 +20,9 @@ import {
   Building2,
   Laptop,
   ShoppingCart,
-  Zap
+  Zap,
+  Crown,
+  FileText
 } from 'lucide-react';
 
 const scraperIcons: Record<string, React.ReactNode> = {
@@ -30,6 +32,8 @@ const scraperIcons: Record<string, React.ReactNode> = {
   'BizQuest': <Building2 className="h-4 w-4" />,
   'MicroAcquire': <Laptop className="h-4 w-4" />,
   'Flippa': <ShoppingCart className="h-4 w-4" />,
+  'EmpireFlippers': <Crown className="h-4 w-4" />,
+  'ExitAdviser': <FileText className="h-4 w-4" />,
 };
 
 const categoryColors: Record<string, string> = {
@@ -38,6 +42,7 @@ const categoryColors: Record<string, string> = {
   'Startup': 'bg-purple-100 text-purple-800',
   'Micro SaaS': 'bg-orange-100 text-orange-800',
   'Digital Asset': 'bg-cyan-100 text-cyan-800',
+  'Small Business': 'bg-rose-100 text-rose-800',
 };
 
 export const ScraperManagement: React.FC = () => {
@@ -95,7 +100,7 @@ export const ScraperManagement: React.FC = () => {
             <span>Multi-Source Scraper Management</span>
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Manage data collection from 6 popular business directories
+            Manage data collection from 8 popular business directories
           </p>
         </CardHeader>
         <CardContent>

@@ -7,7 +7,9 @@ import {
   TrendingUp, 
   Laptop, 
   ShoppingCart, 
-  CheckCircle 
+  CheckCircle,
+  Crown,
+  FileText
 } from 'lucide-react';
 
 const sourceIcons: Record<string, React.ReactNode> = {
@@ -17,6 +19,8 @@ const sourceIcons: Record<string, React.ReactNode> = {
   'BizQuest': <Building2 className="h-4 w-4" />,
   'MicroAcquire': <Laptop className="h-4 w-4" />,
   'Flippa': <ShoppingCart className="h-4 w-4" />,
+  'EmpireFlippers': <Crown className="h-4 w-4" />,
+  'ExitAdviser': <FileText className="h-4 w-4" />,
 };
 
 const sourceColors: Record<string, string> = {
@@ -26,6 +30,8 @@ const sourceColors: Record<string, string> = {
   'BizQuest': 'bg-orange-100 text-orange-800 hover:bg-orange-200',
   'MicroAcquire': 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200',
   'Flippa': 'bg-pink-100 text-pink-800 hover:bg-pink-200',
+  'EmpireFlippers': 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+  'ExitAdviser': 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200',
 };
 
 interface SourceFilterProps {

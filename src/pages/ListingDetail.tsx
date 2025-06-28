@@ -19,10 +19,28 @@ import {
   Phone
 } from "lucide-react";
 import { extractOriginalUrl } from "../utils/extractOriginalUrl";
+import { SaveButton } from "@/components/SaveButton";
+import { useAuth } from "@/hooks/useAuth";
+import { useFavorites } from "@/hooks/useBusinessListings";
+import { useListingViews } from "@/hooks/useListingViews";
+import { useEffect } from "react";
 
 const ListingDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const { data: listing, isLoading, error } = useBusinessListing(id || '');
+  const { data: favorites = [] } = useFavorites(user?.id);
+  const { trackView } = useListingViews();
+  
+  // Check if this listing is saved
+  const isSaved = favorites.some(fav => fav.business_listings?.id === listing?.id);
+  
+  // Track view when listing loads and user is authenticated
+  useEffect(() => {
+    if (listing && user) {
+      trackView(listing.id, listing.name);
+    }
+  }, [listing, user, trackView]);
 
   if (isLoading) {
     return (
@@ -240,10 +258,16 @@ const ListingDetail = () => {
                   Request Call
                 </Button>
                 <Separator />
-                <Button variant="ghost" className="w-full">
-                  <Heart className="h-4 w-4 mr-2" />
-                  Save to Favorites
-                </Button>
+                <div className="flex items-center justify-center space-x-3 p-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                  <SaveButton 
+                    listingId={listing.id} 
+                    isSaved={isSaved}
+                    className="p-0 hover:bg-transparent"
+                  />
+                  <span className="text-sm text-gray-700 font-medium">
+                    {isSaved ? 'Saved to Favorites' : 'Save to Favorites'}
+                  </span>
+                </div>
                 
                 <div className="text-xs text-muted-foreground text-center">
                   By contacting the seller, you agree to our terms of service

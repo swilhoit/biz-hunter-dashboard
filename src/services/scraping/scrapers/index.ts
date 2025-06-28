@@ -33,5 +33,15 @@ export function getScraperInfo() {
       description: 'Website and digital asset marketplace',
       category: 'Digital Asset',
     },
+    empireflippers: {
+      name: 'EmpireFlippers',
+      description: 'Online business marketplace from EmpireFlippers.com',
+      category: 'Digital Business',
+    },
+    exitadviser: {
+      name: 'ExitAdviser',
+      description: 'Business for sale listings from ExitAdviser.com',
+      category: 'Small Business',
+    },
   };
 }
