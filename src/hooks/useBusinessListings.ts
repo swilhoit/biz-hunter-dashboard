@@ -18,6 +18,7 @@ export interface BusinessListing {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  is_saved?: boolean;
 }
 
 export const useBusinessListings = () => {
@@ -28,7 +29,7 @@ export const useBusinessListings = () => {
         .from('business_listings')
         .select('*')
         .eq('status', 'active')
-        .in('source', ['BizBuySell'])
+        .in('source', ['BizBuySell', 'QuietLight', 'Acquire', 'BizQuest', 'MicroAcquire', 'Flippa', 'EmpireFlippers', 'ExitAdviser'])
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -46,7 +47,7 @@ export const useBusinessListing = (id: string) => {
         .select('*')
         .eq('id', id)
         .eq('status', 'active')
-        .in('source', ['BizBuySell'])
+        .in('source', ['BizBuySell', 'QuietLight', 'Acquire', 'BizQuest', 'MicroAcquire', 'Flippa', 'EmpireFlippers', 'ExitAdviser'])
         .single();
       
       if (error) throw error;
@@ -111,6 +112,19 @@ export const useToggleFavorite = () => {
       queryClient.invalidateQueries({ queryKey: ['favorites', userId] });
     }
   });
+};
+
+export const useBusinessListingsWithSavedStatus = (userId?: string) => {
+  const listingsQuery = useBusinessListings();
+  const favoritesQuery = useFavorites(userId);
+
+  return {
+    ...listingsQuery,
+    data: listingsQuery.data?.map(listing => ({
+      ...listing,
+      is_saved: favoritesQuery.data?.some(fav => fav.business_listings?.id === listing.id) || false
+    })) || []
+  };
 };
 
 export const useCreateInquiry = () => {

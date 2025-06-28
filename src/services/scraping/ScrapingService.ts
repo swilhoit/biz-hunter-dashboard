@@ -1,4 +1,6 @@
-import { BizBuySellScraper } from './scrapers/BizBuySellScraper';
+import { ScraperAPIBizBuySellScraper } from './scrapers/ScraperAPIBizBuySellScraper';
+import { ScraperAPIEmpireFlippersScraper } from './scrapers/ScraperAPIEmpireFlippersScraper';
+import { ExitAdviserScraper } from './scrapers/ExitAdviserScraper';
 import { BaseScraper, ScrapingResult, RawListing, ScrapingConfig } from './types';
 import { supabase } from '../../integrations/supabase/client';
 import logger from './utils/logger';
@@ -23,11 +25,11 @@ export class ScrapingService {
   }
 
   private initializeScrapers(): void {
-    // Initialize available scrapers
-    this.scrapers.set('bizbuysell', new BizBuySellScraper());
-    // TODO: Add other scrapers here
-    // this.scrapers.set('flippa', new FlippaScraper());
-    // this.scrapers.set('empireflippers', new EmpireFlippersScraper());
+    // Initialize available scrapers - now using ScraperAPI
+    this.scrapers.set('bizbuysell', new ScraperAPIBizBuySellScraper());
+    this.scrapers.set('empireflippers', new ScraperAPIEmpireFlippersScraper());
+    this.scrapers.set('exitadviser', new ExitAdviserScraper());
+    // Additional scrapers can be added here
   }
 
   async scrapeAll(config: ScrapingConfig = {}): Promise<ScrapingSession> {
@@ -51,7 +53,7 @@ export class ScrapingService {
         logger.info(`Running scraper: ${sourceName}`);
         
         // Configure scraper
-        scraper.config = { ...scraper.config, ...config };
+        scraper.updateConfig(config);
         
         const result = await scraper.scrape();
         
@@ -105,7 +107,7 @@ export class ScrapingService {
     logger.info(`Running single scraper: ${sourceName}`);
     
     // Configure scraper
-    scraper.config = { ...scraper.config, ...config };
+    scraper.updateConfig(config);
     
     const result = await scraper.scrape();
     

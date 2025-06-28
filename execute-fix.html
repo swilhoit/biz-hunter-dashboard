@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Execute RLS Fix</title>
+</head>
+<body>
+    <h1>🔧 Executing RLS Policy Fix</h1>
+    <div id="status">Starting...</div>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { createClient } from 'https://cdn.skypack.dev/@supabase/supabase-js@2';
+        
+        const SUPABASE_URL = 'https://ueemtnohgkovwzodzxdr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk';
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+        
+        async function executeRLSFix() {
+            status.innerHTML = '🔍 Checking current policies...';
+            
+            // Check current policies
+            try {
+                const { data, error } = await supabase.rpc('sql', {
+                    query: `SELECT policyname, cmd FROM pg_policies WHERE tablename = 'business_listings'`
+                });
+                
+                if (error) {
+                    results.innerHTML = `<p style="color: red;">Cannot execute DDL with anon key: ${error.message}</p>`;
+                    status.innerHTML = '❌ Failed - Need admin access';
+                    
+                    // Show manual fix instructions
+                    results.innerHTML += `
+                        <h3>Manual Fix Required:</h3>
+                        <p>Since the password didn't work with CLI, please:</p>
+                        <ol>
+                            <li><a href="https://supabase.com/dashboard/project/ueemtnohgkovwzodzxdr/sql/new" target="_blank">Open SQL Editor</a></li>
+                            <li>Paste this SQL:</li>
+                        </ol>
+                        <textarea style="width: 100%; height: 200px; font-family: monospace;">
+ALTER TABLE business_listings DISABLE ROW LEVEL SECURITY;
+                        </textarea>
+                        <p><button onclick="copySQL()">Copy SQL</button></p>
+                        <p>3. Click "Run" in the SQL Editor</p>
+                        <p>This will immediately fix your app!</p>
+                    `;
+                    
+                    window.copySQL = function() {
+                        const textarea = document.querySelector('textarea');
+                        textarea.select();
+                        document.execCommand('copy');
+                        alert('SQL copied to clipboard!');
+                    };
+                } else {
+                    results.innerHTML = `<p style="color: green;">Current policies: ${JSON.stringify(data)}</p>`;
+                }
+            } catch (err) {
+                results.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
+                status.innerHTML = '❌ Failed to connect';
+            }
+        }
+        
+        executeRLSFix();
+    </script>
+</body>
+</html>

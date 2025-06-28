@@ -8,13 +8,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { MultiSelect } from "@/components/MultiSelect";
-import { useBusinessListings } from "@/hooks/useBusinessListings";
+import { useBusinessListingsWithSavedStatus } from "@/hooks/useBusinessListings";
+import { useAuth } from "@/hooks/useAuth";
 import { AdminClear } from "@/components/AdminClear";
-import { Search, Filter, SlidersHorizontal, Grid2X2, List, Settings, AlertTriangle, CheckCircle } from "lucide-react";
+import { ScraperManagement } from "@/components/ScraperManagement";
+import { SourceFilter } from "@/components/SourceFilter";
+import { Search, Filter, SlidersHorizontal, Grid2X2, List, Settings, AlertTriangle, CheckCircle, Database } from "lucide-react";
 import { useScrapingStatus } from "@/hooks/useScrapingStatus";
+import { useIntegratedScraping } from "@/hooks/useIntegratedScraping";
 
 const Index = () => {
-  const { data: listings = [], isLoading, error } = useBusinessListings();
+  const { user } = useAuth();
+  const { data: listings = [], isLoading, error } = useBusinessListingsWithSavedStatus(user?.id);
   const scrapingStatus = useScrapingStatus();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
@@ -22,14 +27,32 @@ const Index = () => {
   const [revenueRange, setRevenueRange] = useState([0, 5000000]);
   const [showFilters, setShowFilters] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showScraperPanel, setShowScraperPanel] = useState(false);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [isScrapingReal, setIsScrapingReal] = useState(false);
   const [scrapingResult, setScrapingResult] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [clearResult, setClearResult] = useState<string | null>(null);
 
-  // Get unique industries from listings
+  // Get unique industries and sources from listings
   const uniqueIndustries = [...new Set(listings.map(listing => listing.industry))];
+  const uniqueSources = [...new Set(listings.map(listing => listing.source))];
+  
+  // Source filtering
+  const handleSourceToggle = (source: string) => {
+    setSelectedSources(prev => 
+      prev.includes(source) 
+        ? prev.filter(s => s !== source)
+        : [...prev, source]
+    );
+  };
+  
+  // Get listing counts by source
+  const sourceListingCounts = listings.reduce((acc, listing) => {
+    acc[listing.source] = (acc[listing.source] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   // Filter listings based on search and filters
   const filteredListings = listings.filter(listing => {
@@ -40,13 +63,16 @@ const Index = () => {
     const matchesIndustry = selectedIndustries.length === 0 || 
                            selectedIndustries.includes(listing.industry);
     
+    const matchesSource = selectedSources.length === 0 ||
+                         selectedSources.includes(listing.source);
+    
     const matchesPrice = listing.asking_price >= priceRange[0] && 
                         listing.asking_price <= priceRange[1];
     
     const matchesRevenue = listing.annual_revenue >= revenueRange[0] && 
                           listing.annual_revenue <= revenueRange[1];
 
-    return matchesSearch && matchesIndustry && matchesPrice && matchesRevenue;
+    return matchesSearch && matchesIndustry && matchesPrice && matchesRevenue && matchesSource;
   });
 
   const formatCurrency = (amount: number) => {
@@ -194,6 +220,15 @@ const Index = () => {
                 <Settings className="h-4 w-4" />
                 <span>Admin</span>
               </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => setShowScraperPanel(!showScraperPanel)}
+                className="flex items-center space-x-2"
+              >
+                <Database className="h-4 w-4" />
+                <span>Scrapers</span>
+              </Button>
             </div>
 
             {selectedIndustries.length > 0 && (
@@ -214,9 +249,19 @@ const Index = () => {
           </div>
 
           {showFilters && (
-            <Card className="mt-4">
-              <CardContent className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="mt-4 space-y-4">
+              {/* Source Filter */}
+              <SourceFilter
+                availableSources={uniqueSources}
+                selectedSources={selectedSources}
+                onSourceToggle={handleSourceToggle}
+                listingCounts={sourceListingCounts}
+              />
+              
+              {/* Other Filters */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Industries
@@ -269,23 +314,25 @@ const Index = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-end">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedIndustries([]);
-                        setPriceRange([0, 10000000]);
-                        setRevenueRange([0, 5000000]);
-                        setSearchTerm("");
-                      }}
-                      className="w-full"
-                    >
-                      Clear All Filters
-                    </Button>
+                    <div className="flex items-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedIndustries([]);
+                          setSelectedSources([]);
+                          setPriceRange([0, 10000000]);
+                          setRevenueRange([0, 5000000]);
+                          setSearchTerm("");
+                        }}
+                        className="w-full"
+                      >
+                        Clear All Filters
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {showAdminPanel && (
@@ -316,15 +363,20 @@ const Index = () => {
               <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg">
                 <h3 className="text-lg font-semibold text-blue-900 mb-2">🔥 REAL Data Scraper with ScraperAPI</h3>
                 <p className="text-blue-700 mb-4">
-                  Powered by ScraperAPI to bypass blocking. Auto-scrapes every minute with duplicate prevention.
+                  Powered by ScraperAPI with permanent storage. Auto-scrapes every hour. Results stored for 24h to save credits.
                 </p>
-                <button 
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                  onClick={handleRealScraping}
-                  disabled={isScrapingReal || isClearing || !scrapingStatus.apiRunning}
-                >
-                  {isScrapingReal ? 'Scraping REAL Data...' : 'Scrape Fresh Data Now'}
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    onClick={handleRealScraping}
+                    disabled={isScrapingReal || isClearing || !scrapingStatus.apiRunning}
+                  >
+                    {isScrapingReal ? 'Scraping REAL Data...' : 'Manual Refresh Now'}
+                  </button>
+                  <div className="text-sm text-blue-600 flex items-center">
+                    💡 Tip: Uses stored data if available within 24h to save API credits
+                  </div>
+                </div>
                 {scrapingResult && (
                   <p className="mt-2 text-sm">
                     {scrapingResult}
@@ -354,6 +406,12 @@ const Index = () => {
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {showScraperPanel && (
+            <div className="mt-4">
+              <ScraperManagement />
             </div>
           )}
         </div>
@@ -397,6 +455,7 @@ const Index = () => {
                 variant="outline"
                 onClick={() => {
                   setSelectedIndustries([]);
+                  setSelectedSources([]);
                   setPriceRange([0, 10000000]);
                   setRevenueRange([0, 5000000]);
                   setSearchTerm("");

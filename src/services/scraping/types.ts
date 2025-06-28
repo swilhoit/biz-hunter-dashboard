@@ -10,7 +10,7 @@ export const RawListingSchema = z.object({
   source: z.string(),
   highlights: z.array(z.string()).default([]),
   imageUrl: z.string().url().optional(),
-  originalUrl: z.string().url().optional(),
+  originalUrl: z.string().url(),
   scrapedAt: z.date().default(() => new Date()),
 });
 
@@ -64,6 +64,14 @@ export abstract class BaseScraper {
       failedRequests: 0,
       listingsFound: 0,
       errors: [],
+    };
+  }
+  
+  // Public method to update configuration
+  updateConfig(config: Partial<ScrapingConfig>): void {
+    this.config = {
+      ...this.config,
+      ...config
     };
   }
 

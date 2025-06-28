@@ -7,6 +7,7 @@ import { MapPin, DollarSign, TrendingUp, Building2, ExternalLink } from 'lucide-
 import { extractOriginalUrl } from '../utils/extractOriginalUrl';
 import { SaveButton } from './SaveButton';
 import { StatusBadge } from './StatusBadge';
+import { useAuth } from '@/hooks/useAuth';
 
 interface BusinessListing {
   id: string;
@@ -31,6 +32,27 @@ interface BusinessCardProps {
 }
 
 export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
+  const { user } = useAuth();
+  
+  const trackView = async () => {
+    if (user) {
+      try {
+        await fetch('https://biz-hunter-dashboard-production.up.railway.app/api/track-view', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            listingId: listing.id
+          })
+        });
+      } catch (error) {
+        console.error('Error tracking view:', error);
+      }
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000) {
       return `$${(amount / 1000000).toFixed(1)}M`;
@@ -65,7 +87,7 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
     <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start mb-2">
-          <Link to={`/listing/${businessData.id}`} className="flex-1 pr-2">
+          <Link to={`/listing/${businessData.id}`} className="flex-1 pr-2" onClick={trackView}>
             <CardTitle className="text-lg font-light text-gray-900 line-clamp-2 hover:text-blue-600 transition-colors">
               {businessData.name}
             </CardTitle>

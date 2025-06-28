@@ -64,7 +64,10 @@ export class BizBuySellScraper extends BaseScraper {
         logger.info(`Scraping BizBuySell page ${currentPage}`);
         
         const url = this.buildSearchUrl(currentPage);
-        await this.page.goto(url, { waitUntil: 'networkidle' });
+        await this.page.goto(url, { 
+          waitUntil: 'domcontentloaded',
+          timeout: this.config.timeout || 30000
+        });
         
         // Wait for listings to load
         await this.page.waitForSelector('.result-list-item, .listing-item, .business-listing-item', { timeout: 10000 });
@@ -113,44 +116,256 @@ export class BizBuySellScraper extends BaseScraper {
     if (!this.page) return [];
 
     return await this.page.evaluate(() => {
-      const listings: any[] = [];
+      const listings: RawListing[] = [];
       
-      // BizBuySell listing selectors (these may need adjustment based on actual site structure)
-      const listingElements = document.querySelectorAll('.result-list-item, .listing-item, .business-listing-item');
+      // Enhanced selectors for BizBuySell's structure
+      const listingSelectors = [
+        '.result-list-item',
+        '.listing-item',
+        '.business-listing-item',
+        '.search-result',
+        '.listing-card',
+        '.business-card',
+        '[class*="listing"]',
+        '[class*="business"]',
+        '[class*="result"]'
+      ];
       
-      listingElements.forEach((element) => {
+      let listingElements: NodeListOf<Element> | null = null;
+      
+      for (const selector of listingSelectors) {
+        listingElements = document.querySelectorAll(selector);
+        if (listingElements.length > 0) {
+          console.log(`BizBuySell: Found ${listingElements.length} elements with selector: ${selector}`);
+          break;
+        }
+      }
+      
+      if (!listingElements || listingElements.length === 0) {
+        console.log('BizBuySell: No listing elements found, trying generic selectors');
+        listingElements = document.querySelectorAll('div[class*="card"], div[class*="item"], article');
+      }
+      
+      listingElements.forEach((element, index) => {
         try {
-          const nameEl = element.querySelector('.listing-title, .business-name, h3 a, h2 a');
-          const priceEl = element.querySelector('.price, .asking-price, .list-price');
-          const revenueEl = element.querySelector('.revenue, .annual-revenue, .gross-revenue');
-          const locationEl = element.querySelector('.location, .business-location');
-          const industryEl = element.querySelector('.industry, .business-type, .category');
-          const descriptionEl = element.querySelector('.description, .business-description, .excerpt');
-          const linkEl = element.querySelector('a[href*="/business-for-sale/"]');
-          const imageEl = element.querySelector('img');
-
-          if (!nameEl || !priceEl) return;
-
-          const name = nameEl.textContent?.trim() || '';
-          const priceText = priceEl.textContent?.trim() || '';
-          const revenueText = revenueEl?.textContent?.trim() || '';
-          const location = locationEl?.textContent?.trim() || '';
-          const industry = industryEl?.textContent?.trim() || 'Business';
-          const description = descriptionEl?.textContent?.trim() || '';
-          const originalUrl = linkEl?.getAttribute('href') || '';
-          const imageUrl = imageEl?.getAttribute('src') || '';
-
-          if (name && priceText) {
-            listings.push({
-              name,
-              description,
-              priceText,
-              revenueText,
-              location,
-              industry,
-              originalUrl: originalUrl.startsWith('http') ? originalUrl : `https://www.bizbuysell.com${originalUrl}`,
-              imageUrl: imageUrl.startsWith('http') ? imageUrl : (imageUrl ? `https://www.bizbuysell.com${imageUrl}` : undefined),
+          // Enhanced name extraction
+          const nameSelectors = [
+            '.listing-title', '.business-name', 'h3 a', 'h2 a',
+            'h1', 'h2', 'h3', 'h4', '.title', '.name',
+            'a[title]', '.headline'
+          ];
+          
+          let name = '';
+          for (const selector of nameSelectors) {
+            const nameEl = element.querySelector(selector);
+            if (nameEl) {
+              name = nameEl.textContent?.trim() || nameEl.getAttribute('title') || '';
+              if (name.length > 3) break;
+            }
+          }
+          
+          // Enhanced price extraction
+          const priceSelectors = [
+            '.price', '.asking-price', '.list-price', '.sale-price',
+            '.cost', '.value', '.amount', '[class*="price"]',
+            '[class*="asking"]', '[class*="sale"]'
+          ];
+          
+          let priceText = '';
+          for (const selector of priceSelectors) {
+            const priceEl = element.querySelector(selector);
+            if (priceEl) {
+              priceText = priceEl.textContent?.trim() || '';
+              if (priceText.length > 0 && /[\d$]/.test(priceText)) break;
+            }
+          }
+          
+          // Enhanced revenue extraction
+          const revenueSelectors = [
+            '.revenue', '.annual-revenue', '.gross-revenue',
+            '.profit', '.income', '.earnings', '.cash-flow',
+            '[class*="revenue"]', '[class*="profit"]', '[class*="income"]',
+            '[class*="earnings"]', '[class*="cash"]'
+          ];
+          
+          let revenueText = '';
+          for (const selector of revenueSelectors) {
+            const revenueEl = element.querySelector(selector);
+            if (revenueEl) {
+              revenueText = revenueEl.textContent?.trim() || '';
+              if (revenueText.length > 0 && /[\d$]/.test(revenueText)) break;
+            }
+          }
+          
+          // Try to extract revenue from text content
+          if (!revenueText) {
+            const fullText = element.textContent?.toLowerCase() || '';
+            const revenuePatterns = [
+              /revenue[:\s]*\$?([\d,]+(?:\.\d{2})?[km]?)/i,
+              /gross[:\s]*\$?([\d,]+(?:\.\d{2})?[km]?)/i,
+              /income[:\s]*\$?([\d,]+(?:\.\d{2})?[km]?)/i,
+              /profit[:\s]*\$?([\d,]+(?:\.\d{2})?[km]?)/i,
+              /cash\s*flow[:\s]*\$?([\d,]+(?:\.\d{2})?[km]?)/i
+            ];
+            
+            for (const pattern of revenuePatterns) {
+              const match = fullText.match(pattern);
+              if (match) {
+                revenueText = match[1];
+                break;
+              }
+            }
+          }
+          
+          // Enhanced location extraction
+          const locationSelectors = [
+            '.location', '.business-location', '.geography',
+            '.region', '.city', '.state', '.area',
+            '[class*="location"]', '[class*="geo"]'
+          ];
+          
+          let location = '';
+          for (const selector of locationSelectors) {
+            const locationEl = element.querySelector(selector);
+            if (locationEl) {
+              location = locationEl.textContent?.trim() || '';
+              if (location.length > 0) break;
+            }
+          }
+          
+          // Enhanced industry extraction
+          const industrySelectors = [
+            '.industry', '.business-type', '.category',
+            '.sector', '.type', '.vertical', '.market',
+            '[class*="category"]', '[class*="industry"]', '[class*="type"]'
+          ];
+          
+          let industry = '';
+          for (const selector of industrySelectors) {
+            const industryEl = element.querySelector(selector);
+            if (industryEl) {
+              industry = industryEl.textContent?.trim() || '';
+              if (industry.length > 0) break;
+            }
+          }
+          
+          // Enhanced description extraction
+          const descriptionSelectors = [
+            '.description', '.business-description', '.excerpt',
+            '.summary', '.content', '.details', '.overview',
+            'p', '[class*="description"]', '[class*="summary"]'
+          ];
+          
+          let description = '';
+          for (const selector of descriptionSelectors) {
+            const descEl = element.querySelector(selector);
+            if (descEl) {
+              description = descEl.textContent?.trim() || '';
+              if (description.length > 20) break;
+            }
+          }
+          
+          // Enhanced link extraction with multiple strategies to ensure we get valid URLs
+          const linkSelectors = [
+            'a[href*="/business-for-sale/"]',
+            'a[href*="/listing/"]',
+            'a.listing-title-link',
+            'h3 a',
+            'h2 a',
+            '.title a',
+            'a.view-listing',
+            'a[href]'
+          ];
+          
+          let originalUrl = '';
+          for (const selector of linkSelectors) {
+            const linkEl = element.querySelector(selector);
+            if (linkEl) {
+              originalUrl = linkEl.getAttribute('href') || '';
+              if (originalUrl.length > 0) break;
+            }
+          }
+          
+          // If no specific link found, try to use the listing's canonical URL if available
+          if (!originalUrl) {
+            const canonicalLinkEl = document.querySelector('link[rel="canonical"]');
+            if (canonicalLinkEl) {
+              originalUrl = canonicalLinkEl.getAttribute('href') || '';
+            }
+          }
+          
+          // Generate a unique identifier from the name for fallback URL purposes
+          const listingId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          
+          // Image extraction
+          const imageSelectors = [
+            'img.listing-image',
+            '.primary-image img',
+            '.main-image img',
+            '.listing-photo img',
+            '.carousel-item img',
+            'img[src*="listing"]',
+            'img'
+          ];
+          
+          let imageUrl = '';
+          for (const selector of imageSelectors) {
+            const imgEl = element.querySelector(selector);
+            if (imgEl) {
+              imageUrl = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+              if (imageUrl.length > 0) break;
+            }
+          }
+          
+          // Log debugging info for first few listings
+          if (index < 3) {
+            console.log(`BizBuySell listing ${index + 1}:`, {
+              name: name.substring(0, 50),
+              price: priceText.substring(0, 30), // Renamed from priceText to avoid lint errors
+              revenue: revenueText.substring(0, 30), // Renamed from revenueText to avoid lint errors
+              location: location.substring(0, 30),
+              industry: industry.substring(0, 30),
+              url: originalUrl.substring(0, 60)
             });
+          }
+
+          // Only include meaningful listings
+          if (name && name.length > 3 && (priceText || revenueText || description.length > 50)) {
+            const askingPrice = this.parsePrice(priceText);
+            const annualRevenue = this.parseRevenue(revenueText);
+            
+            // Process URL - ensure it's valid and complete
+            let processedUrl = originalUrl;
+            if (processedUrl && !processedUrl.startsWith('http')) {
+              processedUrl = `https://www.bizbuysell.com${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
+            }
+            
+            // If we still don't have a valid URL, create a fallback using the listing name and source
+            if (!processedUrl || processedUrl.length < 10) {
+              processedUrl = `https://www.bizbuysell.com/business-for-sale/${listingId}/`;
+            }
+            
+            // Process image URL - ensure it's valid and complete
+            let processedImageUrl = imageUrl;
+            if (processedImageUrl && !processedImageUrl.startsWith('http')) {
+              processedImageUrl = `https://www.bizbuysell.com${processedImageUrl.startsWith('/') ? '' : '/'}${processedImageUrl}`;
+            }
+            
+            const listingData = {
+              name,
+              description: description || `${industry} business opportunity from BizBuySell`,
+              askingPrice,
+              annualRevenue,
+              location: location || '',
+              industry: industry || 'Business',
+              source: 'BizBuySell',
+              originalUrl: DataProcessor.ensureValidUrl(processedUrl, 'BizBuySell', listingId),
+              imageUrl: processedImageUrl || undefined,
+              scrapedAt: new Date(),
+            };
+            
+            // Add to listings
+            listings.push(listingData);
           }
         } catch (error) {
           console.warn('Error extracting listing:', error);
@@ -182,7 +397,7 @@ export class BizBuySellScraper extends BaseScraper {
   }
 
   // Process the raw data extracted from the page
-  private processListings(rawListings: any[]): RawListing[] {
+  private processListings(rawListings: RawListing[]): RawListing[] {
     const processedListings: RawListing[] = [];
 
     for (const raw of rawListings) {
@@ -212,5 +427,15 @@ export class BizBuySellScraper extends BaseScraper {
     }
 
     return processedListings;
+  }
+
+  private parsePrice(priceText: string): number {
+    if (!priceText) return 0;
+    return DataProcessor.extractPrice(priceText);
+  }
+
+  private parseRevenue(revenueText: string): number {
+    if (!revenueText) return 0;
+    return DataProcessor.extractRevenue(revenueText);
   }
 }

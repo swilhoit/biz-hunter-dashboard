@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Connection Test</title>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { createClient } from 'https://cdn.skypack.dev/@supabase/supabase-js@2';
+        
+        const SUPABASE_URL = 'https://ueemtnohgkovwzodzxdr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ2MjI5ODMsImV4cCI6MjA1MDE5ODk4M30.1iZHzaEJQUc4FCQWAH9HvBPuJiP8jNKePBr1AKJpCtE';
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        console.log('Testing Supabase connection...');
+        console.log('URL:', SUPABASE_URL);
+        console.log('Key:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
+        
+        async function testConnection() {
+            const results = document.getElementById('results');
+            
+            // Test 1: Try to SELECT listings
+            try {
+                const { data, error } = await supabase
+                    .from('business_listings')
+                    .select('id, name, source, status')
+                    .limit(5);
+                
+                if (error) {
+                    results.innerHTML = `<h3>SELECT Test:</h3><p style="color: red;">Error: ${error.message}</p>`;
+                    console.error('SELECT error:', error);
+                } else {
+                    results.innerHTML = `<h3>SELECT Test:</h3><p style="color: green;">Success! Found ${data.length} listings</p>`;
+                    console.log('SELECT success:', data);
+                }
+            } catch (err) {
+                results.innerHTML = `<h3>SELECT Test:</h3><p style="color: red;">Failed: ${err.message}</p>`;
+            }
+            
+            // Test 2: Try to INSERT a test listing
+            try {
+                const testListing = {
+                    name: 'Test Business - DELETE ME',
+                    description: 'This is a test listing',
+                    asking_price: 100000,
+                    annual_revenue: 50000,
+                    industry: 'Test',
+                    location: 'Test Location',
+                    source: 'Test',
+                    highlights: ['Test'],
+                    status: 'active'
+                };
+                
+                const { data, error } = await supabase
+                    .from('business_listings')
+                    .insert([testListing])
+                    .select();
+                
+                if (error) {
+                    results.innerHTML += `<br><h3>INSERT Test:</h3><p style="color: red;">Error: ${error.message}</p>`;
+                    console.error('INSERT error:', error);
+                } else {
+                    results.innerHTML += `<br><h3>INSERT Test:</h3><p style="color: green;">Success! Inserted test listing</p>`;
+                    console.log('INSERT success:', data);
+                    
+                    // Try to delete it
+                    if (data && data[0]) {
+                        const { error: deleteError } = await supabase
+                            .from('business_listings')
+                            .delete()
+                            .eq('id', data[0].id);
+                        
+                        if (deleteError) {
+                            results.innerHTML += `<br><h3>DELETE Test:</h3><p style="color: red;">Error: ${deleteError.message}</p>`;
+                        } else {
+                            results.innerHTML += `<br><h3>DELETE Test:</h3><p style="color: green;">Success! Cleaned up test listing</p>`;
+                        }
+                    }
+                }
+            } catch (err) {
+                results.innerHTML += `<br><h3>INSERT Test:</h3><p style="color: red;">Failed: ${err.message}</p>`;
+            }
+        }
+        
+        testConnection();
+    </script>
+</body>
+</html>

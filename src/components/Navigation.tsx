@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Heart } from 'lucide-react';
+import { Building2, Heart, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { UserMenu } from '@/components/UserMenu';
@@ -30,13 +30,22 @@ const Navigation = () => {
               Browse Listings
             </Link>
             {user && (
-              <Link 
-                to="/saved" 
-                className="text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1"
-              >
-                <Heart className="h-4 w-4" />
-                <span>Saved</span>
-              </Link>
+              <>
+                <Link 
+                  to="/dashboard" 
+                  className="text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span>Dashboard</span>
+                </Link>
+                <Link 
+                  to="/saved" 
+                  className="text-gray-600 hover:text-gray-900 transition-colors flex items-center space-x-1"
+                >
+                  <Heart className="h-4 w-4" />
+                  <span>Saved</span>
+                </Link>
+              </>
             )}
             <a 
               href="#" 

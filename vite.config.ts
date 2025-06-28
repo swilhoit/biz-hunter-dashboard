@@ -14,18 +14,21 @@ export default defineConfig(({ mode }) => ({
     mode === 'development' &&
     componentTagger(),
   ].filter(Boolean),
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
   define: {
     global: 'globalThis',
   },
   optimizeDeps: {
     exclude: ['playwright', 'playwright-core'],
   },
-  ssr: {
-    noExternal: ['playwright', 'playwright-core'],
+  build: {
+    rollupOptions: {
+      external: ['playwright', 'playwright-core'],
+    },
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+    conditions: ['import', 'module', 'browser', 'default'],
   },
 }));

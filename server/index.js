@@ -840,6 +840,476 @@ app.post('/api/verify-all-listings', async (req, res) => {
   }
 });
 
+// Recent listings endpoint
+app.get('/api/listings/recent', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('business_listings')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching recent listings:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Profile Management API Routes
+app.get('/api/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+
+    // If no profile exists, create a basic one
+    if (!data) {
+      const { data: userData } = await supabase.auth.admin.getUserById(userId);
+      const newProfile = {
+        id: userId,
+        email: userData?.user?.email || '',
+        first_name: '',
+        last_name: '',
+        phone: '',
+        company: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: createdProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert([newProfile])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      return res.json({ success: true, data: createdProfile });
+    }
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.put('/api/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const profileData = req.body;
+    
+    // Add metadata fields as JSON for extended profile data
+    const updateData = {
+      ...profileData,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// User Activity Tracking (stored in a simple way using metadata)
+app.post('/api/activity', async (req, res) => {
+  try {
+    const { userId, type, title, description, metadata, listingId } = req.body;
+    
+    // For now, we'll track activity in a JSON field in the profiles table
+    // In a real implementation, you'd want a separate activity table
+    const activityRecord = {
+      id: Date.now().toString(),
+      type,
+      title,
+      description,
+      metadata: metadata || {},
+      listingId,
+      timestamp: new Date().toISOString()
+    };
+
+    // Get existing activities from profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    // Store activities as JSON array (for demo purposes)
+    const activities = profile?.activities || [];
+    activities.unshift(activityRecord);
+    
+    // Keep only last 100 activities
+    if (activities.length > 100) {
+      activities.splice(100);
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        activities: activities,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: activityRecord });
+  } catch (error) {
+    console.error('Error tracking activity:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/activity/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, type, startDate, endDate } = req.query;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('activities')
+      .eq('id', userId)
+      .single();
+
+    let activities = profile?.activities || [];
+    
+    // Apply filters
+    if (type && type !== 'all') {
+      activities = activities.filter(a => a.type === type);
+    }
+    
+    if (startDate) {
+      activities = activities.filter(a => new Date(a.timestamp) >= new Date(startDate));
+    }
+    
+    if (endDate) {
+      activities = activities.filter(a => new Date(a.timestamp) <= new Date(endDate));
+    }
+    
+    // Limit results
+    activities = activities.slice(0, parseInt(limit));
+
+    res.json({ success: true, data: activities });
+  } catch (error) {
+    console.error('Error fetching activity:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// User Settings Management
+app.get('/api/settings/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    // Default settings if none exist
+    const defaultSettings = {
+      profile_visibility: 'private',
+      email_visibility: false,
+      phone_visibility: false,
+      two_factor_enabled: false,
+      email_notifications: true,
+      push_notifications: true,
+      marketing_emails: false,
+      theme: 'system',
+      currency: 'USD',
+      timezone: 'America/New_York',
+      language: 'en',
+      save_search_history: true,
+      personalized_recommendations: true,
+      auto_save_preferences: true,
+      analytics_tracking: true
+    };
+
+    const settings = profile?.settings || defaultSettings;
+
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.put('/api/settings/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const settings = req.body;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ 
+        settings: settings,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({ success: true, data: data.settings });
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Notifications Management
+app.get('/api/notifications/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { filter = 'all', type = 'all', limit = 50 } = req.query;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('notifications')
+      .eq('id', userId)
+      .single();
+
+    let notifications = profile?.notifications || [];
+    
+    // Apply filters
+    if (filter === 'read') {
+      notifications = notifications.filter(n => n.read);
+    } else if (filter === 'unread') {
+      notifications = notifications.filter(n => !n.read);
+    }
+    
+    if (type !== 'all') {
+      notifications = notifications.filter(n => n.type === type);
+    }
+    
+    // Sort by timestamp descending
+    notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    // Limit results
+    notifications = notifications.slice(0, parseInt(limit));
+
+    res.json({ success: true, data: notifications });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const { userId, title, message, type, priority = 'medium', metadata = {} } = req.body;
+    
+    const notification = {
+      id: Date.now().toString(),
+      title,
+      message,
+      type,
+      priority,
+      read: false,
+      metadata,
+      timestamp: new Date().toISOString()
+    };
+
+    // Get existing notifications
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('notifications')
+      .eq('id', userId)
+      .single();
+
+    const notifications = profile?.notifications || [];
+    notifications.unshift(notification);
+    
+    // Keep only last 200 notifications
+    if (notifications.length > 200) {
+      notifications.splice(200);
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        notifications: notifications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: notification });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.put('/api/notifications/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const { userId, read } = req.body;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('notifications')
+      .eq('id', userId)
+      .single();
+
+    const notifications = profile?.notifications || [];
+    const notificationIndex = notifications.findIndex(n => n.id === notificationId);
+    
+    if (notificationIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
+    notifications[notificationIndex].read = read;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        notifications: notifications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    res.json({ success: true, data: notifications[notificationIndex] });
+  } catch (error) {
+    console.error('Error updating notification:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.delete('/api/notifications/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const { userId } = req.query;
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('notifications')
+      .eq('id', userId)
+      .single();
+
+    const notifications = profile?.notifications || [];
+    const filteredNotifications = notifications.filter(n => n.id !== notificationId);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        notifications: filteredNotifications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Dashboard Stats
+app.get('/api/dashboard/stats/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get saved listings count
+    const { count: savedCount } = await supabase
+      .from('favorites')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    // Get total listings count
+    const { count: totalListings } = await supabase
+      .from('business_listings')
+      .select('*', { count: 'exact', head: true });
+
+    // Get user activity for viewed count (mock for now)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('activities')
+      .eq('id', userId)
+      .single();
+
+    const activities = profile?.activities || [];
+    const viewedCount = activities.filter(a => a.type === 'view').length;
+
+    const stats = {
+      savedListings: savedCount || 0,
+      viewedListings: viewedCount,
+      totalListings: totalListings || 0,
+      newThisWeek: Math.floor(Math.random() * 15) + 5 // Mock data
+    };
+
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Track listing view
+app.post('/api/track-view', async (req, res) => {
+  try {
+    const { userId, listingId } = req.body;
+    
+    // Get listing details
+    const { data: listing } = await supabase
+      .from('business_listings')
+      .select('name, industry, asking_price')
+      .eq('id', listingId)
+      .single();
+
+    if (listing) {
+      // Track activity
+      await fetch(`http://localhost:${PORT}/api/activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          type: 'view',
+          title: 'Viewed a listing',
+          description: listing.name,
+          listingId,
+          metadata: {
+            listing_name: listing.name,
+            industry: listing.industry,
+            price: listing.asking_price
+          }
+        })
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking view:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ 

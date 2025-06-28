@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useToggleFavorite } from '@/hooks/useBusinessListings';
 import { toast } from 'sonner';
 
 interface SaveButtonProps {
@@ -18,8 +19,8 @@ export const SaveButton: React.FC<SaveButtonProps> = ({
   className = "" 
 }) => {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
   const [saved, setSaved] = useState(isSaved);
+  const toggleFavorite = useToggleFavorite();
 
   const handleSaveToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -30,46 +31,24 @@ export const SaveButton: React.FC<SaveButtonProps> = ({
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const method = saved ? 'DELETE' : 'POST';
-      const url = saved 
-        ? `https://biz-hunter-dashboard-production.up.railway.app/api/favorites/${listingId}?userId=${user.id}`
-        : 'https://biz-hunter-dashboard-production.up.railway.app/api/favorites';
-
-      const body = saved ? undefined : JSON.stringify({
+      const result = await toggleFavorite.mutateAsync({
         listingId,
         userId: user.id
       });
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const newSavedState = !saved;
-        setSaved(newSavedState);
-        onSaveChange?.(newSavedState);
-        toast.success(newSavedState ? 'Listing saved!' : 'Listing removed from saved');
+      const newSavedState = result === 'added';
+      setSaved(newSavedState);
+      onSaveChange?.(newSavedState);
+      
+      if (result === 'added') {
+        toast.success('Listing saved!');
       } else {
-        if (response.status === 409) {
-          toast.info('Listing is already saved');
-        } else {
-          throw new Error(data.message || 'Failed to update saved status');
-        }
+        toast.success('Listing removed from saved');
       }
     } catch (error) {
       console.error('Error toggling save:', error);
       toast.error('Failed to update saved status');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -78,7 +57,7 @@ export const SaveButton: React.FC<SaveButtonProps> = ({
       variant="ghost"
       size="sm"
       onClick={handleSaveToggle}
-      disabled={isLoading}
+      disabled={toggleFavorite.isPending}
       className={`p-2 hover:bg-red-50 ${className}`}
       title={saved ? 'Remove from saved' : 'Save listing'}
     >
