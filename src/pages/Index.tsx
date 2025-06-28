@@ -13,6 +13,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { AdminClear } from "@/components/AdminClear";
 import { ScraperManagement } from "@/components/ScraperManagement";
 import { SourceFilter } from "@/components/SourceFilter";
+import { SaveListingDebug } from "@/components/SaveListingDebug";
+import { SaveTestButton } from "@/components/SaveTestButton";
+import { ToastTest } from "@/components/ToastTest";
+import { UserDashboard } from "@/components/UserDashboard";
 import { Search, Filter, SlidersHorizontal, Grid2X2, List, Settings, AlertTriangle, CheckCircle, Database } from "lucide-react";
 import { useScrapingStatus } from "@/hooks/useScrapingStatus";
 import { useIntegratedScraping } from "@/hooks/useIntegratedScraping";
@@ -197,6 +201,15 @@ const Index = () => {
         </div>
       </section>
 
+      {/* User Dashboard Section - Only show when signed in */}
+      {user && (
+        <section className="bg-white py-8 border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <UserDashboard />
+          </div>
+        </section>
+      )}
+
       {/* Filters Section */}
       <section className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -337,6 +350,15 @@ const Index = () => {
 
           {showAdminPanel && (
             <div className="mt-4 space-y-4">
+              {/* Save Listing Debug Tool */}
+              <SaveListingDebug />
+              
+              {/* Direct Save Test */}
+              <SaveTestButton />
+              
+              {/* Toast Test */}
+              <ToastTest />
+              
               {/* Scraping Status */}
               <div className={`p-4 border rounded-lg ${scrapingStatus.apiRunning ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex items-center gap-2 mb-2">

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,8 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { BusinessCard } from '@/components/BusinessCard';
+import { useFavorites, useBusinessListings } from '@/hooks/useBusinessListings';
+import { useListingViews } from '@/hooks/useListingViews';
 import { Link } from 'react-router-dom';
 
 interface DashboardStats {
@@ -35,58 +35,26 @@ interface RecentListing {
 
 const Overview = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>({
-    savedListings: 0,
-    viewedListings: 0,
-    totalListings: 0,
+  const { data: favorites = [], isLoading: favoritesLoading } = useFavorites(user?.id);
+  const { data: allListings = [], isLoading: listingsLoading } = useBusinessListings();
+  const { getViewStats } = useListingViews();
+  
+  const viewStats = getViewStats();
+  const isLoading = favoritesLoading || listingsLoading;
+  
+  // Calculate stats from our data
+  const stats = {
+    savedListings: favorites.length,
+    viewedListings: viewStats.uniqueListings,
+    totalListings: allListings.length,
     recentActivity: []
-  });
-  const [recentListings, setRecentListings] = useState<RecentListing[]>([]);
-  const [savedListings, setSavedListings] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-  }, [user]);
-
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Fetch dashboard stats
-      const statsResponse = await fetch(
-        `https://biz-hunter-dashboard-production.up.railway.app/api/dashboard/stats/${user?.id}`
-      );
-      const statsData = await statsResponse.json();
-      
-      // Fetch saved listings count and data
-      const savedResponse = await fetch(
-        `https://biz-hunter-dashboard-production.up.railway.app/api/favorites/${user?.id}`
-      );
-      const savedData = await savedResponse.json();
-      
-      // Fetch recent listings
-      const recentResponse = await fetch(
-        'https://biz-hunter-dashboard-production.up.railway.app/api/listings/recent'
-      );
-      const recentData = await recentResponse.json();
-
-      // Update stats with real data
-      if (statsData.success) {
-        setStats(statsData.data);
-      }
-
-      setSavedListings(savedData.success ? savedData.data.slice(0, 3) : []);
-      setRecentListings(recentData.success ? recentData.data.slice(0, 6) : []);
-      
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setIsLoading(false);
-    }
   };
+  
+  // Get recent listings (last 6)
+  const recentListings = allListings.slice(0, 6);
+  
+  // Get saved listings for preview (first 3)
+  const savedListingsPreview = favorites.slice(0, 3);
 
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000) {
@@ -187,9 +155,9 @@ const Overview = () => {
             <TrendingUp className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{viewStats.viewsThisWeek}</div>
             <p className="text-xs text-muted-foreground">
-              New listings added
+              Listings viewed this week
             </p>
           </CardContent>
         </Card>
@@ -208,7 +176,7 @@ const Overview = () => {
             </Link>
           </CardHeader>
           <CardContent>
-            {savedListings.length === 0 ? (
+            {savedListingsPreview.length === 0 ? (
               <div className="text-center py-6">
                 <Heart className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No saved listings yet</p>
@@ -220,20 +188,20 @@ const Overview = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {savedListings.map((item) => (
+                {savedListingsPreview.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                     <div className="flex-1">
-                      <h4 className="font-medium text-sm">{item.business_listings.name}</h4>
+                      <h4 className="font-medium text-sm">{item.business_listings?.name || 'Unknown Listing'}</h4>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-sm text-green-600 font-medium">
-                          {formatCurrency(item.business_listings.asking_price)}
+                          {formatCurrency(item.business_listings?.asking_price || 0)}
                         </span>
                         <Badge variant="secondary" className="text-xs">
-                          {item.business_listings.industry}
+                          {item.business_listings?.industry || 'Unknown'}
                         </Badge>
                       </div>
                     </div>
-                    <Link to={`/listing/${item.business_listings.id}`}>
+                    <Link to={`/listing/${item.business_listings?.id}`}>
                       <Button variant="ghost" size="sm">
                         <ArrowUpRight className="h-4 w-4" />
                       </Button>
@@ -257,38 +225,57 @@ const Overview = () => {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {/* Mock activity data */}
-              <div className="flex items-center space-x-3 p-2">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Heart className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm">Saved a listing in Technology</p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
-                </div>
+            {favorites.length === 0 && viewStats.recentViews.length === 0 ? (
+              <div className="text-center py-6">
+                <Clock className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No recent activity</p>
+                <Link to="/">
+                  <Button variant="outline" size="sm" className="mt-2">
+                    Start Exploring
+                  </Button>
+                </Link>
               </div>
-              
-              <div className="flex items-center space-x-3 p-2">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Eye className="h-4 w-4 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm">Viewed Restaurant listing</p>
-                  <p className="text-xs text-gray-500">1 day ago</p>
-                </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Recent saves */}
+                {favorites.slice(0, 2).map((fav) => (
+                  <div key={`save-${fav.id}`} className="flex items-center space-x-3 p-2">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <Heart className="h-4 w-4 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm">Saved "{fav.business_listings?.name?.substring(0, 30) || 'Unknown'}..."</p>
+                      <p className="text-xs text-gray-500">{formatDate(fav.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Recent views */}
+                {viewStats.recentViews.slice(0, 2).map((view, index) => (
+                  <div key={`view-${view.listingId}-${index}`} className="flex items-center space-x-3 p-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm">Viewed "{view.listingName?.substring(0, 30) || 'a listing'}..."</p>
+                      <p className="text-xs text-gray-500">{formatDate(view.viewedAt)}</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {favorites.length === 0 && viewStats.recentViews.length === 0 && (
+                  <div className="flex items-center space-x-3 p-2">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Star className="h-4 w-4 text-gray-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm">Welcome! Start exploring to see activity here</p>
+                      <p className="text-xs text-gray-500">Just now</p>
+                    </div>
+                  </div>
+                )}
               </div>
-              
-              <div className="flex items-center space-x-3 p-2">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Star className="h-4 w-4 text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm">Updated search preferences</p>
-                  <p className="text-xs text-gray-500">3 days ago</p>
-                </div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

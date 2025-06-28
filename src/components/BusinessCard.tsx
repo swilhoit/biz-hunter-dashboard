@@ -8,6 +8,7 @@ import { extractOriginalUrl } from '../utils/extractOriginalUrl';
 import { SaveButton } from './SaveButton';
 import { StatusBadge } from './StatusBadge';
 import { useAuth } from '@/hooks/useAuth';
+import { useListingViews } from '@/hooks/useListingViews';
 
 interface BusinessListing {
   id: string;
@@ -33,23 +34,13 @@ interface BusinessCardProps {
 
 export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
   const { user } = useAuth();
+  const { trackView: trackListingView } = useListingViews();
   
-  const trackView = async () => {
+  // Track view when user clicks on listing
+  const trackView = () => {
     if (user) {
-      try {
-        await fetch('https://biz-hunter-dashboard-production.up.railway.app/api/track-view', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            listingId: listing.id
-          })
-        });
-      } catch (error) {
-        console.error('Error tracking view:', error);
-      }
+      trackListingView(listing.id, listing.name);
+      console.log('View tracked for listing:', listing.id);
     }
   };
 
@@ -172,13 +163,15 @@ export const BusinessCard: React.FC<BusinessCardProps> = ({ listing }) => {
             </div>
           )}
           
-          {/* Status Badge */}
-          <div className="flex justify-end mt-2">
-            <StatusBadge 
-              status={listing.verification_status || 'live'}
-              lastVerified={listing.last_verified_at}
-            />
-          </div>
+          {/* Status Badge - only show if verification fields exist */}
+          {listing.verification_status && (
+            <div className="flex justify-end mt-2">
+              <StatusBadge 
+                status={listing.verification_status}
+                lastVerified={listing.last_verified_at}
+              />
+            </div>
+          )}
           </CardContent>
         </Link>
       </Card>
