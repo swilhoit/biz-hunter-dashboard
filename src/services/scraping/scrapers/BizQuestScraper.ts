@@ -105,11 +105,18 @@ export class BizQuestScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number): string {
-    // BizQuest URL structure
+    // Search for Amazon FBA businesses on BizQuest
+    const baseUrl = 'https://www.bizquest.com/businesses-for-sale';
+    const params = new URLSearchParams({
+      'category': 'ecommerce',
+      'keywords': 'amazon fba ecommerce online retail',
+      'business_type': 'ecommerce'
+    });
+    
     if (page === 1) {
-      return 'https://www.bizquest.com/businesses-for-sale/';
+      return `${baseUrl}/?${params.toString()}`;
     }
-    return `https://www.bizquest.com/businesses-for-sale/?page=${page}`;
+    return `${baseUrl}/?${params.toString()}&page=${page}`;
   }
 
   private async extractListingsFromPage(): Promise<RawListing[]> {
@@ -141,6 +148,12 @@ export class BizQuestScraper extends BaseScraper {
           const description = descriptionEl?.textContent?.trim() || '';
           const originalUrl = linkEl?.getAttribute('href') || '';
           const imageUrl = imageEl?.getAttribute('src') || '';
+
+          // Filter for Amazon FBA businesses
+          const isFBABusiness = this.isFBABusiness(name, description);
+          if (!isFBABusiness) {
+            return; // Skip non-FBA businesses
+          }
 
           if (name && priceText) {
             listings.push({
@@ -213,5 +226,18 @@ export class BizQuestScraper extends BaseScraper {
     }
 
     return processedListings;
+  }
+
+  private isFBABusiness(name: string, description: string): boolean {
+    const text = `${name} ${description}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'amazon store', 'amazon selling',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'fba',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 }

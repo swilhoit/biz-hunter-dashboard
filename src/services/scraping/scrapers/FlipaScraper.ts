@@ -105,8 +105,16 @@ export class FlipaScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number): string {
-    // Flippa URL structure for businesses
-    return `https://flippa.com/search?type=business&page=${page}`;
+    // Search for Amazon FBA businesses on Flippa
+    const baseUrl = 'https://flippa.com/search';
+    const params = new URLSearchParams({
+      'type': 'business',
+      'category': 'ecommerce',
+      'keywords': 'amazon fba ecommerce marketplace',
+      'page': page.toString()
+    });
+    
+    return `${baseUrl}?${params.toString()}`;
   }
 
   private async extractListingsFromPage(): Promise<RawListing[]> {
@@ -142,6 +150,12 @@ export class FlipaScraper extends BaseScraper {
           const imageUrl = imageEl?.getAttribute('src') || '';
           const metrics = metricsEl?.textContent?.trim() || '';
           const traffic = trafficEl?.textContent?.trim() || '';
+
+          // Filter for Amazon FBA businesses
+          const isFBABusiness = this.isFBABusiness(name, description);
+          if (!isFBABusiness) {
+            return; // Skip non-FBA businesses
+          }
 
           if (name && priceText) {
             const askingPrice = this.parsePrice(priceText);
@@ -223,5 +237,18 @@ export class FlipaScraper extends BaseScraper {
   private parsePrice(priceText: string): number {
     const cleanPrice = priceText.replace(/[^0-9.]/g, '');
     return parseFloat(cleanPrice) || 0;
+  }
+
+  private isFBABusiness(name: string, description: string): boolean {
+    const text = `${name} ${description}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'amazon store', 'amazon selling',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'fba',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 }

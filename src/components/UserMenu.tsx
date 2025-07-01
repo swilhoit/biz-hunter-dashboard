@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -25,18 +26,18 @@ export const UserMenu = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem>
-          <User className="h-4 w-4 mr-2" />
-          Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Heart className="h-4 w-4 mr-2" />
-          Favorites
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="h-4 w-4 mr-2" />
-          Settings
-        </DropdownMenuItem>
+        <Link to="/dashboard/saved">
+          <DropdownMenuItem>
+            <Heart className="h-4 w-4 mr-2" />
+            Saved Listings
+          </DropdownMenuItem>
+        </Link>
+        <Link to="/dashboard/settings">
+          <DropdownMenuItem>
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
+          </DropdownMenuItem>
+        </Link>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={signOut}>
           <LogOut className="h-4 w-4 mr-2" />

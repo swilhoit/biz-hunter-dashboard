@@ -101,12 +101,14 @@ export class BizBuySellScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number): string {
-    // BizBuySell search URL for business listings
+    // BizBuySell search URL for Amazon FBA businesses
     const baseUrl = 'https://www.bizbuysell.com/businesses-for-sale/';
     const params = new URLSearchParams({
       page: page.toString(),
       sort: 'newest',
-      // Add any additional filters here
+      'business-type': 'online',
+      keywords: 'amazon fba ecommerce online selling',
+      // Add any additional filters for FBA businesses
     });
     
     return `${baseUrl}?${params.toString()}`;
@@ -329,8 +331,9 @@ export class BizBuySellScraper extends BaseScraper {
             });
           }
 
-          // Only include meaningful listings
-          if (name && name.length > 3 && (priceText || revenueText || description.length > 50)) {
+          // Filter for Amazon FBA businesses and only include meaningful listings
+          const isFBABusiness = this.isFBABusiness(name, description, industry);
+          if (isFBABusiness && name && name.length > 3 && (priceText || revenueText || description.length > 50)) {
             const askingPrice = this.parsePrice(priceText);
             const annualRevenue = this.parseRevenue(revenueText);
             
@@ -437,5 +440,18 @@ export class BizBuySellScraper extends BaseScraper {
   private parseRevenue(revenueText: string): number {
     if (!revenueText) return 0;
     return DataProcessor.extractRevenue(revenueText);
+  }
+
+  private isFBABusiness(name: string, description: string, industry: string): boolean {
+    const text = `${name} ${description} ${industry}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'online selling', 'amazon store',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'amazon selling',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 }

@@ -1,47 +1,42 @@
 // Client-safe exports - types only
-export type ScraperName = 'bizbuysell' | 'quietlight' | 'acquire' | 'bizquest' | 'microacquire' | 'flippa' | 'empireflippers' | 'exitadviser';
+export type ScraperName = 'bizbuysell' | 'quietlight' | 'bizquest' | 'flippa' | 'empireflippers' | 'exitadviser' | 'centurica';
 
 export function getScraperInfo() {
   return {
     bizbuysell: {
       name: 'BizBuySell',
-      description: 'Business listings from BizBuySell.com',
-      category: 'Traditional Business',
+      description: 'Amazon FBA businesses from BizBuySell.com',
+      category: 'Amazon FBA',
     },
     quietlight: {
       name: 'QuietLight',
-      description: 'Digital business listings from QuietLight Brokerage',
-      category: 'Digital Business',
-    },
-    acquire: {
-      name: 'Acquire',
-      description: 'Startup acquisitions from Acquire.com',
-      category: 'Startup',
+      description: 'Amazon FBA businesses from QuietLight Brokerage',
+      category: 'Amazon FBA',
     },
     bizquest: {
       name: 'BizQuest',
-      description: 'Business opportunities from BizQuest.com',
-      category: 'Traditional Business',
-    },
-    microacquire: {
-      name: 'MicroAcquire',
-      description: 'Micro-SaaS and small startup acquisitions',
-      category: 'Micro SaaS',
+      description: 'Amazon FBA businesses from BizQuest.com',
+      category: 'Amazon FBA',
     },
     flippa: {
       name: 'Flippa',
-      description: 'Website and digital asset marketplace',
-      category: 'Digital Asset',
+      description: 'Amazon FBA businesses from Flippa.com',
+      category: 'Amazon FBA',
     },
     empireflippers: {
       name: 'EmpireFlippers',
-      description: 'Online business marketplace from EmpireFlippers.com',
-      category: 'Digital Business',
+      description: 'Amazon FBA businesses from EmpireFlippers.com',
+      category: 'Amazon FBA',
     },
     exitadviser: {
       name: 'ExitAdviser',
-      description: 'Business for sale listings from ExitAdviser.com',
-      category: 'Small Business',
+      description: 'Amazon FBA businesses from ExitAdviser.com',
+      category: 'Amazon FBA',
+    },
+    centurica: {
+      name: 'Centurica',
+      description: 'Aggregated business listings from 30+ brokers via Centurica Marketwatch',
+      category: 'Aggregator',
     },
   };
 }

@@ -6,8 +6,8 @@ async function populateDashboard() {
   const scrapingService = new ComprehensiveScrapingService();
   
   console.log('Available scrapers:', scrapingService.getAvailableScrapers());
-  console.log('Target sources: BizBuySell, Empire Flippers, Quiet Light, Flippa, MicroAcquire');
-  console.log('Note: Excluding Acquire.com as requested\n');
+  console.log('Target sources: BizBuySell, Empire Flippers, Quiet Light, Flippa, MicroAcquire, Acquire, Centurica');
+  console.log('🎯 Focus: Amazon FBA businesses only\n');
   
   try {
     // Configure for comprehensive but reasonable scraping

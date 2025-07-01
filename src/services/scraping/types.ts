@@ -12,6 +12,30 @@ export const RawListingSchema = z.object({
   imageUrl: z.string().url().optional(),
   originalUrl: z.string().url(),
   scrapedAt: z.date().default(() => new Date()),
+  
+  // Enhanced fields for Centurica aggregator data
+  businessModel: z.string().optional(),
+  niche: z.string().optional(),
+  grossRevenue: z.number().nonnegative().optional(),
+  netRevenue: z.number().nonnegative().optional(),
+  inventoryValue: z.number().nonnegative().optional(),
+  profitMultiple: z.number().optional(),
+  rIndex: z.number().int().optional(),
+  provider: z.string().optional(),
+  sbaQualified: z.boolean().optional(),
+  booposQualified: z.boolean().optional(),
+  listingDate: z.date().optional(),
+  priceReduced: z.boolean().optional(),
+  underOffer: z.boolean().optional(),
+  newListing: z.boolean().optional(),
+  monthlyRevenue: z.number().nonnegative().optional(),
+  annualProfit: z.number().optional(),
+  employees: z.number().int().optional(),
+  establishedYear: z.number().int().optional(),
+  growthRate: z.number().optional(),
+  trafficSources: z.array(z.string()).optional(),
+  technologyStack: z.array(z.string()).optional(),
+  monetizationModel: z.string().optional(),
 });
 
 export type RawListing = z.infer<typeof RawListingSchema>;
@@ -53,7 +77,7 @@ export abstract class BaseScraper {
       maxPages: 5,
       delayBetweenRequests: 2000,
       headless: true,
-      timeout: 30000,
+      timeout: 90000,
       ...config,
     };
     

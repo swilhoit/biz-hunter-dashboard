@@ -33,7 +33,6 @@ export const useBusinessListings = () => {
         .from('business_listings')
         .select('*')
         .eq('status', 'active')
-        .in('source', ['BizBuySell', 'QuietLight', 'Acquire', 'BizQuest', 'MicroAcquire', 'Flippa', 'EmpireFlippers', 'ExitAdviser'])
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -51,7 +50,6 @@ export const useBusinessListing = (id: string) => {
         .select('*')
         .eq('id', id)
         .eq('status', 'active')
-        .in('source', ['BizBuySell', 'QuietLight', 'Acquire', 'BizQuest', 'MicroAcquire', 'Flippa', 'EmpireFlippers', 'ExitAdviser'])
         .single();
       
       if (error) throw error;
@@ -64,31 +62,77 @@ export const useFavorites = (userId?: string) => {
   return useQuery({
     queryKey: ['favorites', userId],
     queryFn: async () => {
-      if (!userId) {
-        console.log('🔍 useFavorites: No userId provided');
+      try {
+        if (!userId) {
+          console.log('🔍 useFavorites: No userId provided');
+          return [];
+        }
+        
+        console.log('🔍 useFavorites: Fetching favorites for user:', userId);
+        
+        // Step 1: Get user's favorites
+        const { data: favoritesData, error: favoritesError } = await supabase
+          .from('favorites')
+          .select('id, created_at, listing_id')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        
+        if (favoritesError) {
+          console.error('❌ Favorites query error:', favoritesError);
+          throw new Error(`Failed to fetch favorites: ${favoritesError.message}`);
+        }
+        
+        if (!favoritesData || favoritesData.length === 0) {
+          console.log('✅ No favorites found for user');
+          return [];
+        }
+        
+        console.log('✅ Found', favoritesData.length, 'favorites');
+        
+        // Step 2: Get business listings for those favorites
+        const listingIds = favoritesData.map(fav => fav.listing_id);
+        
+        const { data: listingsData, error: listingsError } = await supabase
+          .from('business_listings')
+          .select('*')
+          .in('id', listingIds)
+          .eq('status', 'active');
+        
+        if (listingsError) {
+          console.error('❌ Listings query error:', listingsError);
+          throw new Error(`Failed to fetch business listings: ${listingsError.message}`);
+        }
+        
+        console.log('✅ Found', listingsData?.length || 0, 'business listings');
+        
+        // Step 3: Combine the data
+        const result = favoritesData.map(favorite => {
+          const businessListing = listingsData?.find(listing => listing.id === favorite.listing_id);
+          if (!businessListing) {
+            console.warn('⚠️ No business listing found for favorite:', favorite.id);
+            return null;
+          }
+          
+          return {
+            id: favorite.id,
+            created_at: favorite.created_at,
+            business_listings: businessListing
+          };
+        }).filter(Boolean); // Remove nulls
+        
+        console.log('✅ Final result:', result.length, 'favorites with listings');
+        return result;
+        
+      } catch (error) {
+        console.error('❌ useFavorites error:', error);
+        // Return empty array instead of throwing to prevent crash
         return [];
       }
-      
-      console.log('🔍 useFavorites: Fetching favorites for user:', userId);
-      
-      const { data, error } = await supabase
-        .from('favorites')
-        .select(`
-          id,
-          created_at,
-          business_listings (*)
-        `)
-        .eq('user_id', userId);
-      
-      if (error) {
-        console.error('❌ useFavorites error:', error);
-        throw error;
-      }
-      
-      console.log('✅ useFavorites: Found', data?.length || 0, 'favorites');
-      return data;
     },
-    enabled: !!userId
+    enabled: !!userId,
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000 // 10 minutes
   });
 };
 

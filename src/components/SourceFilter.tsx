@@ -9,29 +9,28 @@ import {
   ShoppingCart, 
   CheckCircle,
   Crown,
-  FileText
+  FileText,
+  Database
 } from 'lucide-react';
 
 const sourceIcons: Record<string, React.ReactNode> = {
   'BizBuySell': <Building2 className="h-4 w-4" />,
   'QuietLight': <Globe className="h-4 w-4" />,
-  'Acquire': <TrendingUp className="h-4 w-4" />,
   'BizQuest': <Building2 className="h-4 w-4" />,
-  'MicroAcquire': <Laptop className="h-4 w-4" />,
   'Flippa': <ShoppingCart className="h-4 w-4" />,
-  'EmpireFlippers': <Crown className="h-4 w-4" />,
+  'Empire Flippers': <Crown className="h-4 w-4" />,
   'ExitAdviser': <FileText className="h-4 w-4" />,
+  'Centurica': <Database className="h-4 w-4" />,
 };
 
 const sourceColors: Record<string, string> = {
   'BizBuySell': 'bg-blue-100 text-blue-800 hover:bg-blue-200',
   'QuietLight': 'bg-green-100 text-green-800 hover:bg-green-200',
-  'Acquire': 'bg-purple-100 text-purple-800 hover:bg-purple-200',
   'BizQuest': 'bg-orange-100 text-orange-800 hover:bg-orange-200',
-  'MicroAcquire': 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200',
   'Flippa': 'bg-pink-100 text-pink-800 hover:bg-pink-200',
-  'EmpireFlippers': 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+  'Empire Flippers': 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
   'ExitAdviser': 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200',
+  'Centurica': 'bg-red-100 text-red-800 hover:bg-red-200',
 };
 
 interface SourceFilterProps {

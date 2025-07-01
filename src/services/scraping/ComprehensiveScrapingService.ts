@@ -2,7 +2,7 @@ import { ScraperAPIBizBuySellScraper } from './scrapers/ScraperAPIBizBuySellScra
 import { ScraperAPIEmpireFlippersScraper } from './scrapers/ScraperAPIEmpireFlippersScraper';
 import { ScraperAPIQuietLightScraper } from './scrapers/ScraperAPIQuietLightScraper';
 import { ScraperAPIFlippaScraper } from './scrapers/ScraperAPIFlippaScraper';
-import { ScraperAPIAcquireScraper } from './scrapers/ScraperAPIAcquireScraper';
+import { ScraperAPICenturicaScraper } from './scrapers/ScraperAPICenturicaScraper';
 import { BaseScraper, ScrapingResult, RawListing, ScrapingConfig } from './types';
 import { supabase } from '../../integrations/supabase/client';
 import logger from './utils/logger';
@@ -27,12 +27,12 @@ export class ComprehensiveScrapingService {
   }
 
   private initializeScrapers(): void {
-    // Initialize all fixed ScraperAPI scrapers 
+    // Initialize all ScraperAPI scrapers for Amazon FBA businesses
     this.scrapers.set('bizbuysell', new ScraperAPIBizBuySellScraper());
     this.scrapers.set('empireflippers', new ScraperAPIEmpireFlippersScraper());
     this.scrapers.set('quietlight', new ScraperAPIQuietLightScraper());
     this.scrapers.set('flippa', new ScraperAPIFlippaScraper());
-    this.scrapers.set('acquire', new ScraperAPIAcquireScraper()); // Fixed: MicroAcquire -> Acquire.com
+    this.scrapers.set('centurica', new ScraperAPICenturicaScraper());
   }
 
   async scrapeAllSources(config: ScrapingConfig = {}): Promise<ComprehensiveScrapingSession> {

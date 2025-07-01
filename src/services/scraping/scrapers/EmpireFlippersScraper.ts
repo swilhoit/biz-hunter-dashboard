@@ -56,7 +56,7 @@ export class EmpireFlippersScraper extends BaseScraper {
     
     try {
       const scraperUrl = `http://api.scraperapi.com?api_key=${this.scraperAPIKey}&url=${encodeURIComponent(url)}&render=true&premium=true`;
-      const response = await axios.get(scraperUrl, { timeout: this.config.timeout || 60000 });
+      const response = await axios.get(scraperUrl, { timeout: 120000 });
       
       if (response.status !== 200) {
         throw new Error(`ScraperAPI returned status code ${response.status}`);
@@ -71,7 +71,15 @@ export class EmpireFlippersScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number = 1): string {
-    return `https://empireflippers.com/marketplace${page > 1 ? `/page/${page}` : ''}`;
+    // Search for Amazon FBA businesses on Empire Flippers
+    const baseUrl = 'https://empireflippers.com/marketplace';
+    const params = new URLSearchParams({
+      'business-type': 'ecommerce',
+      'monetization': 'amazon-fba',
+      'keywords': 'amazon fba ecommerce'
+    });
+    
+    return `${baseUrl}${page > 1 ? `/page/${page}` : ''}?${params.toString()}`;
   }
 
   private async scrapeListings(): Promise<RawListing[]> {
@@ -169,6 +177,12 @@ export class EmpireFlippersScraper extends BaseScraper {
         const annualRevenue = (metrics.monthlyRevenue || 0) * 12;
         
         // Create the listing object
+        // Filter for Amazon FBA businesses
+        const isFBABusiness = this.isFBABusiness(name, description);
+        if (!isFBABusiness) {
+          return; // Skip non-FBA businesses
+        }
+        
         const listing: RawListing = {
           name,
           askingPrice,
@@ -336,12 +350,36 @@ export class EmpireFlippersScraper extends BaseScraper {
       return baseUrl;
     }
     
-    if (url.startsWith('http')) return url;
+    // Fix Empire Flippers unlock URLs to public listing URLs
+    if (url.includes('/unlock/')) {
+      const match = url.match(/\/unlock\/(\d+)/);
+      if (match && match[1]) {
+        return `https://empireflippers.com/listing/${match[1]}/`;
+      }
+    }
     
-    const base = 'https://empireflippers.com';
-    return url.startsWith('/') 
-      ? `${base}${url}`
-      : `${base}/${url}`;
+    // Handle relative URLs
+    if (!url.startsWith('http')) {
+      const base = 'https://empireflippers.com';
+      return url.startsWith('/') 
+        ? `${base}${url}`
+        : `${base}/${url}`;
+    }
+    
+    return url;
+  }
+
+  private isFBABusiness(name: string, description: string): boolean {
+    const text = `${name} ${description}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'amazon store', 'amazon selling',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'fba',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 
   // Use BaseScraper's protected delay method instead

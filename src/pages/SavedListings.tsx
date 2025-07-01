@@ -3,11 +3,16 @@ import { BusinessCard } from "@/components/BusinessCard";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useBusinessListings";
-import { Heart, Loader2, AlertCircle } from "lucide-react";
+import { FavoriteNotesAndFiles } from "@/components/FavoriteNotesAndFiles";
+import { Heart, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface SavedListing {
   id: string;
   created_at: string;
+  notes?: string;
+  updated_at?: string;
   business_listings: {
     id: string;
     name: string;
@@ -25,11 +30,30 @@ interface SavedListing {
     last_verified_at?: string;
     verification_status?: 'live' | 'removed' | 'pending';
   };
+  favorite_files?: Array<{
+    id: string;
+    file_name: string;
+    file_path: string;
+    file_size: number;
+    mime_type: string;
+    uploaded_at: string;
+  }>;
 }
 
 const SavedListings = () => {
   const { user } = useAuth();
   const { data: favorites = [], isLoading, error, refetch } = useFavorites(user?.id);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (favoriteId: string) => {
+    const newExpanded = new Set(expandedCards);
+    if (newExpanded.has(favoriteId)) {
+      newExpanded.delete(favoriteId);
+    } else {
+      newExpanded.add(favoriteId);
+    }
+    setExpandedCards(newExpanded);
+  };
 
   if (!user) {
     return (
@@ -61,15 +85,24 @@ const SavedListings = () => {
   }
 
   if (error) {
+    console.error('SavedListings error:', error);
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <div className="flex items-center justify-center h-64">
-          <div className="text-center">
+          <div className="text-center max-w-md">
             <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Saved Listings</h2>
-            <p className="text-gray-600 mb-4">{error.message}</p>
-            <Button onClick={() => refetch()}>Try Again</Button>
+            <p className="text-gray-600 mb-2">{error?.message || 'Unknown error occurred'}</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Debug info: {JSON.stringify(error, null, 2)}
+            </p>
+            <div className="space-x-2">
+              <Button onClick={() => refetch()}>Try Again</Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Reload Page
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -110,16 +143,53 @@ const SavedListings = () => {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {favorites.map((favorite) => (
-                <BusinessCard 
-                  key={favorite.id} 
-                  listing={{
-                    ...favorite.business_listings,
-                    is_saved: true
-                  }}
-                />
-              ))}
+            <div className="space-y-6">
+              {favorites.map((favorite) => {
+                const isExpanded = expandedCards.has(favorite.id);
+                return (
+                  <Card key={favorite.id} className="overflow-hidden">
+                    <CardContent className="p-0">
+                      {/* Business Card Section */}
+                      <div className="p-6">
+                        <BusinessCard 
+                          listing={{
+                            ...favorite.business_listings,
+                            is_saved: true
+                          }}
+                        />
+                        
+                        {/* Expand/Collapse Button for Notes */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <Button
+                            onClick={() => toggleExpanded(favorite.id)}
+                            variant="ghost"
+                            className="w-full justify-between"
+                          >
+                            <span className="text-sm font-medium">
+                              Notes & Documents
+                            </span>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Expandable Notes Section */}
+                      {isExpanded && (
+                        <div className="px-6 pb-6 bg-gray-50">
+                          <FavoriteNotesAndFiles
+                            favoriteId={favorite.id}
+                            listingName={favorite.business_listings.name}
+                          />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>

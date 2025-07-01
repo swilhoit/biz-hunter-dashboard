@@ -104,11 +104,17 @@ export class QuietLightScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number): string {
-    // FIXED: Use the working QuietLight URL structure
+    // Search for Amazon FBA businesses on QuietLight
+    const baseUrl = 'https://quietlight.com/listings';
+    const params = new URLSearchParams({
+      'category': 'ecommerce',
+      'keywords': 'amazon fba ecommerce private label'
+    });
+    
     if (page === 1) {
-      return 'https://quietlight.com/listings/';
+      return `${baseUrl}/?${params.toString()}`;
     }
-    return `https://quietlight.com/listings/page/${page}/`;
+    return `${baseUrl}/page/${page}/?${params.toString()}`;
   }
 
   private async extractListingsFromPage(): Promise<RawListing[]> {
@@ -354,6 +360,12 @@ export class QuietLightScraper extends BaseScraper {
             });
           }
 
+          // Filter for Amazon FBA businesses
+          const isFBABusiness = this.isFBABusiness(name, description);
+          if (!isFBABusiness) {
+            return; // Skip non-FBA businesses
+          }
+
           // Only include listings with meaningful data
           if (name && name.length > 3 && (priceText || revenueText || description.length > 50)) {
             listings.push({
@@ -442,5 +454,18 @@ export class QuietLightScraper extends BaseScraper {
     
     // Use the enhanced data processor
     return DataProcessor.extractRevenue(revenueText);
+  }
+
+  private isFBABusiness(name: string, description: string): boolean {
+    const text = `${name} ${description}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'amazon store', 'amazon selling',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'fba',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 }

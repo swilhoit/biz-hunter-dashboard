@@ -73,6 +73,16 @@ export class DataProcessor {
     return this.extractPrice(revenueText);
   }
 
+  static extractNumber(text: string): number {
+    if (!text || typeof text !== 'string') return 0;
+    
+    // Remove all non-numeric characters except decimal points
+    const cleanText = text.replace(/[^0-9.-]/g, '');
+    const number = parseFloat(cleanText);
+    
+    return isNaN(number) ? 0 : number;
+  }
+
   static normalizeIndustry(industry: string): string {
     const normalized = industry.toLowerCase().trim();
     
@@ -161,15 +171,18 @@ export class DataProcessor {
   
   static createDefaultUrl(source: string, id: string): string {
     // Create a fallback URL for listings that don't have one
+    // For Centurica listings, don't create fake URLs - let the scraper handle it
+    if (source.includes('Centurica')) {
+      return 'https://app.centurica.com/marketwatch';
+    }
+    
     const sourceMap: Record<string, string> = {
       'BizBuySell': 'https://www.bizbuysell.com/businesses/',
       'EmpireFlippers': 'https://empireflippers.com/marketplace/',
       'Flippa': 'https://flippa.com/businesses/',
-      'MicroAcquire': 'https://microacquire.com/marketplace/',
       'QuietLight': 'https://quietlight.com/listings/',
       'ExitAdviser': 'https://exitadviser.com/businesses-for-sale/',
-      'BizQuest': 'https://www.bizquest.com/business-for-sale/',
-      'Acquire': 'https://acquire.com/startups/'
+      'BizQuest': 'https://www.bizquest.com/business-for-sale/'
     };
     
     const baseUrl = sourceMap[source] || 'https://bizbuysell.com/businesses/';

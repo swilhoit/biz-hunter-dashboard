@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 
 import { ScraperManager } from './ScraperManager';
-import { DatabaseService } from './DatabaseService';
+import { DatabaseService } from './DatabaseService.server';
 import { ScrapingConfig } from './types';
 import logger from './utils/logger';
 

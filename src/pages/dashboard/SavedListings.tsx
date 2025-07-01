@@ -20,6 +20,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useFavorites, useToggleFavorite } from '@/hooks/useBusinessListings';
 import { BusinessCard } from '@/components/BusinessCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Link } from 'react-router-dom';
@@ -50,46 +51,26 @@ interface SavedListing {
 
 const SavedListingsDashboard = () => {
   const { user } = useAuth();
-  const [savedListings, setSavedListings] = useState<SavedListing[]>([]);
+  const { data: favorites = [], isLoading, error } = useFavorites(user?.id);
+  const toggleFavorite = useToggleFavorite();
   const [filteredListings, setFilteredListings] = useState<SavedListing[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price_high' | 'price_low'>('newest');
 
-  useEffect(() => {
-    if (user) {
-      fetchSavedListings();
-    }
-  }, [user]);
+  // Convert favorites data to match expected SavedListing format
+  const savedListings = favorites.map(fav => ({
+    id: fav.id,
+    created_at: fav.created_at,
+    business_listings: fav.business_listings
+  }));
 
   useEffect(() => {
     filterListings();
-  }, [savedListings, searchTerm, selectedIndustries, statusFilter, sortBy]);
+  }, [favorites, searchTerm, selectedIndustries, statusFilter, sortBy]);
 
-  const fetchSavedListings = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(
-        `https://biz-hunter-dashboard-production.up.railway.app/api/favorites/${user?.id}`
-      );
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setSavedListings(data.data);
-      } else {
-        throw new Error(data.message || 'Failed to fetch saved listings');
-      }
-    } catch (error) {
-      console.error('Error fetching saved listings:', error);
-      toast.error('Failed to load saved listings');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const filterListings = () => {
     let filtered = [...savedListings];
@@ -138,20 +119,14 @@ const SavedListingsDashboard = () => {
   };
 
   const handleRemoveSaved = async (listingId: string) => {
+    if (!user?.id) return;
+    
     try {
-      const response = await fetch(
-        `https://biz-hunter-dashboard-production.up.railway.app/api/favorites/${listingId}?userId=${user?.id}`,
-        { method: 'DELETE' }
-      );
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setSavedListings(prev => prev.filter(item => item.business_listings.id !== listingId));
-        toast.success('Listing removed from saved');
-      } else {
-        throw new Error(data.message);
-      }
+      await toggleFavorite.mutateAsync({
+        listingId,
+        userId: user.id
+      });
+      toast.success('Listing removed from saved');
     } catch (error) {
       console.error('Error removing saved listing:', error);
       toast.error('Failed to remove listing');
@@ -195,6 +170,18 @@ const SavedListingsDashboard = () => {
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <AlertCircle className="h-16 w-16 text-red-300 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Saved Listings</h2>
+          <p className="text-gray-600 mb-4">{error?.message || 'Failed to load saved listings'}</p>
         </div>
       </div>
     );
@@ -356,13 +343,86 @@ const SavedListingsDashboard = () => {
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredListings.map((item) => (
-                <BusinessCard 
-                  key={item.id} 
-                  listing={{
-                    ...item.business_listings,
-                    is_saved: true
-                  }}
-                />
+                <Card key={item.id} className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+                  <CardHeader className="pb-3">
+                    <Link to={`/dashboard/saved/${item.id}`} className="block mb-3">
+                      <CardTitle className="text-lg font-light text-gray-900 hover:text-blue-600 transition-colors truncate">
+                        {item.business_listings.name}
+                      </CardTitle>
+                    </Link>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <StatusBadge 
+                          status={item.business_listings.verification_status || 'live'}
+                          lastVerified={item.business_listings.last_verified_at}
+                        />
+                        <Badge variant="outline" className="text-xs">
+                          {item.business_listings.source}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleRemoveSaved(item.business_listings.id)}
+                          className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                          title="Remove from saved"
+                        >
+                          <Heart className="h-4 w-4 fill-current" />
+                        </button>
+                        {item.business_listings.original_url && (
+                          <a
+                            href={item.business_listings.original_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+                      {item.business_listings.description}
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-green-600">
+                          {formatCurrency(item.business_listings.asking_price)}
+                        </p>
+                        <p className="text-xs text-gray-600">Asking Price</p>
+                      </div>
+                      <div className="text-center p-3 bg-blue-50 rounded-lg">
+                        <TrendingUp className="h-5 w-5 text-blue-600 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-blue-600">
+                          {formatCurrency(item.business_listings.annual_revenue)}
+                        </p>
+                        <p className="text-xs text-gray-600">Revenue</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center space-x-1">
+                        <Building2 className="h-4 w-4" />
+                        <span className="truncate">{item.business_listings.industry}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <MapPin className="h-4 w-4" />
+                        <span className="truncate">{item.business_listings.location}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="flex items-center space-x-1 text-xs text-gray-500">
+                        <Calendar className="h-3 w-3" />
+                        <span>Saved {formatDate(item.created_at)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
@@ -375,7 +435,7 @@ const SavedListingsDashboard = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <Link to={`/listing/${item.business_listings.id}`}>
+                              <Link to={`/dashboard/saved/${item.id}`}>
                                 <h3 className="text-lg font-medium text-gray-900 hover:text-blue-600 mb-1">
                                   {item.business_listings.name}
                                 </h3>

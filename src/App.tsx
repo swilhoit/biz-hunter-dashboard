@@ -13,11 +13,12 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/DashboardLayout";
 import Overview from "./pages/dashboard/Overview";
-import Profile from "./pages/dashboard/Profile";
 import SavedListingsDashboard from "./pages/dashboard/SavedListings";
-import Activity from "./pages/dashboard/Activity";
+import SavedListingDetail from "./pages/dashboard/SavedListingDetail";
+import BusinessAnalysis from "./pages/dashboard/BusinessAnalysis";
 import Notifications from "./pages/dashboard/Notifications";
 import Settings from "./pages/dashboard/Settings";
+import AIAnalysis from "./pages/dashboard/AIAnalysis";
 
 const queryClient = new QueryClient();
 
@@ -29,19 +30,20 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/saved" element={<SavedListings />} />
-            <Route path="/listing/:id" element={<ListingDetail />} />
             
-            {/* Dashboard Routes */}
-            <Route path="/dashboard" element={<DashboardLayout />}>
-              <Route index element={<Overview />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="saved" element={<SavedListingsDashboard />} />
-              <Route path="activity" element={<Activity />} />
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="settings" element={<Settings />} />
+            {/* All routes wrapped in DashboardLayout */}
+            <Route path="/" element={<DashboardLayout />}>
+              <Route index element={<Index />} />
+              <Route path="saved" element={<SavedListings />} />
+              <Route path="listing/:id" element={<ListingDetail />} />
+              <Route path="dashboard" element={<Overview />} />
+              <Route path="dashboard/saved" element={<SavedListingsDashboard />} />
+              <Route path="dashboard/saved/:id" element={<SavedListingDetail />} />
+              <Route path="dashboard/ai-analysis" element={<AIAnalysis />} />
+              <Route path="dashboard/analysis/:analysisId" element={<BusinessAnalysis />} />
+              <Route path="dashboard/notifications" element={<Notifications />} />
+              <Route path="dashboard/settings" element={<Settings />} />
             </Route>
             
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

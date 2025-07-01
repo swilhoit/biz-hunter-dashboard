@@ -83,9 +83,14 @@ export class ExitAdviserScraper extends BaseScraper {
   }
 
   private buildSearchUrl(page: number): string {
-    // ExitAdviser URL structure has changed - try both popular paths
+    // Search for Amazon FBA businesses on ExitAdviser
     const basePath = '/find-a-business';
-    const url = `https://exitadviser.com${basePath}${page > 1 ? `/page-${page}` : ''}`;
+    const params = new URLSearchParams({
+      'category': 'ecommerce',
+      'keywords': 'amazon fba ecommerce marketplace online retail'
+    });
+    
+    const url = `https://exitadviser.com${basePath}${page > 1 ? `/page-${page}` : ''}?${params.toString()}`;
     logger.info(`Building ExitAdviser URL: ${url}`);
     return url;
   }
@@ -288,6 +293,12 @@ export class ExitAdviserScraper extends BaseScraper {
           logger.info(`Extracted listing: ${title} - ${priceText} - ${url}`);
         }
         
+        // Filter for Amazon FBA businesses
+        const isFBABusiness = this.isFBABusiness(title, description);
+        if (!isFBABusiness) {
+          return; // Skip non-FBA businesses
+        }
+
         // Only create a listing if we have at least a title or description
         if (title || description) {
           // Create listing object
@@ -392,5 +403,18 @@ export class ExitAdviserScraper extends BaseScraper {
     return url.startsWith('/') 
       ? `${base}${url}`
       : `${base}/${url}`;
+  }
+
+  private isFBABusiness(name: string, description: string): boolean {
+    const text = `${name} ${description}`.toLowerCase();
+    const fbaKeywords = [
+      'amazon fba', 'amazon seller', 'fba business', 'amazon business',
+      'ecommerce', 'e-commerce', 'amazon store', 'amazon selling',
+      'private label', 'retail arbitrage', 'wholesale amazon',
+      'amazon marketplace', 'fulfilled by amazon', 'fba',
+      'dropshipping', 'online retail', 'product sales'
+    ];
+    
+    return fbaKeywords.some(keyword => text.includes(keyword));
   }
 }

@@ -8,17 +8,26 @@ import {
   Bell, 
   Settings, 
   Building2,
-  ArrowLeft
+  ArrowLeft,
+  Search,
+  Brain
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { UserMenu } from '@/components/UserMenu';
+import { Badge } from '@/components/ui/badge';
 
 const DashboardLayout = () => {
   const location = useLocation();
   const { user } = useAuth();
 
   const navigationItems = [
+    {
+      name: 'Browse Listings',
+      href: '/',
+      icon: Search,
+      current: location.pathname === '/'
+    },
     {
       name: 'Overview',
       href: '/dashboard',
@@ -32,28 +41,10 @@ const DashboardLayout = () => {
       current: location.pathname === '/dashboard/saved'
     },
     {
-      name: 'Profile',
-      href: '/dashboard/profile',
-      icon: User,
-      current: location.pathname === '/dashboard/profile'
-    },
-    {
-      name: 'Activity',
-      href: '/dashboard/activity',
-      icon: Activity,
-      current: location.pathname === '/dashboard/activity'
-    },
-    {
-      name: 'Notifications',
-      href: '/dashboard/notifications',
-      icon: Bell,
-      current: location.pathname === '/dashboard/notifications'
-    },
-    {
-      name: 'Settings',
-      href: '/dashboard/settings',
-      icon: Settings,
-      current: location.pathname === '/dashboard/settings'
+      name: 'AI Analysis',
+      href: '/dashboard/ai-analysis',
+      icon: Brain,
+      current: location.pathname === '/dashboard/ai-analysis'
     }
   ];
 
@@ -63,23 +54,35 @@ const DashboardLayout = () => {
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-4">
-            <Link to="/" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to BizHunter</span>
-            </Link>
             <div className="flex items-center space-x-2">
               <Building2 className="h-6 w-6 text-blue-600" />
-              <span className="text-lg font-semibold text-gray-900">Dashboard</span>
+              <span className="text-lg font-semibold text-gray-900">FBA Hunter</span>
             </div>
           </div>
-          <UserMenu />
+          <div className="flex items-center space-x-4">
+            {/* Notifications */}
+            <Link 
+              to="/dashboard/notifications" 
+              className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Bell className="h-5 w-5" />
+              {/* Notification badge - you can add state management for unread count */}
+              <Badge 
+                variant="destructive" 
+                className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs flex items-center justify-center"
+              >
+                3
+              </Badge>
+            </Link>
+            <UserMenu />
+          </div>
         </div>
       </div>
 
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 min-h-screen">
-          <div className="p-4">
+        <div className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
+          <div className="p-4 flex-1">
             <div className="space-y-1">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
@@ -102,18 +105,16 @@ const DashboardLayout = () => {
           </div>
 
           {/* User Info in Sidebar */}
-          <div className="absolute bottom-4 left-4 right-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user?.email || 'User'}
-                  </p>
-                  <p className="text-xs text-gray-500">Free Account</p>
-                </div>
+          <div className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user?.email || 'User'}
+                </p>
+                <p className="text-xs text-gray-500">Free Account</p>
               </div>
             </div>
           </div>

@@ -48,7 +48,25 @@
       "Bash(npm run:*)",
       "mcp__supabase__get_advisors",
       "Bash(jq:*)",
-      "WebFetch(domain:quietlight.com)"
+      "WebFetch(domain:quietlight.com)",
+      "Bash(true)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:centurica.com)",
+      "WebFetch(domain:app.centurica.com)",
+      "mcp__supabase__list_branches",
+      "mcp__supabase__create_branch",
+      "Bash(VITE_SUPABASE_URL=https://ueemtnohgkovwzodzxdr.supabase.co VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk tsx src/services/scraping/test-scrapers.ts centurica)",
+      "Bash(VITE_SUPABASE_URL=https://ueemtnohgkovwzodzxdr.supabase.co VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk npx tsx src/services/scraping/test-scrapers.ts centurica)",
+      "mcp__supabase__get_logs",
+      "Bash(npx @smithery/cli list:*)",
+      "Bash(npx @smithery/cli install @modelcontextprotocol/server-puppeteer)",
+      "Bash(npx @smithery/cli install @modelcontextprotocol/server-puppeteer --client claude)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm search:*)",
+      "Bash(supabase projects:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase inspect:*)",
+      "Bash(npx ts-node:*)"
     ],
     "deny": []
   }

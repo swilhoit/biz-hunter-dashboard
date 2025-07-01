@@ -17,7 +17,7 @@ const Navigation = () => {
           <Link to="/" className="flex items-center space-x-2">
             <Building2 className="h-8 w-8 text-blue-600" />
             <span className="text-xl font-semibold text-gray-900">
-              BizHunter
+              FBA Hunter
             </span>
           </Link>
 
@@ -27,7 +27,7 @@ const Navigation = () => {
               to="/" 
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
-              Browse Listings
+              Browse FBA Businesses
             </Link>
             {user && (
               <>
@@ -51,7 +51,7 @@ const Navigation = () => {
               href="#" 
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
-              Sell Business
+              Sell FBA Business
             </a>
             <a 
               href="#" 
