@@ -60,6 +60,45 @@ export const dealsAdapter = {
     }));
   },
 
+  // Fetch a single deal by ID
+  async fetchDealById(dealId: string) {
+    const { data, error } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('id', dealId)
+      .single();
+
+    if (error) throw error;
+
+    if (!data) return null;
+
+    // Map the data to match mosaic-react expectations
+    const mappedDeal = {
+      ...data,
+      status: mapDealStatus(data.stage || 'prospecting'),
+      // Add any other field mappings needed
+      valuation_multiple: data.multiple,
+      monthly_revenue: data.monthly_revenue || (data.annual_revenue ? data.annual_revenue / 12 : null),
+      monthly_profit: data.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
+      // Map broker fields from actual database columns
+      broker_company: data.source, // Use source as broker company fallback
+      amazon_store_url: data.amazon_store_link,
+      seller_name: data.seller_name || 'Unknown',
+      seller_email: data.seller_email || '',
+      seller_phone: data.seller_phone || '',
+      fba_percentage: data.fba_percentage || 0,
+      amazon_subcategory: data.sub_industry,
+      first_contact_date: data.created_at,
+      due_diligence_start_date: data.stage === 'due_diligence' ? data.stage_updated_at : null,
+      expected_close_date: data.next_action_date,
+      notes: data.custom_fields?.notes || '',
+      // Add placeholder image if none exists
+      image_url: data.image_url || getBusinessImage(data.business_name)
+    };
+
+    return mappedDeal;
+  },
+
   // Create a new deal
   async createDeal(dealData: any) {
     const mappedData: any = {};

@@ -34,8 +34,7 @@ function DealDetails() {
   const loadDeal = async (dealId: string) => {
     try {
       setLoading(true);
-      const deals = await dealsAdapter.fetchDeals();
-      const foundDeal = deals?.find(d => d.id === dealId);
+      const foundDeal = await dealsAdapter.fetchDealById(dealId);
       if (foundDeal) {
         setDeal(foundDeal);
       } else {

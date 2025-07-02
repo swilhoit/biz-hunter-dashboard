@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -69,6 +69,18 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
             {listing.isNew && (
               <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
                 New
+              </span>
+            )}
+            {listing.duplicate_count > 0 && (
+              <span className="ml-2 px-2 py-1 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 rounded-full flex items-center">
+                <Copy className="w-3 h-3 mr-1" />
+                {listing.duplicate_count + 1} similar
+              </span>
+            )}
+            {listing.is_primary_listing === false && (
+              <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full flex items-center">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Duplicate
               </span>
             )}
           </div>

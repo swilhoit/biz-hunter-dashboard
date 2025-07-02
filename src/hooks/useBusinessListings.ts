@@ -91,12 +91,16 @@ const transformToMarketListing = (listing: any): BusinessListing => {
   };
 };
 
-export const useBusinessListings = () => {
+export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
   return useQuery({
-    queryKey: ['business-listings'],
+    queryKey: ['business-listings', options?.hideDuplicates],
     queryFn: async () => {
-      console.log('🔍 Fetching Amazon FBA business listings from database...');
-      const { data, error } = await supabase
+      console.log('\n========================================');
+      console.log('🔍 [FRONTEND] Fetching Amazon FBA business listings from database...');
+      console.log(`🕒 [FRONTEND] Query time: ${new Date().toISOString()}`);
+      console.log(`🔧 [FRONTEND] Options: hideDuplicates=${options?.hideDuplicates}`);
+      
+      let query = supabase
         .from('business_listings')
         .select('*')
         .eq('status', 'active')
@@ -106,23 +110,43 @@ export const useBusinessListings = () => {
         .gt('asking_price', 1000) // Exclude prices under $1,000 (likely invalid)
         .order('created_at', { ascending: false });
       
+      // Filter out non-primary duplicates if requested
+      if (options?.hideDuplicates) {
+        query = query.or('is_primary_listing.eq.true,is_primary_listing.is.null');
+      }
+      
+      const { data, error } = await query;
+      
       if (error) {
-        console.error('❌ Error fetching Amazon FBA business listings:', error);
+        console.error('❌ [FRONTEND] Error fetching Amazon FBA business listings:', error);
         throw error;
       }
       
-      console.log('✅ Found', data?.length || 0, 'Amazon FBA business listings');
+      console.log(`📦 [FRONTEND] Raw data from Supabase: ${data?.length || 0} listings`);
+      console.log('🔍 [FRONTEND] Sample listings:');
+      data?.slice(0, 3).forEach((item, idx) => {
+        console.log(`  ${idx + 1}. ${item.name} - $${item.asking_price?.toLocaleString() || 'N/A'} - ${item.source} - ${item.industry}`);
+      });
       
       
       // Transform to market feed format and filter out invalid data
+      console.log('🔄 [FRONTEND] Starting data transformation...');
       const transformedData = data?.map(transformToMarketListing).filter(listing => {
         // Additional client-side validation
-        return listing.name && 
+        const isValid = listing.name && 
                listing.name !== 'Unknown Business' &&
                listing.asking_price && 
                listing.asking_price < 1000000000 &&
                listing.asking_price > 1000;
+        
+        if (!isValid) {
+          console.log(`⚠️ [FRONTEND] Filtered out invalid listing: ${listing.name} - Price: ${listing.asking_price}`);
+        }
+        return isValid;
       }) || [];
+      
+      console.log(`🎯 [FRONTEND] Final transformed data: ${transformedData.length} valid listings`);
+      console.log('========================================\n');
       
       return transformedData as BusinessListing[];
     },

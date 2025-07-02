@@ -222,6 +222,9 @@ async function fetchPageWithScraperAPI(url) {
 
 // Extract listings from HTML
 function extractListingsFromHTML(html, pageUrl) {
+  console.log('📋 [EXTRACT] Starting HTML extraction from:', pageUrl);
+  console.log('📋 [EXTRACT] HTML length:', html.length, 'characters');
+  
   const $ = cheerio.load(html);
   const listings = [];
   const seenNames = new Set();
@@ -240,8 +243,9 @@ function extractListingsFromHTML(html, pageUrl) {
   
   for (const selector of selectors) {
     const elements = $(selector);
+    console.log(`📋 [EXTRACT] Trying selector: ${selector} - Found: ${elements.length} elements`);
     if (elements.length > 5) {
-      console.log(`✅ Found ${elements.length} listings with: ${selector}`);
+      console.log(`✅ [EXTRACT] Found ${elements.length} listings with: ${selector}`);
       found = true;
       
       elements.each((index, element) => {
@@ -263,7 +267,10 @@ function extractListingsFromHTML(html, pageUrl) {
           }
           
           // Skip duplicates and ensure quality
-          if (!name || seenNames.has(name) || name.length < 10) return;
+          if (!name || seenNames.has(name) || name.length < 10) {
+            console.log(`⚠️ [EXTRACT] Skipping listing - Invalid name: ${name ? name.substring(0, 30) : 'empty'}`);
+            return;
+          }
           
           // Extract price
           const priceSelectors = ['[data-testid*="price"]', '.price', '[class*="price"]'];
@@ -328,8 +335,9 @@ function extractListingsFromHTML(html, pageUrl) {
             
             listings.push(listing);
             const priceDisplay = askingPrice ? `$${askingPrice.toLocaleString()}` : priceText;
-            console.log(`📋 ${name.substring(0, 50)}... - ${priceDisplay}`);
-            console.log(`🔗 URL: ${originalUrl.substring(0, 80)}...`);
+            console.log(`✅ [EXTRACT] Added listing #${listings.length}: ${name.substring(0, 50)}... - ${priceDisplay}`);
+            console.log(`🔗 [EXTRACT] URL: ${originalUrl.substring(0, 80)}...`);
+            console.log(`📍 [EXTRACT] Location: ${location}, Industry: ${listing.industry}`);
           }
         } catch (error) {
           console.warn(`⚠️ Error extracting listing ${index}:`, error.message);
@@ -341,9 +349,11 @@ function extractListingsFromHTML(html, pageUrl) {
   }
   
   if (!found) {
-    console.log('❌ No listings found with any selector');
+    console.log('❌ [EXTRACT] No listings found with any selector');
+    console.log('🔍 [EXTRACT] HTML sample:', html.substring(0, 500));
   }
   
+  console.log(`📊 [EXTRACT] Total listings extracted: ${listings.length}`);
   return listings;
 }
 
@@ -561,6 +571,9 @@ async function scrapeFBABusinesses() {
 
 // Extract FBA listings from HTML with improved selectors
 function extractFBAListingsFromHTML(html, siteName, url) {
+  console.log(`🧾 [FBA EXTRACT] Starting extraction for ${siteName} from ${url}`);
+  console.log(`🧾 [FBA EXTRACT] HTML length: ${html.length} characters`);
+  
   const $ = cheerio.load(html);
   const listings = [];
   
@@ -592,6 +605,9 @@ function extractFBAListingsFromHTML(html, siteName, url) {
   
   // Try each selector until we find listings
   for (const selector of selectors) {
+    const elements = $(selector);
+    console.log(`🧾 [FBA EXTRACT] Trying selector: ${selector} - Found: ${elements.length} elements`);
+    
     $(selector).each((i, element) => {
       if (i >= 20) return false; // Limit per selector
       
@@ -600,12 +616,14 @@ function extractFBAListingsFromHTML(html, siteName, url) {
       
       if (listing && isValidFBAListing(listing)) {
         listings.push(listing);
+        console.log(`✅ [FBA EXTRACT] Valid listing #${listings.length}: ${listing.name.substring(0, 40)}... - $${listing.asking_price?.toLocaleString() || 'N/A'}`);
       }
     });
     
     if (listings.length >= 10) break; // Stop if we found enough
   }
 
+  console.log(`📊 [FBA EXTRACT] Total FBA listings extracted from ${siteName}: ${listings.length}`);
   return listings.slice(0, 30); // Limit results per page
 }
 
@@ -749,9 +767,11 @@ function isValidFBAListing(listing) {
 // FBA-focused scraping with duplicate prevention
 async function scrapeWithDuplicatePrevention() {
   try {
-    console.log('🚀 Starting FBA-focused scraping...');
+    console.log('🚀 [SCRAPE] Starting FBA-focused scraping with duplicate prevention...');
+    console.log('🕒 [SCRAPE] Timestamp:', new Date().toISOString());
     
     const listings = await scrapeFBABusinesses();
+    console.log(`📦 [SCRAPE] Raw listings received: ${listings.length}`);
     
     if (listings.length === 0) {
       console.log('⚠️ No new FBA listings found from scrapers');
@@ -760,22 +780,55 @@ async function scrapeWithDuplicatePrevention() {
     
     // Prevent duplicates by checking business name and source
     const uniqueListings = [];
+    console.log('🔍 [DUPLICATE CHECK] Starting duplicate prevention...');
     
     for (const listing of listings) {
-      if (!listing.name) continue;
+      if (!listing.name) {
+        console.log('⚠️ [DUPLICATE CHECK] Skipping listing with no name');
+        continue;
+      }
       
-      // Check if this name already exists from the same source
+      // Enhanced duplicate check - check normalized name and similar prices
+      const { data: normalizedName } = await supabase
+        .rpc('normalize_business_name', { name: listing.name });
+      
+      // Check for existing duplicates with more sophisticated matching
       const { data: existing } = await supabase
         .from('business_listings')
-        .select('id')
-        .eq('name', listing.name)
-        .eq('source', listing.source)
-        .limit(1);
+        .select('id, name, asking_price, source')
+        .or(`normalized_name.eq.${normalizedName},name.eq.${listing.name}`)
+        .eq('status', 'active');
       
-      if (!existing || existing.length === 0) {
+      // Check if truly duplicate based on multiple factors
+      let isDuplicate = false;
+      let duplicateReason = '';
+      
+      if (existing && existing.length > 0) {
+        for (const existingListing of existing) {
+          // Exact name match from same source
+          if (existingListing.name === listing.name && existingListing.source === listing.source) {
+            isDuplicate = true;
+            duplicateReason = 'exact match from same source';
+            break;
+          }
+          
+          // Similar price (within 10%) from any source
+          if (listing.asking_price && existingListing.asking_price) {
+            const priceDiff = Math.abs(listing.asking_price - existingListing.asking_price) / listing.asking_price;
+            if (priceDiff < 0.1 && normalizedName === existingListing.normalized_name) {
+              isDuplicate = true;
+              duplicateReason = `similar price (${Math.round(priceDiff * 100)}% diff) and same normalized name`;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!isDuplicate) {
         uniqueListings.push(listing);
+        console.log(`✅ [DUPLICATE CHECK] New listing: ${listing.name.substring(0, 50)}... from ${listing.source}`);
       } else {
-        console.log(`🔄 Skipping duplicate: ${listing.name} from ${listing.source}`);
+        console.log(`🔄 [DUPLICATE CHECK] Skipping duplicate: ${listing.name.substring(0, 50)}... from ${listing.source} (${duplicateReason})`);
       }
     }
     
@@ -785,17 +838,23 @@ async function scrapeWithDuplicatePrevention() {
     }
     
     // Insert only unique listings
+    console.log(`💾 [DATABASE] Inserting ${uniqueListings.length} unique listings...`);
     const { data, error } = await supabase
       .from('business_listings')
       .insert(uniqueListings)
       .select();
     
     if (error) {
-      console.error('❌ Database error:', error.message);
+      console.error('❌ [DATABASE] Insert error:', error.message);
+      console.error('🔍 [DATABASE] Error details:', error);
       return { success: false, count: 0, message: error.message };
     }
     
-    console.log(`🎉 Added ${data.length} new unique FBA listings`);
+    console.log(`🎉 [DATABASE] Successfully added ${data.length} new unique FBA listings`);
+    console.log('📋 [DATABASE] Sample inserted listings:');
+    data.slice(0, 3).forEach((item, idx) => {
+      console.log(`  ${idx + 1}. ${item.name} - $${item.asking_price?.toLocaleString() || 'N/A'} - ${item.source}`);
+    });
     return { success: true, count: data.length, message: `Added ${data.length} new FBA listings` };
     
   } catch (error) {
@@ -1734,7 +1793,10 @@ app.get('/api/health', (req, res) => {
 app.post('/api/scrape', async (req, res) => {
   try {
     const { method = 'traditional' } = req.body;
-    console.log(`🚀 API: Starting ${method} scraping...`);
+    console.log('\n========================================');
+    console.log(`🚀 [API SCRAPE] Starting ${method} scraping...`);
+    console.log(`🕒 [API SCRAPE] Request time: ${new Date().toISOString()}`);
+    console.log('========================================');
     
     // Force ScrapeGraph method if requested
     if (method === 'scrapegraph') {
@@ -1825,9 +1887,10 @@ app.post('/api/scrape', async (req, res) => {
     // Try Enhanced Multi-Scraper first for two-stage scraping with descriptions
     if (EnhancedMultiScraper) {
       try {
-        console.log('🔧 Using Enhanced Multi-Scraper for two-stage scraping...');
+        console.log('🔧 [API SCRAPE] Using Enhanced Multi-Scraper for two-stage scraping...');
         const scraper = new EnhancedMultiScraper();
         const enhancedResult = await scraper.runTwoStageScraping();
+        console.log(`📊 [API SCRAPE] Enhanced scraper result:`, enhancedResult);
         
         if (enhancedResult.success && enhancedResult.totalSaved > 0) {
           return res.json({
@@ -1842,7 +1905,15 @@ app.post('/api/scrape', async (req, res) => {
     }
     
     // Fallback to standard scraping
+    console.log('🔄 [API SCRAPE] Using standard scraping method...');
     const result = await scrapeWithDuplicatePrevention();
+    
+    console.log('\n========================================');
+    console.log(`🎯 [API SCRAPE] Final Result:`);
+    console.log(`  Success: ${result.success}`);
+    console.log(`  Count: ${result.count}`);
+    console.log(`  Message: ${result.message}`);
+    console.log('========================================\n');
     
     res.json({
       success: result.success,

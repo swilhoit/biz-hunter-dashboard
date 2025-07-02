@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend Query</title>
+</head>
+<body>
+    <h1>Testing Business Listings Query</h1>
+    <pre id="results">Loading...</pre>
+    
+    <script type="module">
+        // Load environment variables
+        const SUPABASE_URL = 'https://ueemtnohgkovwzodzxdr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk';
+        
+        async function testQuery() {
+            const resultsElement = document.getElementById('results');
+            
+            try {
+                // Basic query first
+                const basicResponse = await fetch(`${SUPABASE_URL}/rest/v1/business_listings?status=eq.active&limit=5`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const basicData = await basicResponse.json();
+                
+                // Complex query from useBusinessListings
+                const complexUrl = `${SUPABASE_URL}/rest/v1/business_listings?status=eq.active&or=(industry.ilike.%25amazon%25,description.ilike.%25amazon%25,description.ilike.%25fba%25,industry.ilike.%25fba%25)&name=not.eq.Unknown%20Business&asking_price=lt.1000000000&asking_price=gt.1000&order=created_at.desc&limit=5`;
+                
+                const complexResponse = await fetch(complexUrl, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const complexData = await complexResponse.json();
+                
+                resultsElement.textContent = `Basic Query Results: ${basicData.length} listings
+Complex Query Results: ${complexData.length} listings
+
+Basic Query Sample:
+${JSON.stringify(basicData.slice(0, 2), null, 2)}
+
+Complex Query Sample:
+${JSON.stringify(complexData.slice(0, 2), null, 2)}
+
+Complex Query URL:
+${complexUrl}`;
+                
+            } catch (error) {
+                resultsElement.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        testQuery();
+    </script>
+</body>
+</html>

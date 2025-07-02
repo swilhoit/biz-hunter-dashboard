@@ -8,7 +8,8 @@ import { useBusinessListings, useAddToPipeline } from '../hooks/useBusinessListi
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain } from 'lucide-react';
+import { DuplicateManager } from '../components/DuplicateManager';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 function ListingsFeed() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,6 +17,8 @@ function ListingsFeed() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedListings, setSelectedListings] = useState([]);
+  const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [showDuplicateManager, setShowDuplicateManager] = useState(false);
 
   // Fetch real business listings data
   const { 
@@ -23,7 +26,23 @@ function ListingsFeed() {
     isLoading, 
     error, 
     refetch 
-  } = useBusinessListings();
+  } = useBusinessListings({ hideDuplicates });
+  
+  // Log listings data when it changes
+  React.useEffect(() => {
+    console.log('========================================');
+    console.log('📊 [LISTINGS FEED] Listings data updated:');
+    console.log(`  Total listings: ${listings.length}`);
+    console.log(`  Loading: ${isLoading}`);
+    console.log(`  Error: ${error ? error.message : 'None'}`);
+    if (listings.length > 0) {
+      console.log('  First 3 listings:');
+      listings.slice(0, 3).forEach((listing, idx) => {
+        console.log(`    ${idx + 1}. ${listing.name} - $${listing.asking_price?.toLocaleString() || 'N/A'} - ${listing.source}`);
+      });
+    }
+    console.log('========================================');
+  }, [listings, isLoading, error]);
   
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
@@ -77,6 +96,48 @@ function ListingsFeed() {
       }
       
       setSelectedListings([]); // Clear selection after bulk action
+    } else if (action === 'delete') {
+      if (!user) {
+        showError('You must be logged in to delete listings');
+        return;
+      }
+      
+      const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedListings.length} listing${selectedListings.length > 1 ? 's' : ''}? This action cannot be undone.`);
+      if (!confirmDelete) return;
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const listingId of selectedListings) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/listings/${listingId}?userId=${user.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error('❌ Failed to delete listing:', listingId, error);
+          errorCount++;
+        }
+      }
+      
+      if (successCount > 0) {
+        showSuccess(`Successfully deleted ${successCount} listing${successCount > 1 ? 's' : ''}`);
+        refetch(); // Refresh the listings
+      }
+      if (errorCount > 0) {
+        showError(`Failed to delete ${errorCount} listing${errorCount > 1 ? 's' : ''}`);
+      }
+      
+      setSelectedListings([]); // Clear selection after bulk action
     } else {
       console.log('Bulk action:', action, 'on listings:', selectedListings);
     }
@@ -87,7 +148,9 @@ function ListingsFeed() {
   };
 
   const handleCheckForNewListings = (method = 'traditional') => {
+    console.log(`🚀 [LISTINGS FEED] Starting ${method} scraping...`);
     checkForNewListings(() => {
+      console.log('✅ [LISTINGS FEED] Scraping completed, refetching listings...');
       // Refetch listings after scraping completes
       refetch();
     }, method);
@@ -190,6 +253,37 @@ function ListingsFeed() {
                   )}
                   Refresh
                 </button>
+                {/* Duplicate Management */}
+                <button 
+                  onClick={() => setShowDuplicateManager(true)}
+                  className="btn bg-amber-600 text-white hover:bg-amber-700"
+                  title="Manage duplicate listings"
+                >
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Manage Duplicates
+                </button>
+                
+                <button 
+                  onClick={() => setHideDuplicates(!hideDuplicates)}
+                  className={`btn ${hideDuplicates 
+                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                  }`}
+                  title={hideDuplicates ? 'Show all listings' : 'Hide duplicate listings'}
+                >
+                  {hideDuplicates ? (
+                    <>
+                      <Eye className="w-4 h-4 mr-2" />
+                      Show All
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="w-4 h-4 mr-2" />
+                      Hide Duplicates
+                    </>
+                  )}
+                </button>
+
                 <button className="btn bg-indigo-600 text-white hover:bg-indigo-700">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Custom Listing
@@ -199,6 +293,7 @@ function ListingsFeed() {
                 <div className="flex items-center px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                     {isLoading ? 'Loading...' : `${filteredListings.length} listings`}
+                    {hideDuplicates && <span className="ml-1 text-xs">(duplicates hidden)</span>}
                   </span>
                 </div>
               </div>
@@ -302,6 +397,14 @@ function ListingsFeed() {
                     >
                       Compare
                     </button>
+                    {user && (
+                      <button 
+                        onClick={() => handleBulkAction('delete')}
+                        className="btn bg-red-600 text-white hover:bg-red-700 text-sm"
+                      >
+                        Delete Selected
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -400,6 +503,12 @@ function ListingsFeed() {
           </div>
         </main>
       </div>
+      
+      {/* Duplicate Manager Modal */}
+      <DuplicateManager 
+        isOpen={showDuplicateManager}
+        onClose={() => setShowDuplicateManager(false)}
+      />
     </div>
   );
 }

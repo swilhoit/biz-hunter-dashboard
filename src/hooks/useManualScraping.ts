@@ -37,6 +37,11 @@ export function useManualScraping() {
 
   const runScraperMutation = useMutation<any, Error, { method?: 'traditional' | 'scrapegraph' }>({
     mutationFn: async ({ method = 'traditional' }) => {
+      console.log('\n========================================');
+      console.log(`🔌 [MANUAL SCRAPING] Starting ${method} scraping request...`);
+      console.log(`📡 [MANUAL SCRAPING] API URL: ${SCRAPING_API_URL}/api/scrape`);
+      console.log('========================================');
+      
       try {
         const response = await fetch(`${SCRAPING_API_URL}/api/scrape`, {
           method: 'POST',
@@ -49,10 +54,13 @@ export function useManualScraping() {
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({ message: 'Failed to start scraping' }));
+          console.error('❌ [MANUAL SCRAPING] API error response:', error);
           throw new Error(error.message || 'Failed to start scraping');
         }
 
-        return response.json();
+        const result = await response.json();
+        console.log('📊 [MANUAL SCRAPING] API response:', result);
+        return result;
       } catch (error: any) {
         if (error.message === 'Failed to fetch') {
           throw new Error('Scraping server is not running. Please start it with: cd server && node index.js');
@@ -108,6 +116,14 @@ export function useManualScraping() {
       setCurrentScraper(null);
       
       const method = variables.method === 'scrapegraph' ? 'AI-powered' : 'Traditional';
+      
+      console.log('\n========================================');
+      console.log(`✅ [MANUAL SCRAPING] ${method} scraping completed`);
+      console.log(`📊 [MANUAL SCRAPING] Results:`);
+      console.log(`  Success: ${data.success}`);
+      console.log(`  New listings: ${data.count}`);
+      console.log(`  Message: ${data.message}`);
+      console.log('========================================\n');
       
       if (data.success && data.count > 0) {
         showSuccess(`${method} scraping completed! Found ${data.count} new listings.`);
