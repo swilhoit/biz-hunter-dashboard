@@ -131,13 +131,15 @@ async function fetchPageWithScraperAPI(url) {
   try {
     const response = await fetch(scraperApiUrl.toString(), {
       method: 'GET',
-      timeout: 45000,
+      timeout: 30000, // Reduced timeout
       headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
       }
     });
     
     if (!response.ok) {
+      console.log(`❌ ScraperAPI error: ScraperAPI returned ${response.status}: ${response.statusText}`);
       throw new Error(`ScraperAPI returned ${response.status}: ${response.statusText}`);
     }
     
@@ -175,6 +177,45 @@ async function fetchPageWithScraperAPI(url) {
     
   } catch (error) {
     console.error(`❌ ScraperAPI error: ${error.message}`);
+    
+    // Fallback to direct fetch for some sites
+    try {
+      console.log(`🔄 Trying direct fetch as fallback for: ${url}`);
+      const directResponse = await fetch(url, {
+        timeout: 20000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+        }
+      });
+
+      if (directResponse.ok) {
+        const html = await directResponse.text();
+        if (html.length > 1000) {
+          console.log(`✅ Direct fetch successful: ${html.length} characters`);
+          
+          // Store in database
+          await supabase
+            .from('scraped_pages')
+            .upsert({
+              url,
+              html_content: html,
+              scraped_at: new Date().toISOString(),
+              last_used: new Date().toISOString(),
+              status: 'active'
+            });
+          
+          return html;
+        }
+      }
+    } catch (directError) {
+      console.log(`❌ Direct fetch also failed: ${directError.message}`);
+    }
+    
     throw error;
   }
 }
@@ -369,41 +410,311 @@ async function scrapeBizBuySellReal() {
   }
 }
 
-// Background scraping with duplicate prevention
+// Enhanced FBA business scraping across multiple platforms
+async function scrapeFBABusinesses() {
+  console.log('🎯 Starting comprehensive FBA business scraping...');
+  
+  if (!SCRAPER_API_KEY) {
+    throw new Error('SCRAPER_API_KEY not configured in environment variables');
+  }
+  
+  // Check cooldown to prevent excessive API usage
+  const timeSinceLastScrape = Date.now() - lastScrapeTime;
+  if (timeSinceLastScrape < SCRAPING_COOLDOWN) {
+    const waitTime = Math.ceil((SCRAPING_COOLDOWN - timeSinceLastScrape) / 1000);
+    console.log(`⏸️ Cooldown active. Wait ${waitTime}s before scraping again.`);
+    return [];
+  }
+  
+  lastScrapeTime = Date.now();
+  
+  // FBA-specific URLs for targeted scraping
+  const fbaTargets = [
+    {
+      site: 'QuietLight',
+      urls: [
+        'https://quietlight.com/amazon-fba-businesses-for-sale/',
+        'https://quietlight.com/amazon-fba-businesses-for-sale/page/2/'
+      ]
+    },
+    {
+      site: 'EmpireFlippers',
+      urls: [
+        'https://empireflippers.com/marketplace/?industry=amazon-fba',
+        'https://empireflippers.com/marketplace/?business_model=fulfillment_by_amazon'
+      ]
+    },
+    {
+      site: 'BizBuySell',
+      urls: [
+        'https://www.bizbuysell.com/search/businesses-for-sale/?q=amazon+fba',
+        'https://www.bizbuysell.com/search/businesses-for-sale/?q=fba+business'
+      ]
+    },
+    {
+      site: 'Flippa',
+      urls: [
+        'https://flippa.com/buy/monetization/amazon-fba',
+        'https://flippa.com/search?filter%5Bmonetization%5D%5B%5D=amazon-fba'
+      ]
+    }
+  ];
+  
+  const allListings = [];
+  
+  for (const target of fbaTargets) {
+    console.log(`\n📍 Scraping ${target.site} - ${target.urls.length} FBA URLs`);
+    
+    for (const url of target.urls) {
+      try {
+        console.log(`🔍 Processing: ${url}`);
+        
+        const html = await fetchPageWithScraperAPI(url);
+        if (html && html.length > 1000) {
+          const listings = extractFBAListingsFromHTML(html, target.site, url);
+          console.log(`   📋 Found ${listings.length} FBA listings`);
+          allListings.push(...listings);
+        } else {
+          console.log(`   ❌ Invalid response from ${url}`);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error scraping ${url}:`, error.message);
+        // Continue to next URL instead of breaking the entire process
+      }
+      
+      // Always delay between requests regardless of success/failure
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+  
+  console.log(`\n🎯 Total FBA listings extracted: ${allListings.length}`);
+  return allListings;
+}
+
+// Extract FBA listings from HTML with improved selectors
+function extractFBAListingsFromHTML(html, siteName, url) {
+  const $ = cheerio.load(html);
+  const listings = [];
+  
+  // Site-specific selectors for listing cards
+  const siteSelectors = {
+    'QuietLight': [
+      '.listing-card, .listing-item, .business-card',
+      'article[class*="listing"], article[class*="business"]',
+      '[class*="listing-"] a, [class*="business-"] a'
+    ],
+    'EmpireFlippers': [
+      '.listing-card, .marketplace-listing, .business-listing',
+      '[data-listing], [data-business]',
+      'article, .result-item, [class*="listing"]'
+    ],
+    'Flippa': [
+      '.flip-card, .listing-card, .auction-card',
+      '[data-cy*="listing"], [data-testid*="listing"]',
+      '.search-result, .auction-item'
+    ],
+    'BizBuySell': [
+      '.result-item, .listing-item, .business-item',
+      '.search-result, .business-card',
+      'article, .listing-row'
+    ]
+  };
+
+  const selectors = siteSelectors[siteName] || ['.listing-card', 'article', '.result-item'];
+  
+  // Try each selector until we find listings
+  for (const selector of selectors) {
+    $(selector).each((i, element) => {
+      if (i >= 20) return false; // Limit per selector
+      
+      const $item = $(element);
+      const listing = extractListingFromElement($item, siteName, url);
+      
+      if (listing && isValidFBAListing(listing)) {
+        listings.push(listing);
+      }
+    });
+    
+    if (listings.length >= 10) break; // Stop if we found enough
+  }
+
+  return listings.slice(0, 30); // Limit results per page
+}
+
+// Extract listing data from HTML element
+function extractListingFromElement($item, siteName, sourceUrl) {
+  const text = $item.text() || '';
+  if (text.length < 30) return null;
+
+  // Extract name/title
+  let name = '';
+  const titleSelectors = ['h1', 'h2', 'h3', '.title', '.business-name', '.listing-title', 'a[href*="listing"]'];
+  
+  for (const sel of titleSelectors) {
+    const titleText = $item.find(sel).first().text().trim();
+    if (titleText && titleText.length > 10 && titleText.length < 200 && !titleText.includes('$')) {
+      name = titleText;
+      break;
+    }
+  }
+
+  // If no structured title, extract from text
+  if (!name) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 15);
+    name = lines.find(line => 
+      !line.includes('$') && 
+      line.length < 150 && 
+      line.match(/[a-zA-Z].*[a-zA-Z]/)
+    ) || '';
+  }
+
+  if (!name || name.length < 5) return null;
+
+  // Extract prices with better context understanding
+  const asking_price = extractPriceFromText(text, ['asking', 'price', 'list', 'sale']) || 0;
+  const annual_revenue = extractPriceFromText(text, ['revenue', 'sales', 'annual', 'yearly']) || 0;
+
+  // Get URL
+  const url = $item.find('a').first().attr('href');
+  const original_url = url ? normalizeUrl(url, siteName) : sourceUrl;
+
+  // Extract basic description
+  const description = extractDescriptionFromElement($item) || null;
+
+  return {
+    name: name.substring(0, 200),
+    description: description,
+    asking_price: asking_price,
+    annual_revenue: annual_revenue,
+    industry: 'Amazon FBA', // Force FBA since we're scraping FBA-specific pages
+    location: 'Online',
+    source: siteName,
+    original_url: original_url,
+    highlights: [],
+    status: 'active'
+  };
+}
+
+// Helper functions for extraction
+function extractPriceFromText(text, keywords) {
+  // Look for prices in context of keywords
+  const sentences = text.split(/[.!?\n]/).filter(s => s.length > 10);
+  
+  for (const sentence of sentences) {
+    const lowerSentence = sentence.toLowerCase();
+    if (keywords.some(keyword => lowerSentence.includes(keyword))) {
+      const priceMatch = sentence.match(/\$[\d,]+(?:\.\d{2})?[kmKM]?/);
+      if (priceMatch) {
+        return parsePrice(priceMatch[0]);
+      }
+    }
+  }
+
+  // Fallback: find any price in text
+  const allPrices = text.match(/\$[\d,]+(?:\.\d{2})?[kmKM]?/g);
+  if (allPrices && allPrices.length > 0) {
+    return parsePrice(allPrices[0]);
+  }
+
+  return null;
+}
+
+function parsePrice(priceText) {
+  if (!priceText) return null;
+  
+  const cleanPrice = priceText.replace(/[^\d.,kmKM]/g, '');
+  const numMatch = cleanPrice.match(/[\d.,]+/);
+  if (!numMatch) return null;
+  
+  const num = parseFloat(numMatch[0].replace(/,/g, ''));
+  if (isNaN(num)) return null;
+  
+  const lower = priceText.toLowerCase();
+  let finalPrice;
+  if (lower.includes('m') || lower.includes('million')) {
+    finalPrice = Math.round(num * 1000000);
+  } else if (lower.includes('k') || lower.includes('thousand')) {
+    finalPrice = Math.round(num * 1000);
+  } else {
+    finalPrice = Math.round(num);
+  }
+  
+  // Validate reasonable price range
+  return (finalPrice >= 1000 && finalPrice <= 50000000) ? finalPrice : null;
+}
+
+function extractDescriptionFromElement($item) {
+  const descSelectors = ['.description', '.overview', '.summary', '.details', '.content', 'p'];
+  
+  for (const sel of descSelectors) {
+    const desc = $item.find(sel).first().text().trim();
+    if (desc && desc.length > 50 && desc.length < 1000) {
+      return desc.substring(0, 500);
+    }
+  }
+  
+  return null;
+}
+
+function normalizeUrl(url, source) {
+  if (url.startsWith('http')) return url;
+  
+  const baseUrls = {
+    'QuietLight': 'https://quietlight.com',
+    'EmpireFlippers': 'https://empireflippers.com',
+    'Flippa': 'https://flippa.com',
+    'BizBuySell': 'https://www.bizbuysell.com'
+  };
+  
+  return baseUrls[source] + url;
+}
+
+function isValidFBAListing(listing) {
+  if (!listing.name || listing.name.length < 5) return false;
+  
+  // Since we're scraping FBA-specific URLs, be less strict
+  if (listing.asking_price < 0 || listing.annual_revenue < 0) return false;
+  
+  return true;
+}
+
+// FBA-focused scraping with duplicate prevention
 async function scrapeWithDuplicatePrevention() {
   try {
-    console.log('🔄 Background scraping check...');
+    console.log('🚀 Starting FBA-focused scraping...');
     
-    const listings = await scrapeBizBuySellReal();
+    const listings = await scrapeFBABusinesses();
     
     if (listings.length === 0) {
-      console.log('⚠️ No new listings found from scraper');
-      return { success: false, count: 0, message: 'No listings found' };
+      console.log('⚠️ No new FBA listings found from scrapers');
+      return { success: false, count: 0, message: 'No FBA listings found' };
     }
     
-    // Prevent duplicates by checking business name
+    // Prevent duplicates by checking business name and source
     const uniqueListings = [];
     
     for (const listing of listings) {
       if (!listing.name) continue;
       
-      // Check if this name already exists
+      // Check if this name already exists from the same source
       const { data: existing } = await supabase
         .from('business_listings')
         .select('id')
         .eq('name', listing.name)
+        .eq('source', listing.source)
         .limit(1);
       
       if (!existing || existing.length === 0) {
         uniqueListings.push(listing);
       } else {
-        console.log(`🔄 Skipping duplicate: ${listing.name}`);
+        console.log(`🔄 Skipping duplicate: ${listing.name} from ${listing.source}`);
       }
     }
     
     if (uniqueListings.length === 0) {
-      console.log('✅ No new listings - all scraped listings already exist');
-      return { success: true, count: 0, message: 'No new listings found' };
+      console.log('✅ No new listings - all scraped FBA listings already exist');
+      return { success: true, count: 0, message: 'No new FBA listings found' };
     }
     
     // Insert only unique listings
@@ -417,11 +728,11 @@ async function scrapeWithDuplicatePrevention() {
       return { success: false, count: 0, message: error.message };
     }
     
-    console.log(`🎉 Added ${data.length} new unique listings`);
-    return { success: true, count: data.length, message: `Added ${data.length} new listings` };
+    console.log(`🎉 Added ${data.length} new unique FBA listings`);
+    return { success: true, count: data.length, message: `Added ${data.length} new FBA listings` };
     
   } catch (error) {
-    console.error('❌ Background scraping failed:', error.message);
+    console.error('❌ FBA scraping failed:', error.message);
     return { success: false, count: 0, message: error.message };
   }
 }
@@ -450,30 +761,16 @@ async function manualCleanupStoredPages() {
   }
 }
 
-// Auto-scrape on startup
+// Auto-scrape on startup (disabled to prevent API rate limits)
 async function autoScrapeOnStartup() {
-  console.log('\\n🚀 AUTO-SCRAPING ON STARTUP...');
+  console.log('\\n⏸️ AUTO-SCRAPING DISABLED (use "Check for New Listings" button)');
   console.log('================================');
   
-  try {
-    // Wait a moment for server to fully start
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const result = await scrapeWithDuplicatePrevention();
-    
-    if (result.success && result.count > 0) {
-      console.log(`🎉 STARTUP SUCCESS: ${result.count} new listings added!`);
-    } else {
-      console.log('✅ Startup check complete - no new listings needed');
-    }
-    
-  } catch (error) {
-    console.error('❌ Auto-scrape failed:', error.message);
-    console.log('💡 Manual scraping still available via dashboard');
-  }
-  
-  console.log('\\n🔥 SYSTEM READY - Dashboard populated with real data!');
-  console.log('📊 Visit: http://localhost:8080');
+  // Disabled to prevent API rate limit issues on startup
+  // Users can trigger scraping manually via the button
+  console.log('\\n🔥 SYSTEM READY - Use "Check for New Listings" button to scrape!');
+  console.log('📊 Visit: http://localhost:5174 for frontend');
+  return;
 }
 
 // Background scraping interval
@@ -1329,7 +1626,7 @@ app.post('/api/scrape', async (req, res) => {
       success: result.success,
       count: result.count,
       message: result.success ? 
-        `Successfully scraped ${result.count} REAL business listings from BizBuySell` :
+        `Successfully scraped ${result.count} FBA business listings from multiple sources` :
         result.message
     });
     
