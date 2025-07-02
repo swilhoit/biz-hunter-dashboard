@@ -93,13 +93,20 @@ function RecentListingsCard() {
   });
 
   const formatPrice = (price) => {
-    if (!price) return 'Contact for price';
-    if (price >= 1000000) {
-      return `$${(price / 1000000).toFixed(1)}M`;
-    } else if (price >= 1000) {
-      return `$${(price / 1000).toFixed(0)}K`;
+    if (!price || isNaN(price) || price <= 0) return 'Contact for price';
+    
+    const numPrice = Math.round(Number(price));
+    
+    // Cap at reasonable values
+    if (numPrice > 50000000) return 'Contact for price';
+    if (numPrice < 1000) return 'Contact for price';
+    
+    if (numPrice >= 1000000) {
+      return `$${(numPrice / 1000000).toFixed(1)}M`;
+    } else if (numPrice >= 1000) {
+      return `$${(numPrice / 1000).toFixed(0)}K`;
     }
-    return `$${price.toFixed(0)}`;
+    return `$${numPrice.toLocaleString()}`;
   };
 
   const formatTimeAgo = (date) => {

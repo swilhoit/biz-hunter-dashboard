@@ -40,8 +40,14 @@ function BusinessOverviewCard() {
               .select('asking_price')
               .not('asking_price', 'is', null);
 
-            const prices = priceData?.map(item => item.asking_price).filter(p => p && p > 0) || [];
-            avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+            const prices = priceData?.map(item => {
+              const price = Number(item.asking_price);
+              // Cap prices at reasonable values (max $50M, min $1K)
+              if (isNaN(price) || price <= 1000 || price > 50000000) return null;
+              return price;
+            }).filter(p => p !== null) || [];
+            
+            avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
             maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
 
             // Get recent listings (last 7 days)
@@ -78,8 +84,14 @@ function BusinessOverviewCard() {
               .select('asking_price')
               .not('asking_price', 'is', null);
 
-            const prices = priceData?.map(item => item.asking_price).filter(p => p && p > 0) || [];
-            avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+            const prices = priceData?.map(item => {
+              const price = Number(item.asking_price);
+              // Cap prices at reasonable values (max $50M, min $1K)
+              if (isNaN(price) || price <= 1000 || price > 50000000) return null;
+              return price;
+            }).filter(p => p !== null) || [];
+            
+            avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
             maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
 
             const sevenDaysAgo = new Date();
@@ -138,12 +150,16 @@ function BusinessOverviewCard() {
   }
 
   const formatPrice = (price) => {
-    if (price >= 1000000) {
-      return `$${(price / 1000000).toFixed(1)}M`;
-    } else if (price >= 1000) {
-      return `$${(price / 1000).toFixed(0)}K`;
+    if (!price || isNaN(price) || price <= 0) return '$0';
+    
+    const numPrice = Math.round(Number(price));
+    
+    if (numPrice >= 1000000) {
+      return `$${(numPrice / 1000000).toFixed(1)}M`;
+    } else if (numPrice >= 1000) {
+      return `$${(numPrice / 1000).toFixed(0)}K`;
     }
-    return `$${price.toFixed(0)}`;
+    return `$${numPrice.toLocaleString()}`;
   };
 
   return (
