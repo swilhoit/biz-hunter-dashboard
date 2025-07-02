@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, ImageIcon } from 'lucide-react';
+import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, ImageIcon, Trash2 } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
+import { useAuth } from '../../hooks/useAuth';
 
-function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline }) {
+function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete }) {
+  const { user } = useAuth();
+  const [deletingId, setDeletingId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const formatCurrency = (amount) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -38,6 +42,20 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
       onSelectionChange(selectedListings.filter(id => id !== listingId));
     } else {
       onSelectionChange([...selectedListings, listingId]);
+    }
+  };
+
+  const handleDelete = async (listingId) => {
+    if (!onDelete) return;
+    
+    setDeletingId(listingId);
+    try {
+      await onDelete(listingId);
+      setShowDeleteConfirm(null);
+    } catch (error) {
+      console.error('Error deleting listing:', error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -202,6 +220,15 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                         <ExternalLink className="w-4 h-4" />
                       </a>
                     )}
+                    {onDelete && user && (
+                      <button
+                        onClick={() => setShowDeleteConfirm(listing.id)}
+                        className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                        title="Delete listing"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -209,6 +236,36 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Confirm Delete
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Are you sure you want to delete this listing? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
+                disabled={deletingId === showDeleteConfirm}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(showDeleteConfirm)}
+                className="btn bg-red-600 text-white hover:bg-red-700"
+                disabled={deletingId === showDeleteConfirm}
+              >
+                {deletingId === showDeleteConfirm ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

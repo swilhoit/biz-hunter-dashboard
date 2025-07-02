@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon } from 'lucide-react';
+import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon, Trash2 } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
+import { useAuth } from '../../hooks/useAuth';
 
-function ListingCard({ listing, onAddToPipeline }) {
+function ListingCard({ listing, onAddToPipeline, onDelete }) {
+  const { user } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const formatCurrency = (amount) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -32,6 +37,20 @@ function ListingCard({ listing, onAddToPipeline }) {
       case 'Quiet Light': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
       case 'Website Closers': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await onDelete(listing.id);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Error deleting listing:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -200,8 +219,47 @@ function ListingCard({ listing, onAddToPipeline }) {
               <ExternalLink className="w-4 h-4" />
             </a>
           )}
+          {onDelete && user && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 text-sm"
+              title="Delete listing"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Confirm Delete
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Are you sure you want to delete this listing? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="btn bg-red-600 text-white hover:bg-red-700"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

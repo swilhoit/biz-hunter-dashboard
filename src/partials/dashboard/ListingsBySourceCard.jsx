@@ -14,7 +14,10 @@ function ListingsBySourceCard() {
         const { data } = await supabase
           .from('business_listings')
           .select('source')
-          .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%');
+          .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%')
+          .neq('name', 'Unknown Business')
+          .gt('asking_price', 1000)
+          .lt('asking_price', 50000000);
 
         if (data && data.length > 0) {
           const sourceCounts = {};
@@ -37,11 +40,11 @@ function ListingsBySourceCard() {
         console.error('Error fetching FBA source data:', error);
       }
 
-      // Fallback to FBA-focused demo data based on actual database
+      // Fallback to realistic data (only 1 clean FBA listing from QuietLight)
       return {
-        labels: ['Empire Flippers', 'QuietLight', 'BizBuySell', 'Flippa', 'Direct'],
-        data: [28, 1, 0, 0, 0],
-        total: 29
+        labels: ['QuietLight'],
+        data: [1],
+        total: 1
       };
     },
     refetchInterval: 300000

@@ -410,10 +410,77 @@ async function scrapeBizBuySellReal() {
   }
 }
 
+// Import ScrapeGraph scraper if available
+let ScrapeGraphScraper;
+try {
+  ScrapeGraphScraper = require('./scrapers/scrapegraph-scraper');
+} catch (e) {
+  console.log('⚠️  ScrapeGraph scraper not available');
+}
+
+// Import Enhanced Multi-Scraper if available
+let EnhancedMultiScraper;
+try {
+  const module = await import('../enhanced-multi-scraper.js');
+  EnhancedMultiScraper = module.default;
+  console.log('✅ Enhanced Multi-Scraper loaded');
+} catch (e) {
+  console.log('⚠️  Enhanced Multi-Scraper not available');
+}
+
 // Enhanced FBA business scraping across multiple platforms
 async function scrapeFBABusinesses() {
   console.log('🎯 Starting comprehensive FBA business scraping...');
   
+  // Try ScrapeGraph first if available and configured
+  if (ScrapeGraphScraper && (process.env.SCRAPEGRAPH_API_KEY || process.env.VITE_SCRAPEGRAPH_API_KEY)) {
+    try {
+      console.log('🤖 Checking ScrapeGraph AI availability...');
+      const sgScraper = new ScrapeGraphScraper();
+      
+      // Check if we have credits
+      const hasCredits = await sgScraper.checkCredits();
+      
+      if (!hasCredits) {
+        console.log('📊 No ScrapeGraph credits - using mock data for demonstration');
+      }
+      
+      const result = await sgScraper.scrapeListings({
+        sites: ['quietlight', 'bizbuysell', 'flippa', 'empireflippers'],
+        maxPagesPerSite: 2, // Conservative to save API credits
+        query: 'amazon fba ecommerce'
+      });
+      
+      if (result.listings && result.listings.length > 0) {
+        console.log(`✅ ScrapeGraph found ${result.listings.length} listings (${result.summary.fbaCount} FBA)`);
+        
+        // Convert to our format
+        const formattedListings = result.listings.map(listing => ({
+          name: listing.name,
+          description: listing.description,
+          asking_price: listing.askingPrice || 0,
+          annual_revenue: listing.revenue || 0,
+          annual_profit: listing.cashFlow || 0,
+          profit_multiple: listing.multiple || null,
+          location: listing.location || 'Online',
+          original_url: listing.url,
+          source: listing.source,
+          industry: listing.isFBA ? 'Amazon FBA' : (listing.industry || 'E-commerce'),
+          highlights: listing.highlights || [],
+          status: 'active',
+          listing_date: listing.dateListed,
+          scraped_at: new Date().toISOString()
+        }));
+        
+        return formattedListings;
+      }
+    } catch (error) {
+      console.error('❌ ScrapeGraph error:', error.message);
+      console.log('🔄 Falling back to traditional scraping...');
+    }
+  }
+  
+  // Traditional scraping as fallback
   if (!SCRAPER_API_KEY) {
     throw new Error('SCRAPER_API_KEY not configured in environment variables');
   }
@@ -1155,6 +1222,54 @@ app.get('/api/listings/recent', async (req, res) => {
   }
 });
 
+// Delete listing endpoint
+app.delete('/api/listings/:listingId', async (req, res) => {
+  try {
+    const { listingId } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    // First check if the listing exists
+    const { data: listing, error: fetchError } = await supabase
+      .from('business_listings')
+      .select('id, name')
+      .eq('id', listingId)
+      .single();
+
+    if (fetchError || !listing) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
+
+    // Delete any associated favorites first
+    await supabase
+      .from('favorites')
+      .delete()
+      .eq('listing_id', listingId);
+
+    // Delete the listing
+    const { error: deleteError } = await supabase
+      .from('business_listings')
+      .delete()
+      .eq('id', listingId);
+
+    if (deleteError) throw deleteError;
+
+    console.log(`🗑️ Deleted listing: ${listing.name} (${listingId})`);
+
+    res.json({ 
+      success: true, 
+      message: 'Listing deleted successfully',
+      deletedListing: listing
+    });
+  } catch (error) {
+    console.error('Error deleting listing:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Profile Management API Routes
 app.get('/api/profile/:userId', async (req, res) => {
   try {
@@ -1618,8 +1733,115 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/scrape', async (req, res) => {
   try {
-    console.log('🚀 API: Starting manual scraping...');
+    const { method = 'traditional' } = req.body;
+    console.log(`🚀 API: Starting ${method} scraping...`);
     
+    // Force ScrapeGraph method if requested
+    if (method === 'scrapegraph') {
+      // Try ScrapeGraph even without credits (will use mock data)
+      if (ScrapeGraphScraper) {
+        try {
+          console.log('🤖 Using ScrapeGraph AI for intelligent scraping...');
+          const sgScraper = new ScrapeGraphScraper();
+          
+          // Check if we have credits
+          const hasCredits = await sgScraper.checkCredits();
+          
+          if (!hasCredits) {
+            console.log('📊 No ScrapeGraph credits - using mock data for demonstration');
+          }
+          
+          const result = await sgScraper.scrapeListings({
+            sites: ['quietlight', 'bizbuysell', 'flippa', 'empireflippers'],
+            maxPagesPerSite: 2, // Conservative to save API credits
+            query: 'amazon fba ecommerce'
+          });
+          
+          if (result.listings && result.listings.length > 0) {
+            console.log(`✅ ScrapeGraph found ${result.listings.length} listings (${result.summary.fbaCount} FBA)`);
+            
+            // Convert to our format and save
+            const formattedListings = result.listings.map(listing => ({
+              name: listing.name,
+              description: listing.description,
+              asking_price: listing.askingPrice || 0,
+              annual_revenue: listing.revenue || 0,
+              annual_profit: listing.cashFlow || 0,
+              profit_multiple: listing.multiple || null,
+              location: listing.location || 'Online',
+              original_url: listing.url,
+              source: listing.source,
+              industry: listing.isFBA ? 'Amazon FBA' : (listing.industry || 'E-commerce'),
+              highlights: listing.highlights || [],
+              status: 'active',
+              listing_date: listing.dateListed,
+              scraped_at: new Date().toISOString()
+            }));
+            
+            // Save to database
+            let savedCount = 0;
+            for (const listing of formattedListings) {
+              const { data: existing } = await supabase
+                .from('business_listings')
+                .select('id')
+                .eq('original_url', listing.original_url)
+                .single();
+              
+              if (!existing) {
+                const { error } = await supabase
+                  .from('business_listings')
+                  .insert(listing);
+                
+                if (!error) savedCount++;
+              }
+            }
+            
+            return res.json({
+              success: true,
+              count: savedCount,
+              message: hasCredits 
+                ? `AI-powered scraping found ${savedCount} new listings`
+                : `Mock data: Added ${savedCount} example listings (add ScrapeGraph credits for real data)`
+            });
+          }
+        } catch (error) {
+          console.error('❌ ScrapeGraph error:', error.message);
+          return res.json({
+            success: false,
+            count: 0,
+            message: `AI scraping failed: ${error.message}. Add credits at https://dashboard.scrapegraphai.com/`
+          });
+        }
+      } else {
+        return res.json({
+          success: false,
+          count: 0,
+          message: 'ScrapeGraph scraper not configured. Add VITE_SCRAPEGRAPH_API_KEY to .env'
+        });
+      }
+    }
+    
+    // Traditional scraping method
+    // Try Enhanced Multi-Scraper first for two-stage scraping with descriptions
+    if (EnhancedMultiScraper) {
+      try {
+        console.log('🔧 Using Enhanced Multi-Scraper for two-stage scraping...');
+        const scraper = new EnhancedMultiScraper();
+        const enhancedResult = await scraper.runTwoStageScraping();
+        
+        if (enhancedResult.success && enhancedResult.totalSaved > 0) {
+          return res.json({
+            success: true,
+            count: enhancedResult.totalSaved,
+            message: `Successfully scraped ${enhancedResult.totalSaved} FBA listings with full descriptions from ${Object.keys(enhancedResult.bySource).length} sources`
+          });
+        }
+      } catch (enhancedError) {
+        console.log('⚠️ Enhanced scraper failed, falling back to standard scraper:', enhancedError.message);
+      }
+    }
+    
+    // Fallback to standard scraping
     const result = await scrapeWithDuplicatePrevention();
     
     res.json({

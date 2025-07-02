@@ -35,8 +35,8 @@ export function useManualScraping() {
   const [currentScraper, setCurrentScraper] = useState<string | null>(null);
   const { showSuccess, showError, showInfo } = useToast();
 
-  const runAllScrapersMutation = useMutation<any, Error>({
-    mutationFn: async () => {
+  const runScraperMutation = useMutation<any, Error, { method?: 'traditional' | 'scrapegraph' }>({
+    mutationFn: async ({ method = 'traditional' }) => {
       try {
         const response = await fetch(`${SCRAPING_API_URL}/api/scrape`, {
           method: 'POST',
@@ -44,7 +44,7 @@ export function useManualScraping() {
             'Content-Type': 'application/json',
           },
           mode: 'cors',
-          body: JSON.stringify({})
+          body: JSON.stringify({ method })
         });
 
         if (!response.ok) {
@@ -60,15 +60,23 @@ export function useManualScraping() {
         throw error;
       }
     },
-    onMutate: () => {
+    onMutate: ({ method }) => {
       setIsChecking(true);
       setProgress(0);
-      setCurrentScraper('BizBuySell');
-      showInfo('Checking for new listings from all sources...');
       
-      // Simulate progress since this server doesn't provide real-time updates
+      if (method === 'scrapegraph') {
+        setCurrentScraper('ScrapeGraph AI');
+        showInfo('Using AI-powered scraping to find new listings...');
+      } else {
+        setCurrentScraper('BizBuySell');
+        showInfo('Checking for new listings from all sources...');
+      }
+      
+      // Simulate progress
       let currentProgress = 0;
-      const scrapers = ['BizBuySell', 'Flippa', 'QuietLight', 'Empire Flippers'];
+      const scrapers = method === 'scrapegraph' 
+        ? ['ScrapeGraph AI', 'Processing...', 'Extracting data...', 'Saving listings...']
+        : ['BizBuySell', 'Flippa', 'QuietLight', 'Empire Flippers'];
       let scraperIndex = 0;
       
       const progressInterval = setInterval(() => {
@@ -89,7 +97,7 @@ export function useManualScraping() {
       // Store interval so we can clear it on success/error
       (window as any).__scrapingProgressInterval = progressInterval;
     },
-    onSuccess: (data, _, context) => {
+    onSuccess: (data, variables, context) => {
       // Clear the progress interval
       if ((window as any).__scrapingProgressInterval) {
         clearInterval((window as any).__scrapingProgressInterval);
@@ -99,12 +107,17 @@ export function useManualScraping() {
       setProgress(100);
       setCurrentScraper(null);
       
-      showSuccess(`Scraping completed! Found ${data.totalScraped || 0} total listings, ${data.newCount || 0} new listings added.`);
-      if (context?.onComplete) {
-        context.onComplete();
+      const method = variables.method === 'scrapegraph' ? 'AI-powered' : 'Traditional';
+      
+      if (data.success && data.count > 0) {
+        showSuccess(`${method} scraping completed! Found ${data.count} new listings.`);
+      } else if (data.success && data.count === 0) {
+        showInfo(`${method} scraping completed. No new listings found.`);
+      } else {
+        showError(data.message || 'Scraping completed with errors');
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       // Clear the progress interval
       if ((window as any).__scrapingProgressInterval) {
         clearInterval((window as any).__scrapingProgressInterval);
@@ -113,17 +126,25 @@ export function useManualScraping() {
       setIsChecking(false);
       setProgress(0);
       setCurrentScraper(null);
-      showError(`${error.message}`);
+      
+      const method = variables.method === 'scrapegraph' ? 'AI-powered' : 'Traditional';
+      showError(`${method} scraping failed: ${error.message}`);
     },
   });
 
-  const checkForNewListings = (onComplete: () => void) => {
-    runAllScrapersMutation.mutate(undefined, { onComplete });
+  const checkForNewListings = (onComplete?: () => void, method: 'traditional' | 'scrapegraph' = 'traditional') => {
+    runScraperMutation.mutate({ method }, { 
+      onSuccess: () => {
+        if (onComplete) {
+          onComplete();
+        }
+      }
+    });
   };
 
   return {
     checkForNewListings,
-    isChecking: isChecking || runAllScrapersMutation.isPending,
+    isChecking: isChecking || runScraperMutation.isPending,
     progress,
     currentScraper,
   };

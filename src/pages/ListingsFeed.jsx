@@ -7,7 +7,8 @@ import ListingCard from '../partials/deals/ListingCard';
 import { useBusinessListings, useAddToPipeline } from '../hooks/useBusinessListings';
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain } from 'lucide-react';
 
 function ListingsFeed() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,6 +28,7 @@ function ListingsFeed() {
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
   const { checkForNewListings, isChecking, progress, currentScraper } = useManualScraping();
+  const { user } = useAuth();
 
   const filteredListings = listings.filter(listing => 
     listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -84,11 +86,39 @@ function ListingsFeed() {
     refetch();
   };
 
-  const handleCheckForNewListings = () => {
+  const handleCheckForNewListings = (method = 'traditional') => {
     checkForNewListings(() => {
       // Refetch listings after scraping completes
       refetch();
-    });
+    }, method);
+  };
+
+  const handleDeleteListing = async (listingId) => {
+    if (!user) {
+      showError('You must be logged in to delete listings');
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/listings/${listingId}?userId=${user.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showSuccess('Listing deleted successfully');
+        refetch(); // Refresh the listings
+      } else {
+        showError(result.message || 'Failed to delete listing');
+      }
+    } catch (error) {
+      console.error('Error deleting listing:', error);
+      showError('Failed to delete listing');
+    }
   };
 
   return (
@@ -108,23 +138,46 @@ function ListingsFeed() {
               </div>
 
               <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
+                {/* Traditional Scraper Button */}
                 <button 
-                  onClick={handleCheckForNewListings}
+                  onClick={() => handleCheckForNewListings('traditional')}
                   disabled={isChecking || isLoading}
                   className="btn bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Use traditional HTML scrapers (ScraperAPI)"
                 >
-                  {isChecking ? (
+                  {isChecking && currentScraper && !currentScraper.includes('AI') ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {currentScraper ? `Checking ${currentScraper}... ${progress}%` : 'Checking...'}
+                      {currentScraper ? `${currentScraper}... ${progress}%` : 'Checking...'}
                     </>
                   ) : (
                     <>
                       <Download className="w-4 h-4 mr-2" />
-                      Check for New Listings
+                      Check (Traditional)
                     </>
                   )}
                 </button>
+                
+                {/* ScrapeGraph AI Button */}
+                <button 
+                  onClick={() => handleCheckForNewListings('scrapegraph')}
+                  disabled={isChecking || isLoading}
+                  className="btn bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Use AI-powered scraping (ScrapeGraph)"
+                >
+                  {isChecking && currentScraper && currentScraper.includes('AI') ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {currentScraper ? `${currentScraper}... ${progress}%` : 'AI Scraping...'}
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-4 h-4 mr-2" />
+                      Check (AI-Powered)
+                    </>
+                  )}
+                </button>
+                
                 <button 
                   onClick={handleRefresh}
                   disabled={isLoading || isChecking}
@@ -307,6 +360,7 @@ function ListingsFeed() {
                     selectedListings={selectedListings}
                     onSelectionChange={setSelectedListings}
                     onAddToPipeline={handleAddToPipeline}
+                    onDelete={handleDeleteListing}
                   />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -315,6 +369,7 @@ function ListingsFeed() {
                         key={listing.id} 
                         listing={listing}
                         onAddToPipeline={handleAddToPipeline}
+                        onDelete={handleDeleteListing}
                       />
                     ))}
                   </div>

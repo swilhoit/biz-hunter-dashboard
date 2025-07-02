@@ -14,18 +14,45 @@ function RecentListingsCard() {
           .from('business_listings')
           .select('*')
           .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%')
+          .neq('name', 'Unknown Business')
+          .gt('asking_price', 1000)
+          .lt('asking_price', 50000000)
           .order('created_at', { ascending: false })
           .limit(5);
 
         if (data && data.length > 0) {
-          return data.map(listing => ({
-            id: listing.id,
-            title: listing.name || 'Untitled FBA Listing',
-            asking_price: listing.asking_price,
-            location: listing.location,
-            source: listing.source,
-            created_at: listing.created_at
-          }));
+          return data.map(listing => {
+            // Extract meaningful title from description if name is generic
+            let title = listing.name;
+            if (!title || title === 'Unknown Business') {
+              const desc = listing.description || '';
+              if (desc.includes('Amazon FBA')) {
+                if (desc.includes('supplements')) title = 'Amazon FBA Supplements Business';
+                else if (desc.includes('health')) title = 'Amazon FBA Health Business';
+                else if (desc.includes('fitness')) title = 'Amazon FBA Fitness Business';
+                else if (desc.includes('gaming')) title = 'Amazon FBA Gaming Business';
+                else if (desc.includes('outdoors')) title = 'Amazon FBA Outdoors Business';
+                else title = 'Amazon FBA Business';
+              } else {
+                title = 'FBA Business Listing';
+              }
+            }
+
+            // Clean up asking price
+            let cleanPrice = listing.asking_price;
+            if (cleanPrice && (cleanPrice > 50000000 || cleanPrice < 1000)) {
+              cleanPrice = null; // Will show "Contact for price"
+            }
+
+            return {
+              id: listing.id,
+              title,
+              asking_price: cleanPrice,
+              location: listing.location,
+              source: listing.source,
+              created_at: listing.created_at
+            };
+          });
         }
       } catch (error) {
         console.error('Error fetching FBA listings:', error);
