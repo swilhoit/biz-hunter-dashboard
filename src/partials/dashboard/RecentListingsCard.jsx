@@ -8,88 +8,51 @@ function RecentListingsCard() {
   const { data: listings, isLoading, error } = useQuery({
     queryKey: ['recent-listings'],
     queryFn: async () => {
-      try {
-        let data = null;
-        
-        // Try business_listings first, fallback to deals table
-        try {
-          const result = await supabase
-            .from('business_listings')
-            .select('id, title, asking_price, location, source, created_at')
-            .order('created_at', { ascending: false })
-            .limit(5);
-          
-          if (result.error) throw result.error;
-          data = result.data;
-        } catch (businessListingsError) {
-          console.warn('business_listings table not found, using deals table');
-          const result = await supabase
-            .from('deals')
-            .select('id, business_name, asking_price, created_at, source')
-            .order('created_at', { ascending: false })
-            .limit(5);
-          
-          if (result.error) throw result.error;
-          // Transform deals data to match business_listings format
-          data = result.data?.map(deal => ({
-            id: deal.id,
-            title: deal.business_name,
-            asking_price: deal.asking_price,
-            location: null, // deals table doesn't have location
-            source: deal.source,
-            created_at: deal.created_at
-          }));
+      // Return clean demo data for now
+      return [
+        {
+          id: '1',
+          title: 'Established E-commerce Store',
+          asking_price: 125000,
+          location: 'California, USA',
+          source: 'BizBuySell',
+          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
+        },
+        {
+          id: '2',
+          title: 'Amazon FBA Electronics Business',
+          asking_price: 89000,
+          location: 'Texas, USA',
+          source: 'Flippa',
+          created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 hours ago
+        },
+        {
+          id: '3',
+          title: 'SaaS Platform with Recurring Revenue',
+          asking_price: 250000,
+          location: null,
+          source: 'QuietLight',
+          created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() // 8 hours ago
+        },
+        {
+          id: '4',
+          title: 'Pet Supplies Drop Shipping Business',
+          asking_price: 45000,
+          location: 'Florida, USA',
+          source: 'Empire Flippers',
+          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() // 12 hours ago
+        },
+        {
+          id: '5',
+          title: 'Health & Wellness Content Site',
+          asking_price: 67000,
+          location: null,
+          source: 'Direct',
+          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1 day ago
         }
-
-        return data || [];
-      } catch (error) {
-        console.error('Error fetching recent listings:', error);
-        // Return demo data if database is not available
-        return [
-          {
-            id: '1',
-            title: 'Established E-commerce Store',
-            asking_price: 125000,
-            location: 'California, USA',
-            source: 'BizBuySell',
-            created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
-          },
-          {
-            id: '2',
-            title: 'Amazon FBA Electronics Business',
-            asking_price: 89000,
-            location: 'Texas, USA',
-            source: 'Flippa',
-            created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 hours ago
-          },
-          {
-            id: '3',
-            title: 'SaaS Platform with Recurring Revenue',
-            asking_price: 250000,
-            location: null,
-            source: 'QuietLight',
-            created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() // 8 hours ago
-          },
-          {
-            id: '4',
-            title: 'Pet Supplies Drop Shipping Business',
-            asking_price: 45000,
-            location: 'Florida, USA',
-            source: 'Empire Flippers',
-            created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() // 12 hours ago
-          },
-          {
-            id: '5',
-            title: 'Health & Wellness Content Site',
-            asking_price: 67000,
-            location: null,
-            source: 'Direct',
-            created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1 day ago
-          }
-        ];
-      }
+      ];
     },
-    refetchInterval: 60000
+    refetchInterval: 300000
   });
 
   const formatPrice = (price) => {

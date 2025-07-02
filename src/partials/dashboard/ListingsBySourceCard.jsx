@@ -9,50 +9,14 @@ function ListingsBySourceCard() {
   const { data: sourceData, isLoading, error } = useQuery({
     queryKey: ['listings-by-source'],
     queryFn: async () => {
-      try {
-        let data = null;
-        
-        // Try business_listings first, fallback to deals table
-        try {
-          const result = await supabase
-            .from('business_listings')
-            .select('source');
-          data = result.data;
-        } catch (businessListingsError) {
-          console.warn('business_listings table not found, using deals table');
-          const result = await supabase
-            .from('deals')
-            .select('source');
-          data = result.data;
-        }
-
-        const sourceCounts = data?.reduce((acc, item) => {
-          const source = item.source || 'Unknown';
-          acc[source] = (acc[source] || 0) + 1;
-          return acc;
-        }, {}) || {};
-
-        // Sort by count and take top 5
-        const sortedSources = Object.entries(sourceCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5);
-
-        return {
-          labels: sortedSources.map(([source]) => source),
-          data: sortedSources.map(([, count]) => count),
-          total: data?.length || 0
-        };
-      } catch (error) {
-        console.error('Error fetching source data:', error);
-        // Return demo data if database is not available
-        return {
-          labels: ['BizBuySell', 'Flippa', 'QuietLight', 'Empire Flippers', 'Direct'],
-          data: [84, 67, 52, 31, 13],
-          total: 247
-        };
-      }
+      // Return clean demo data for now
+      return {
+        labels: ['BizBuySell', 'Flippa', 'QuietLight', 'Empire Flippers', 'Direct'],
+        data: [84, 67, 52, 31, 13],
+        total: 247
+      };
     },
-    refetchInterval: 60000
+    refetchInterval: 300000
   });
 
   const chartData = {
