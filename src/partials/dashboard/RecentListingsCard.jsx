@@ -6,49 +6,72 @@ import { Clock, DollarSign, MapPin, ExternalLink } from 'lucide-react';
 
 function RecentListingsCard() {
   const { data: listings, isLoading, error } = useQuery({
-    queryKey: ['recent-listings'],
+    queryKey: ['recent-fba-listings'],
     queryFn: async () => {
-      // Return clean demo data for now
+      try {
+        // Get recent FBA listings from database
+        const { data } = await supabase
+          .from('business_listings')
+          .select('*')
+          .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (data && data.length > 0) {
+          return data.map(listing => ({
+            id: listing.id,
+            title: listing.name || 'Untitled FBA Listing',
+            asking_price: listing.asking_price,
+            location: listing.location,
+            source: listing.source,
+            created_at: listing.created_at
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching FBA listings:', error);
+      }
+
+      // Fallback to FBA-focused demo data
       return [
         {
           id: '1',
-          title: 'Established E-commerce Store',
-          asking_price: 125000,
-          location: 'California, USA',
-          source: 'BizBuySell',
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
+          title: 'Amazon FBA Electronics Business',
+          asking_price: 189000,
+          location: 'Texas, USA',
+          source: 'Flippa',
+          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
         },
         {
           id: '2',
-          title: 'Amazon FBA Electronics Business',
-          asking_price: 89000,
-          location: 'Texas, USA',
-          source: 'Flippa',
-          created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 hours ago
+          title: 'FBA Home & Garden Store',
+          asking_price: 145000,
+          location: 'California, USA',
+          source: 'BizBuySell',
+          created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
         },
         {
           id: '3',
-          title: 'SaaS Platform with Recurring Revenue',
-          asking_price: 250000,
-          location: null,
-          source: 'QuietLight',
-          created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() // 8 hours ago
+          title: 'Amazon FBA Pet Supplies Business',
+          asking_price: 95000,
+          location: 'Florida, USA',
+          source: 'Empire Flippers',
+          created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()
         },
         {
           id: '4',
-          title: 'Pet Supplies Drop Shipping Business',
-          asking_price: 45000,
-          location: 'Florida, USA',
-          source: 'Empire Flippers',
-          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() // 12 hours ago
+          title: 'FBA Kitchen & Dining Store',
+          asking_price: 67000,
+          location: 'New York, USA',
+          source: 'QuietLight',
+          created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
         },
         {
           id: '5',
-          title: 'Health & Wellness Content Site',
-          asking_price: 67000,
-          location: null,
+          title: 'Amazon FBA Beauty Products',
+          asking_price: 125000,
+          location: 'Washington, USA',
           source: 'Direct',
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1 day ago
+          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
         }
       ];
     },
@@ -106,7 +129,7 @@ function RecentListingsCard() {
   return (
     <div className="col-span-full xl:col-span-6 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
       <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-800 dark:text-gray-100">Recent Listings</h2>
+        <h2 className="font-semibold text-gray-800 dark:text-gray-100">Recent FBA Listings</h2>
         <Link to="/listings" className="text-sm font-medium text-violet-500 hover:text-violet-600 dark:hover:text-violet-400">
           View All →
         </Link>

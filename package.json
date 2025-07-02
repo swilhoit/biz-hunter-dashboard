@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "npm run dev & cd server && node index.js",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

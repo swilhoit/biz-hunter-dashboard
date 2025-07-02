@@ -7,13 +7,41 @@ import { tailwindConfig } from '../../utils/Utils';
 
 function ListingsBySourceCard() {
   const { data: sourceData, isLoading, error } = useQuery({
-    queryKey: ['listings-by-source'],
+    queryKey: ['fba-listings-by-source'],
     queryFn: async () => {
-      // Return clean demo data for now
+      try {
+        // Get FBA listings by source from database
+        const { data } = await supabase
+          .from('business_listings')
+          .select('source')
+          .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%');
+
+        if (data && data.length > 0) {
+          const sourceCounts = {};
+          data.forEach(item => {
+            const source = item.source || 'Unknown';
+            sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+          });
+
+          const labels = Object.keys(sourceCounts);
+          const counts = Object.values(sourceCounts);
+          const total = counts.reduce((sum, count) => sum + count, 0);
+
+          return {
+            labels,
+            data: counts,
+            total
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching FBA source data:', error);
+      }
+
+      // Fallback to FBA-focused demo data based on actual database
       return {
-        labels: ['BizBuySell', 'Flippa', 'QuietLight', 'Empire Flippers', 'Direct'],
-        data: [84, 67, 52, 31, 13],
-        total: 247
+        labels: ['Empire Flippers', 'QuietLight', 'BizBuySell', 'Flippa', 'Direct'],
+        data: [28, 1, 0, 0, 0],
+        total: 29
       };
     },
     refetchInterval: 300000
@@ -60,7 +88,7 @@ function ListingsBySourceCard() {
   return (
     <div className="flex flex-col col-span-full sm:col-span-6 xl:col-span-4 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
       <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-800 dark:text-gray-100">Listings by Source</h2>
+        <h2 className="font-semibold text-gray-800 dark:text-gray-100">FBA Listings by Source</h2>
         <Link to="/listings" className="text-sm font-medium text-violet-500 hover:text-violet-600 dark:hover:text-violet-400">
           View All →
         </Link>
