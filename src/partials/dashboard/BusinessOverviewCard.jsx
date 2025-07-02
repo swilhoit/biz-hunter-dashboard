@@ -11,13 +11,13 @@ function BusinessOverviewCard() {
       
       // Return clean demo data for now to avoid corrupt database issues
       return {
-        totalListings: 247,
-        activeListings: 189,
-        pendingListings: 42,
-        soldListings: 16,
+        totalListings: 157,
+        activeListings: 157,
+        pendingListings: 0,
+        soldListings: 0,
         avgPrice: 125000,
-        maxPrice: 850000,
-        recentListings: 23
+        maxPrice: 450000,
+        recentListings: 157
       };
     },
     refetchInterval: 300000 // Refetch every 5 minutes
