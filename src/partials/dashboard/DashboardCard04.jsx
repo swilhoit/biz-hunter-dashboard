@@ -1,5 +1,5 @@
 import React from 'react';
-import BarChart from '../../charts/BarChart01';
+import BarChart01 from '../../charts/BarChart01';
 
 // Import utilities
 import { tailwindConfig } from '../../utils/Utils';
@@ -46,7 +46,7 @@ function DashboardCard04() {
       </header>
       {/* Chart built with Chart.js 3 */}
       {/* Change the height attribute to adjust the chart height */}
-      <BarChart data={chartData} width={595} height={248} />
+      <BarChart01 data={chartData} width={595} height={248} />
     </div>
   );
 }

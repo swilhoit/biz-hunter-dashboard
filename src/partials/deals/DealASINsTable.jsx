@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Star, TrendingUp, TrendingDown, Package, Search, Filter, Download } from 'lucide-react';
 import { getProductPlaceholderImage } from '../../utils/asinImageUtils';
+import ASINImage from '../../components/ASINImage';
 
 // Mock ASIN data
 const mockASINs = [
@@ -350,10 +351,11 @@ function DealASINsTable({ dealId }) {
                   <td className="px-6 py-4">
                     <div className="flex items-start">
                       <div className="relative inline-flex mr-3 flex-shrink-0">
-                        <img 
+                        <ASINImage
                           className="w-16 h-16 rounded-lg object-cover"
                           src={getProductPlaceholderImage(asin.category, asin.asin)} 
                           alt={asin.product_name}
+                          fallbackText={asin.asin.substring(0, 6)}
                           loading="lazy"
                         />
                       </div>

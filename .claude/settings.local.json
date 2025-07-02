@@ -66,7 +66,17 @@
       "Bash(supabase projects:*)",
       "Bash(supabase status:*)",
       "Bash(supabase inspect:*)",
-      "Bash(npx ts-node:*)"
+      "Bash(npx ts-node:*)",
+      "Bash(cp:*)",
+      "Bash(./setup-mosaic-frontend.sh:*)",
+      "Bash(./finalize-integration.sh:*)",
+      "Bash(gcloud:*)",
+      "Bash(timeout 10 npm run dev)",
+      "Bash(cat:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git rm:*)",
+      "Bash(git reset:*)",
+      "Bash(git config:*)"
     ],
     "deny": []
   }

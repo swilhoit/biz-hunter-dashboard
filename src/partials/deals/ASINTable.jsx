@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getProductPlaceholderImage } from '../../utils/asinImageUtils';
+import ASINImage from '../../components/ASINImage';
 
 function ASINTable({ category, timeframe }) {
   const [sortField, setSortField] = useState('revenue');
@@ -263,10 +264,11 @@ function ASINTable({ category, timeframe }) {
                 <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="relative inline-flex mr-3">
-                      <img 
+                      <ASINImage
                         className="w-12 h-12 rounded-lg object-cover"
                         src={getProductPlaceholderImage(asin.category, asin.asin)} 
                         alt={asin.title}
+                        fallbackText={asin.asin.substring(0, 6)}
                         loading="lazy"
                       />
                     </div>

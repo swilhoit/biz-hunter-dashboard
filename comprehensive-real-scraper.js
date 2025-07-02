@@ -277,6 +277,36 @@ class ComprehensiveRealScraper {
     return 'Digital Business';
   }
 
+  isAmazonFBABusiness(listing) {
+    const keywords = [
+      'amazon fba', 'fulfillment by amazon', 'amazon seller',
+      'fba business', 'amazon store', 'private label',
+      'product sourcing', 'amazon marketplace', 'amazon brand',
+      'wholesale to amazon', 'retail arbitrage', 'online arbitrage'
+    ];
+    const text = `${listing.name || ''} ${listing.description || ''}`.toLowerCase();
+    return keywords.some(keyword => text.includes(keyword)) || listing.industry === 'Amazon FBA';
+  }
+
+  validateListing(listing) {
+    // Check for valid business name
+    if (!listing.name || listing.name === 'Unknown Business' || listing.name.length < 3) {
+      return false;
+    }
+    
+    // Check for valid prices
+    if (!listing.asking_price || listing.asking_price < 1000 || listing.asking_price > 100000000) {
+      return false;
+    }
+    
+    // Check for valid revenue (if provided)
+    if (listing.annual_revenue && (listing.annual_revenue < 0 || listing.annual_revenue > 100000000)) {
+      return false;
+    }
+    
+    return true;
+  }
+
   normalizeUrl(url, source) {
     if (url.startsWith('http')) return url;
     
@@ -302,13 +332,22 @@ class ComprehensiveRealScraper {
     if (isNaN(numericValue)) return null;
     
     const lowerText = priceText.toLowerCase();
+    let finalPrice;
     if (lowerText.includes('m') || lowerText.includes('million')) {
-      return Math.round(numericValue * 1000000);
+      finalPrice = Math.round(numericValue * 1000000);
     } else if (lowerText.includes('k') || lowerText.includes('thousand')) {
-      return Math.round(numericValue * 1000);
+      finalPrice = Math.round(numericValue * 1000);
+    } else {
+      finalPrice = Math.round(numericValue);
     }
     
-    return Math.round(numericValue);
+    // Validate price range for Amazon FBA businesses
+    if (finalPrice < 1000 || finalPrice > 100000000) {
+      console.log(`⚠️ Invalid price filtered out: $${finalPrice?.toLocaleString()}`);
+      return null;
+    }
+    
+    return finalPrice;
   }
 
   deduplicateListings(listings) {
@@ -378,22 +417,37 @@ class ComprehensiveRealScraper {
   async saveToDatabase(listings) {
     if (listings.length === 0) return { saved: 0, errors: 0 };
 
-    console.log(`💾 Saving ${listings.length} listings to database...`);
+    // Filter for Amazon FBA businesses only and validate data quality
+    const amazonFBAListings = listings
+      .filter(listing => this.isAmazonFBABusiness(listing))
+      .filter(listing => this.validateListing(listing));
+    
+    console.log(`🔍 Filtered to ${amazonFBAListings.length} valid Amazon FBA listings out of ${listings.length} total`);
+    
+    if (amazonFBAListings.length === 0) {
+      console.log('⚠️ No valid Amazon FBA listings found to save');
+      return { saved: 0, errors: 0 };
+    }
+
+    console.log(`💾 Saving ${amazonFBAListings.length} validated Amazon FBA listings to database...`);
     
     let saved = 0;
     let errors = 0;
 
-    for (const listing of listings) {
+    for (const listing of amazonFBAListings) {
       try {
-        // Check for duplicates
+        // Check for duplicates using multiple criteria
         const { data: existing } = await this.supabase
           .from('business_listings')
           .select('id')
-          .eq('name', listing.name)
+          .or(`name.eq.${listing.name},original_url.eq.${listing.original_url || 'none'}`)
           .eq('source', listing.source)
           .limit(1);
 
-        if (existing && existing.length > 0) continue;
+        if (existing && existing.length > 0) {
+          console.log(`   ⏭️ Skipped duplicate: "${listing.name}"`);
+          continue;
+        }
 
         const { error } = await this.supabase
           .from('business_listings')
@@ -405,11 +459,12 @@ class ComprehensiveRealScraper {
         } else {
           saved++;
           if (saved <= 5) {
-            console.log(`   ✅ Saved: "${listing.name}" - $${listing.asking_price?.toLocaleString() || 'N/A'}`);
+            console.log(`   ✅ Saved Amazon FBA: "${listing.name}" - $${listing.asking_price?.toLocaleString() || 'N/A'}`);
           }
         }
       } catch (err) {
         errors++;
+        if (errors <= 3) console.error(`❌ Save error: ${err.message}`);
       }
     }
 

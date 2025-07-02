@@ -299,15 +299,35 @@ async function scrapeMicroAcquire() {
   return [];
 }
 
+function isAmazonFBABusiness(listing) {
+  const keywords = [
+    'amazon fba', 'fulfillment by amazon', 'amazon seller',
+    'fba business', 'amazon store', 'private label',
+    'product sourcing', 'amazon marketplace', 'amazon brand',
+    'wholesale to amazon', 'retail arbitrage', 'online arbitrage'
+  ];
+  const text = `${listing.name || ''} ${listing.description || ''}`.toLowerCase();
+  return keywords.some(keyword => text.includes(keyword)) || listing.industry === 'Amazon FBA';
+}
+
 async function saveToDatabase(listings) {
   if (listings.length === 0) return 0;
   
   try {
-    console.log(`💾 Saving ${listings.length} listings to database...`);
+    // Filter for Amazon FBA businesses only
+    const amazonFBAListings = listings.filter(listing => isAmazonFBABusiness(listing));
+    console.log(`🔍 Filtered to ${amazonFBAListings.length} Amazon FBA listings out of ${listings.length} total`);
+    
+    if (amazonFBAListings.length === 0) {
+      console.log('⚠️ No Amazon FBA listings found to save');
+      return 0;
+    }
+    
+    console.log(`💾 Saving ${amazonFBAListings.length} Amazon FBA listings to database...`);
     
     // Check for existing listings to avoid duplicates
     const uniqueListings = [];
-    for (const listing of listings) {
+    for (const listing of amazonFBAListings) {
       const { data: existing } = await supabase
         .from('business_listings')
         .select('id')
@@ -320,7 +340,7 @@ async function saveToDatabase(listings) {
     }
     
     if (uniqueListings.length === 0) {
-      console.log('⚠️ All listings already exist in database');
+      console.log('⚠️ All Amazon FBA listings already exist in database');
       return 0;
     }
     
@@ -335,7 +355,7 @@ async function saveToDatabase(listings) {
     }
     
     const savedCount = data?.length || 0;
-    console.log(`✅ Saved ${savedCount} new listings`);
+    console.log(`✅ Saved ${savedCount} new Amazon FBA listings`);
     return savedCount;
     
   } catch (error) {

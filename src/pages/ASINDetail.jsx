@@ -4,6 +4,7 @@ import { Tab } from '@headlessui/react';
 import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
 import { getProductDetailImage, getProductGalleryImages } from '../utils/asinImageUtils';
+import ASINImage from '../components/ASINImage';
 
 // Chart components
 import LineChart01 from '../charts/LineChart01';
@@ -138,10 +139,11 @@ function ASINDetail() {
                     <div className="mb-4 md:mb-0">
                       <div className="space-y-4">
                         <div className="relative">
-                          <img
+                          <ASINImage
                             src={galleryImages[selectedImage]}
                             alt={asinData.title}
                             className="w-full md:w-96 h-64 md:h-96 object-cover rounded-lg"
+                            fallbackText={asinData.asin}
                           />
                         </div>
                         <div className="flex space-x-2">
@@ -153,10 +155,11 @@ function ASINDetail() {
                                 selectedImage === index ? 'ring-2 ring-violet-500' : ''
                               }`}
                             >
-                              <img
+                              <ASINImage
                                 src={img}
                                 alt={`${asinData.title} ${index + 1}`}
                                 className="w-20 h-20 object-cover"
+                                fallbackText={`${index + 1}`}
                               />
                             </button>
                           ))}

@@ -101,8 +101,8 @@ function App() {
   return (
     <>
       <Routes>
-        <Route exact path="/" element={<ProtectedRoute><ListingsFeed /></ProtectedRoute>} />
-        <Route path="/dashboard" element={<ProtectedRoute><DealsDashboard /></ProtectedRoute>} />
+        <Route exact path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/deals" element={<ProtectedRoute><DealPipeline /></ProtectedRoute>} />
         <Route path="/deals/dashboard" element={<ProtectedRoute><DealsDashboard /></ProtectedRoute>} />
         <Route path="/deals/ai-analysis" element={<ProtectedRoute><AIAnalysis /></ProtectedRoute>} />
