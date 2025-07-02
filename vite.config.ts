@@ -1,34 +1,23 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+import path from 'path'
 
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-  },
-  plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
-  define: {
-    global: 'globalThis',
-  },
-  optimizeDeps: {
-    exclude: ['playwright', 'playwright-core'],
-  },
-  build: {
-    rollupOptions: {
-      external: ['playwright', 'playwright-core'],
-    },
-  },
+export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
+      '@/components': path.resolve(__dirname, './src/components'),
+      '@/lib': path.resolve(__dirname, './src/lib'),
+      '@/utils': path.resolve(__dirname, './src/utils'),
+      '@/hooks': path.resolve(__dirname, './src/hooks'),
+      '@/services': path.resolve(__dirname, './src/services'),
+      '@/types': path.resolve(__dirname, './src/types'),
+      '@/integrations': path.resolve(__dirname, './src/integrations'),
+      '@tailwindConfig': path.resolve(__dirname, './tailwind.config.js')
     },
-    conditions: ['import', 'module', 'browser', 'default'],
   },
-}));
+  server: {
+    port: 5173
+  }
+})
