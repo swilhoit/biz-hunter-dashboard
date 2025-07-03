@@ -79,6 +79,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   const dealStatuses: { value: DealStatus; label: string }[] = [
     { value: 'prospecting', label: 'Prospecting' },
     { value: 'initial_contact', label: 'Initial Contact' },
+    { value: 'analysis', label: 'Analysis' },
     { value: 'loi_submitted', label: 'LOI Submitted' },
     { value: 'due_diligence', label: 'Due Diligence' },
     { value: 'negotiation', label: 'Negotiation' },
