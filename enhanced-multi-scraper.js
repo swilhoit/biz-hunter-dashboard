@@ -680,22 +680,62 @@ class EnhancedMultiScraper {
         const pageTitle = $('h1').text();
         this.log('INFO', `BizBuySell page title: ${pageTitle}`);
 
-        // Debug what we're getting
-        this.log('DEBUG', 'BizBuySell selectors:', {
-          '.listing': $('.listing').length,
-          'h3 a': $('h3 a').length,
-          '.listingTitle': $('.listingTitle').length,
-          'a[href*="/Business-Opportunity/"]': $('a[href*="/Business-Opportunity/"]').length
+        // Look for JSON-LD structured data
+        let structuredListings = [];
+        $('script[type="application/ld+json"]').each((i, elem) => {
+          try {
+            const jsonText = $(elem).html();
+            const data = JSON.parse(jsonText);
+            
+            // Check if this contains a list of products
+            if (data['@type'] === 'ItemList' && data.itemListElement) {
+              this.log('INFO', `Found structured data with ${data.itemListElement.length} items`);
+              structuredListings = data.itemListElement;
+            } else if (data['@graph']) {
+              // Sometimes it's in a graph structure
+              const itemList = data['@graph'].find(item => item['@type'] === 'ItemList');
+              if (itemList && itemList.itemListElement) {
+                this.log('INFO', `Found structured data in @graph with ${itemList.itemListElement.length} items`);
+                structuredListings = itemList.itemListElement;
+              }
+            }
+          } catch (e) {
+            this.log('WARN', 'Failed to parse JSON-LD', { error: e.message });
+          }
         });
-        
-        // Check if we're on the right page by looking for Amazon/FBA mentions
-        const pageContent = $('body').text();
-        const hasAmazonContent = pageContent.toLowerCase().includes('amazon') || pageContent.toLowerCase().includes('fba');
-        this.log('INFO', `Page contains Amazon/FBA content: ${hasAmazonContent}`);
-        
-        // BizBuySell structure: .listing contains each listing
-        const listingElements = $('.listing');
-        this.log('INFO', `Found ${listingElements.length} listings on page ${page + 1}`);
+
+        // Process structured data listings
+        if (structuredListings.length > 0) {
+          this.log('INFO', `Processing ${structuredListings.length} structured listings`);
+          
+          structuredListings.forEach((listingItem, index) => {
+            const item = listingItem.item || listingItem;
+            if (item && item['@type'] === 'Product') {
+              const title = item.name || '';
+              const url = item.url || '';
+              const priceText = item.offers?.price ? `$${item.offers.price.toLocaleString()}` : 'Contact for price';
+              const location = item.offers?.availableAtOrFrom?.address?.addressLocality || 'Online';
+              
+              if (url && title) {
+                listings.push({
+                  url: url.startsWith('http') ? url : `https://www.bizbuysell.com${url}`,
+                  title,
+                  priceText,
+                  location,
+                  source: 'BizBuySell'
+                });
+                
+                this.logFoundListing('BizBuySell', title, url);
+              }
+            }
+          });
+        } else {
+          // Fallback to HTML parsing if no structured data
+          this.log('WARN', 'No structured data found, falling back to HTML parsing');
+          
+          // BizBuySell structure: .listing contains each listing
+          const listingElements = $('.listing');
+          this.log('INFO', `Found ${listingElements.length} .listing elements`);
 
         listingElements.each((i, elem) => {
           const $elem = $(elem);
@@ -743,6 +783,7 @@ class EnhancedMultiScraper {
             this.logFoundListing('BizBuySell', title, fullUrl);
           }
         });
+        } // Close the else block for fallback HTML parsing
 
         this.log('INFO', `BizBuySell page ${page + 1} scraped, found ${listings.length} total listings`);
       } catch (error) {
