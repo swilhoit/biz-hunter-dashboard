@@ -412,9 +412,15 @@ export class DocumentAnalysisService {
       console.log('Starting document analysis for file:', file.name, 'Type:', file.type, 'Size:', file.size);
       
       // Check if API key is available - try runtime config first
+      console.log('Checking for OpenAI API key...');
+      console.log('Window runtime config:', typeof window !== 'undefined' ? (window as any).__RUNTIME_CONFIG__ : 'Not available');
+      console.log('Import meta env:', import.meta.env);
+      
       const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
                      import.meta.env.VITE_OPENAI_API_KEY || 
                      import.meta.env.REACT_APP_OPENAI_API_KEY;
+      
+      console.log('API key found:', apiKey ? 'Yes (hidden)' : 'No');
       
       if (!apiKey) {
         console.error('OpenAI API key not found');

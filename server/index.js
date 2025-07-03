@@ -841,21 +841,9 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
       scrapeFunction: async () => {
         console.log('🔄 [QuietLight] Starting QuietLight scraping...');
         try {
-          // Simulate QuietLight scraping (replace with actual implementation)
-          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
-          const mockListings = Array.from({ length: Math.floor(Math.random() * 8) + 3 }, (_, i) => ({
-            name: `QuietLight FBA Business ${i + 1}`,
-            description: 'Amazon FBA business with established brand and customer base',
-            asking_price: Math.floor(Math.random() * 500000) + 100000,
-            annual_revenue: Math.floor(Math.random() * 300000) + 50000,
-            location: 'Online',
-            original_url: `https://quietlight.com/listing/mock-${Date.now()}-${i + 1}`,
-            industry: 'E-commerce',
-            highlights: ['Amazon FBA', 'Established Brand', 'Premium Listing'].join(', '),
-            source: 'QuietLight'
-          }));
-          console.log(`✅ [QuietLight] Generated ${mockListings.length} mock listings`);
-          return mockListings;
+          // NO MOCK DATA - Real scraping should be handled by Enhanced Multi-Scraper
+          console.log('❌ [QuietLight] This fallback should not be used - Enhanced Multi-Scraper should handle this');
+          return [];
         } catch (error) {
           console.error(`❌ [QuietLight] Scraping failed: ${error.message}`);
           throw error;
@@ -868,21 +856,9 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
       scrapeFunction: async () => {
         console.log('🔄 [EmpireFlippers] Starting Empire Flippers scraping...');
         try {
-          // Simulate Empire Flippers scraping (replace with actual implementation)
-          await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
-          const mockListings = Array.from({ length: Math.floor(Math.random() * 6) + 2 }, (_, i) => ({
-            name: `Premium Amazon FBA Portfolio ${i + 1}`,
-            description: 'High-performing Amazon FBA business with multiple product lines',
-            asking_price: Math.floor(Math.random() * 800000) + 200000,
-            annual_revenue: Math.floor(Math.random() * 400000) + 100000,
-            location: 'USA',
-            original_url: `https://empireflippers.com/listing/mock-${Date.now()}-${i + 1}`,
-            industry: 'Amazon FBA',
-            highlights: ['Multiple SKUs', 'High Margin', 'Vetted Business'].join(', '),
-            source: 'Empire Flippers'
-          }));
-          console.log(`✅ [EmpireFlippers] Generated ${mockListings.length} mock listings`);
-          return mockListings;
+          // NO MOCK DATA - Real scraping should be handled by Enhanced Multi-Scraper
+          console.log('❌ [EmpireFlippers] This fallback should not be used - Enhanced Multi-Scraper should handle this');
+          return [];
         } catch (error) {
           console.error(`❌ [EmpireFlippers] Scraping failed: ${error.message}`);
           throw error;
@@ -895,21 +871,9 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
       scrapeFunction: async () => {
         console.log('🔄 [Flippa] Starting Flippa scraping...');
         try {
-          // Simulate Flippa scraping (replace with actual implementation)
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2500));
-          const mockListings = Array.from({ length: Math.floor(Math.random() * 10) + 4 }, (_, i) => ({
-            name: `Flippa Amazon Store ${i + 1}`,
-            description: 'Profitable Amazon business with strong metrics and growth potential',
-            asking_price: Math.floor(Math.random() * 300000) + 50000,
-            annual_revenue: Math.floor(Math.random() * 200000) + 30000,
-            location: 'Global',
-            original_url: `https://flippa.com/listing/mock-${Date.now()}-${i + 1}`,
-            industry: 'E-commerce',
-            highlights: ['Growing Revenue', 'Low Competition', 'Automated Operations'].join(', '),
-            source: 'Flippa'
-          }));
-          console.log(`✅ [Flippa] Generated ${mockListings.length} mock listings`);
-          return mockListings;
+          // NO MOCK DATA - Real scraping should be handled by Enhanced Multi-Scraper
+          console.log('❌ [Flippa] This fallback should not be used - Enhanced Multi-Scraper should handle this');
+          return [];
         } catch (error) {
           console.error(`❌ [Flippa] Scraping failed: ${error.message}`);
           throw error;

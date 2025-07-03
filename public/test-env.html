@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Environment Test</title>
+</head>
+<body>
+    <h1>Environment Variable Test</h1>
+    <div id="results"></div>
+    <script>
+        const results = document.getElementById('results');
+        
+        // Check window runtime config
+        const runtimeConfig = window.__RUNTIME_CONFIG__ || {};
+        
+        results.innerHTML = `
+            <h2>Runtime Config:</h2>
+            <pre>${JSON.stringify(runtimeConfig, null, 2)}</pre>
+            
+            <h2>Import Meta Env (if available):</h2>
+            <pre>${typeof import !== 'undefined' && import.meta ? JSON.stringify(import.meta.env || {}, null, 2) : 'Not available'}</pre>
+            
+            <h2>API Key Status:</h2>
+            <p>VITE_OPENAI_API_KEY: ${runtimeConfig.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET'}</p>
+        `;
+    </script>
+</body>
+</html>

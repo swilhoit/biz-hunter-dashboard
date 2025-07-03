@@ -5,6 +5,38 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Log all environment variables that start with VITE_ (without showing the values)
+console.log('=== Server Starting ===');
+console.log('Port:', PORT);
+console.log('Node Environment:', process.env.NODE_ENV);
+console.log('Environment variables:');
+Object.keys(process.env).forEach(key => {
+  if (key.startsWith('VITE_') || key === 'PORT' || key === 'NODE_ENV') {
+    console.log(`  ${key}: ${process.env[key] ? 'SET' : 'NOT SET'}`);
+  }
+});
+
+// Log all requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Test endpoint to verify environment variables
+app.get('/api/test-env', (req, res) => {
+  res.json({
+    server: 'production-server',
+    timestamp: new Date().toISOString(),
+    env: {
+      VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET',
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      PORT: process.env.PORT || 'not set'
+    }
+  });
+});
+
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, 'dist'), {
   // Don't serve index.html as static, we'll handle it separately
