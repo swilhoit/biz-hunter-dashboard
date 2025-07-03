@@ -1,17 +1,17 @@
 import React from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
   Area,
   AreaChart
 } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '../ui/chart';
 import { ProcessedProduct } from '../../utils/explorer/dataProcessing';
 import { format, parseISO } from 'date-fns';
+import { useThemeProvider } from '../../utils/ThemeContext';
+import { chartColors } from '../../charts/ChartjsConfig';
 
 interface TimelineChartProps {
   data: ProcessedProduct[];
@@ -24,6 +24,9 @@ interface TimelineData {
 }
 
 export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
+  const { currentTheme } = useThemeProvider();
+  const darkMode = currentTheme === 'dark';
+  const { gridColor, textColor } = chartColors;
   // Process data to get timeline information
   const processTimelineData = (): TimelineData[] => {
     // Group products by date
@@ -61,9 +64,14 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
 
   if (timelineData.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6">
-        <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Product Launch Timeline</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-center">No timeline data available</p>
+      <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+        <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+          <h2 className="font-semibold text-gray-800 dark:text-gray-100">Product Launch Timeline</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Cumulative product launches over time</p>
+        </header>
+        <div className="p-5 text-center">
+          <p className="text-gray-500 dark:text-gray-400">No timeline data available</p>
+        </div>
       </div>
     );
   }
@@ -84,13 +92,16 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
         const formattedDate = format(date, 'MMM dd, yyyy');
         
         return (
-          <div className="bg-white dark:bg-gray-800 p-3 rounded shadow-lg border border-gray-200 dark:border-gray-700">
-            <p className="text-sm font-semibold mb-1">{formattedDate}</p>
-            {payload.map((entry: any, index: number) => (
-              <p key={index} className="text-sm" style={{ color: entry.color }}>
-                {entry.name}: {entry.value}
-              </p>
-            ))}
+          <div className="grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-xs shadow-xl">
+            <div className="font-medium text-gray-800 dark:text-gray-100">{formattedDate}</div>
+            <div className="grid gap-1.5">
+              {payload.map((entry: any, index: number) => (
+                <div key={index} className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">{entry.name}:</span>
+                  <span className="font-mono font-medium" style={{ color: entry.color }}>{entry.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         );
       } catch {
@@ -100,40 +111,64 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
     return null;
   };
 
+  const chartConfig = {
+    cumulative: {
+      label: "Cumulative Products",
+      color: "#8b5cf6",
+    },
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+    <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
       <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Product Launch Timeline</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Cumulative product launches over time</p>
       </header>
-      <div className="p-4">
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={timelineData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+      <div className="p-5">
+        <ChartContainer config={chartConfig} className="h-[350px]">
+          <AreaChart data={timelineData} margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
             <defs>
               <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor="var(--color-cumulative)" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="var(--color-cumulative)" stopOpacity={0.1}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid 
+              strokeDasharray="3 3" 
+              stroke={darkMode ? gridColor.dark : gridColor.light}
+              className="stroke-muted"
+            />
             <XAxis 
               dataKey="date" 
               tickFormatter={formatXAxisTick}
-              tick={{ fontSize: 12 }}
+              tick={{ 
+                fontSize: 12, 
+                fill: darkMode ? textColor.dark : textColor.light 
+              }}
+              axisLine={{ stroke: darkMode ? gridColor.dark : gridColor.light }}
+              tickLine={{ stroke: darkMode ? gridColor.dark : gridColor.light }}
               interval="preserveStartEnd"
             />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip content={<CustomTooltip />} />
+            <YAxis 
+              tick={{ 
+                fontSize: 12, 
+                fill: darkMode ? textColor.dark : textColor.light 
+              }}
+              axisLine={{ stroke: darkMode ? gridColor.dark : gridColor.light }}
+              tickLine={{ stroke: darkMode ? gridColor.dark : gridColor.light }}
+            />
+            <ChartTooltip content={<CustomTooltip />} />
             <Area
               type="monotone"
               dataKey="cumulative"
               name="Cumulative Products"
-              stroke="#8b5cf6"
+              stroke="var(--color-cumulative)"
               fillOpacity={1}
               fill="url(#colorCumulative)"
               strokeWidth={2}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </div>
     </div>
   );

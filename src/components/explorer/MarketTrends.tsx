@@ -1,11 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Calendar, Globe, DollarSign, BarChart3 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '../ui/chart';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import { useThemeProvider } from '../../utils/ThemeContext';
+import { chartColors } from '../../charts/ChartjsConfig';
+
+// Card components for template styling
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`bg-white dark:bg-gray-800 shadow-sm rounded-xl ${className}`}>
+    {children}
+  </div>
+);
+
+const CardHeader = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`px-5 py-4 border-b border-gray-100 dark:border-gray-700/60 ${className}`}>
+    {children}
+  </div>
+);
+
+const CardTitle = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <h3 className={`font-semibold text-gray-800 dark:text-gray-100 ${className}`}>
+    {children}
+  </h3>
+);
+
+const CardDescription = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <p className={`text-sm text-gray-500 dark:text-gray-400 ${className}`}>
+    {children}
+  </p>
+);
+
+const CardContent = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`p-5 ${className}`}>
+    {children}
+  </div>
+);
+
+const Button = ({ children, onClick, variant = "default", size = "default", className = "" }: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "default" | "outline";
+  size?: "default" | "sm";
+  className?: string;
+}) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
+  const sizeClasses = size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2 text-sm";
+  const variantClasses = variant === "outline" 
+    ? "border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+    : "bg-violet-600 text-white hover:bg-violet-700 focus:ring-violet-500";
+  
+  return (
+    <button 
+      onClick={onClick}
+      className={`${baseClasses} ${sizeClasses} ${variantClasses} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
 
 interface MarketTrendsProps {
   products: any[];
@@ -14,6 +67,10 @@ interface MarketTrendsProps {
 }
 
 export function MarketTrends({ products, keywords, keywordData }: MarketTrendsProps) {
+  const { currentTheme } = useThemeProvider();
+  const darkMode = currentTheme === 'dark';
+  const { gridColor, textColor } = chartColors;
+  
   const [timeRange, setTimeRange] = useState<'30d' | '90d' | '1y'>('90d');
   const [trendData, setTrendData] = useState<any[]>([]);
 
@@ -292,9 +349,9 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
                       <span className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1">
                         {product.title}
                       </span>
-                      <Badge variant="secondary" className="ml-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 ml-2">
                         ${formatNumberWithCommas(product.revenue)}
-                      </Badge>
+                      </span>
                     </div>
                   ))}
               </div>

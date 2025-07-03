@@ -95,7 +95,8 @@
       "WebFetch(domain:docs.railway.com)",
       "Bash(grep -n -B5 -A20 \"saveToDB\\|saveListingsToDB\" server/index.js)",
       "Bash(sed:*)",
-      "WebFetch(domain:fbahunter.up.railway.app)"
+      "WebFetch(domain:fbahunter.up.railway.app)",
+      "Bash(git check-ignore:*)"
     ],
     "deny": []
   }

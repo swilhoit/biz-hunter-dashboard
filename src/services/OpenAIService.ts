@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { getConfigValue } from '../config/runtime-config';
+import { RailwayAPIWrapper } from './RailwayAPIWrapper';
 
 interface ProductData {
   asin: string;
@@ -31,10 +32,20 @@ interface PortfolioAnalysis {
 export class OpenAIService {
   private client: OpenAI;
   private readonly model = 'gpt-4o-mini'; // OpenAI's fastest model
+  private railwayWrapper: RailwayAPIWrapper;
+  private useRailwayWrapper: boolean = false;
 
   constructor() {
     // Delay client initialization until it's actually needed
     this.client = null as any;
+    this.railwayWrapper = RailwayAPIWrapper.getInstance();
+    
+    // Check if we should use Railway wrapper
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      this.useRailwayWrapper = hostname.includes('railway.app') || 
+                               hostname.includes('up.railway.app');
+    }
   }
 
   private ensureClient() {
@@ -77,20 +88,38 @@ export class OpenAIService {
     return await this.processBatchedSegmentation(products, batchSize, totalBatches);
   }
 
+  private async callOpenAIAPI(messages: any[], options: any = {}): Promise<any> {
+    // Use Railway wrapper if we're in Railway environment
+    if (this.useRailwayWrapper) {
+      console.log('🚂 Using Railway-optimized API call for OpenAI');
+      const response = await this.railwayWrapper.callOpenAI(messages, {
+        ...options,
+        temperature: options.temperature || 0.3,
+        max_tokens: options.max_tokens || 4000
+      });
+      return response;
+    }
+    
+    // Otherwise use standard OpenAI client
+    this.ensureClient();
+    return await this.client.chat.completions.create({
+      model: this.model,
+      messages,
+      ...options
+    });
+  }
+
   private async processAllProductsAtOnce(products: ProductData[]): Promise<{ segments: MarketSegment[] }> {
     const prompt = this.createSegmentationPrompt(products);
     
     try {
-      this.ensureClient();
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert Amazon marketplace analyst. Analyze product portfolios and create meaningful market segments based on product characteristics, price points, and market positioning."
-          },
-          { role: "user", content: prompt }
-        ],
+      const response = await this.callOpenAIAPI([
+        {
+          role: "system",
+          content: "You are an expert Amazon marketplace analyst. Analyze product portfolios and create meaningful market segments based on product characteristics, price points, and market positioning."
+        },
+        { role: "user", content: prompt }
+      ], {
         temperature: 0.3,
         max_tokens: 4000,
       });
@@ -132,15 +161,13 @@ export class OpenAIService {
     ).join('\n')}`;
 
     try {
-      await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are storing product information for batch analysis. Simply acknowledge receipt."
-          },
-          { role: "user", content: prompt }
-        ],
+      await this.callOpenAIAPI([
+        {
+          role: "system",
+          content: "You are storing product information for batch analysis. Simply acknowledge receipt."
+        },
+        { role: "user", content: prompt }
+      ], {
         temperature: 0.1,
         max_tokens: 50,
       });
@@ -153,16 +180,13 @@ export class OpenAIService {
     const prompt = this.createSegmentationPrompt(products);
     
     try {
-      this.ensureClient();
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an Amazon marketplace analyst. Create market segments based on the stored product data."
-          },
-          { role: "user", content: prompt }
-        ],
+      const response = await this.callOpenAIAPI([
+        {
+          role: "system",
+          content: "You are an Amazon marketplace analyst. Create market segments based on the stored product data."
+        },
+        { role: "user", content: prompt }
+      ], {
         temperature: 0.3,
         max_tokens: 4000,
       });
@@ -302,16 +326,13 @@ Provide a comprehensive analysis including:
 Format as JSON with these keys: topPerformers, riskFactors, opportunities, overallScore, analysis`;
 
     try {
-      this.ensureClient();
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert Amazon business acquisition analyst. Provide detailed portfolio analysis in the requested JSON format."
-          },
-          { role: "user", content: prompt }
-        ],
+      const response = await this.callOpenAIAPI([
+        {
+          role: "system",
+          content: "You are an expert Amazon business acquisition analyst. Provide detailed portfolio analysis in the requested JSON format."
+        },
+        { role: "user", content: prompt }
+      ], {
         temperature: 0.3,
         max_tokens: 2000,
       });
@@ -367,16 +388,13 @@ ${text}
 Return only the ASIN codes, one per line, without any additional text or formatting.`;
 
     try {
-      this.ensureClient();
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert at identifying Amazon ASINs in text. Return only the ASIN codes, nothing else."
-          },
-          { role: "user", content: prompt }
-        ],
+      const response = await this.callOpenAIAPI([
+        {
+          role: "system",
+          content: "You are an expert at identifying Amazon ASINs in text. Return only the ASIN codes, nothing else."
+        },
+        { role: "user", content: prompt }
+      ], {
         temperature: 0.1,
         max_tokens: 500,
       });

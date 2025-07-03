@@ -1,17 +1,5 @@
 import React from 'react';
 import { Download, Package, Trash2, ExternalLink } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Checkbox } from '../ui/checkbox';
-import { Badge } from '../ui/badge';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
 
 interface ProductSearchTableProps {
@@ -33,142 +21,191 @@ export function ProductSearchTable({
 }: ProductSearchTableProps) {
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl p-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+        </div>
+      </div>
     );
   }
 
   if (products.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
+      <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+        <div className="flex flex-col items-center justify-center py-12">
           <Package className="w-12 h-12 text-gray-400 mb-4" />
           <p className="text-gray-500 dark:text-gray-400 text-center">
             Enter keywords above to search for Amazon products
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Search Results ({products.length})</CardTitle>
-        <Button onClick={onExport} variant="outline" size="sm">
-          <Download className="w-4 h-4 mr-2" />
-          Export
-        </Button>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedProducts.length === products.length}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        products.forEach(p => onProductSelect(p.asin));
-                      } else {
-                        selectedProducts.forEach(asin => onProductSelect(asin));
-                      }
-                    }}
-                  />
-                </TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Sales</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Reviews</TableHead>
-                <TableHead className="text-right">Rating</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.asin}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedProducts.includes(product.asin)}
-                      onCheckedChange={() => onProductSelect(product.asin)}
+    <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+      <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+        <div className="flex justify-between items-center">
+          <h2 className="font-semibold text-gray-800 dark:text-gray-100">
+            Search Results 
+            <span className="text-gray-400 dark:text-gray-500 font-medium ml-2">
+              ({products.length} products)
+            </span>
+          </h2>
+          <button 
+            onClick={onExport}
+            className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </button>
+        </div>
+      </header>
+      
+      <div className="overflow-x-auto">
+        <table className="table-auto w-full dark:text-gray-300">
+          <thead className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/20 border-t border-b border-gray-100 dark:border-gray-700/60">
+            <tr>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px">
+                <div className="flex items-center">
+                  <label className="inline-flex">
+                    <span className="sr-only">Select all</span>
+                    <input 
+                      className="form-checkbox" 
+                      type="checkbox" 
+                      checked={selectedProducts.length === products.length && products.length > 0}
+                      onChange={() => {
+                        if (selectedProducts.length === products.length) {
+                          selectedProducts.forEach(asin => onProductSelect(asin));
+                        } else {
+                          products.forEach(p => {
+                            if (!selectedProducts.includes(p.asin)) {
+                              onProductSelect(p.asin);
+                            }
+                          });
+                        }
+                      }}
                     />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-3">
+                  </label>
+                </div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-left">Product</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-right">Price</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-right">Sales</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-right">Revenue</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-right">Reviews</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-center">Rating</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <div className="font-semibold text-left">Category</div>
+              </th>
+              <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/60">
+            {products.map((product, index) => (
+              <tr key={`${product.asin}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px">
+                  <div className="flex items-center">
+                    <label className="inline-flex">
+                      <span className="sr-only">Select</span>
+                      <input 
+                        className="form-checkbox" 
+                        type="checkbox" 
+                        checked={selectedProducts.includes(product.asin)}
+                        onChange={() => onProductSelect(product.asin)}
+                      />
+                    </label>
+                  </div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="relative inline-flex mr-3">
                       <img 
                         src={product.imageUrl || 'https://via.placeholder.com/50'} 
                         alt={product.title}
-                        className="w-12 h-12 rounded object-cover"
+                        className="w-12 h-12 rounded-lg object-cover"
                         onError={(e) => {
                           e.target.src = 'https://via.placeholder.com/50';
                         }}
                       />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800 dark:text-gray-100 mb-1">
+                        <div className="truncate max-w-xs" title={product.title}>
                           {product.title}
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          ASIN: {product.asin}
-                          <a 
-                            href={product.amazonUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-violet-600 hover:text-violet-800"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        ASIN: {product.asin}
+                        <a 
+                          href={product.amazonUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-violet-500 hover:text-violet-600 ml-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    ${product.price.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumberWithCommas(product.sales)}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
+                  </div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-right font-medium">${product.price.toFixed(2)}</div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-right">{formatNumberWithCommas(product.sales)}</div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-right font-medium text-green-600 dark:text-green-400">
                     ${formatNumberWithCommas(product.revenue)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumberWithCommas(product.reviews)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  </div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-right">{formatNumberWithCommas(product.reviews)}</div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-center">
+                    <span className="inline-flex items-center gap-1">
                       <span className="text-yellow-500">⭐</span>
                       {product.rating.toFixed(1)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {product.category || 'N/A'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      onClick={() => onDeleteProduct(product.asin)}
-                      variant="ghost"
-                      size="sm"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+                    </span>
+                  </div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
+                  <div className="text-xs inline-flex font-medium rounded-full text-center px-2.5 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                    {product.category || 'N/A'}
+                  </div>
+                </td>
+                <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px">
+                  <button
+                    onClick={() => onDeleteProduct(product.asin)}
+                    className="text-gray-400 hover:text-red-500 rounded-full"
+                  >
+                    <span className="sr-only">Delete</span>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

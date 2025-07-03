@@ -372,6 +372,16 @@ class EnhancedMultiScraper {
         .insert(listingToInsert);
 
       if (error) {
+        console.error('❌ [DB ERROR] Failed to insert listing:', {
+          name: listing.name,
+          url: listing.original_url,
+          error: error,
+          errorCode: error.code,
+          errorMessage: error.message,
+          errorDetails: error.details,
+          listingData: listingToInsert
+        });
+        
         if (error.code === '23505') {
           this.duplicates++;
           console.log(`  -> [DB] Duplicate (skipped): "${listing.name}"`);
@@ -390,9 +400,20 @@ class EnhancedMultiScraper {
       return 'created';
 
     } catch (error) {
+      console.error('❌ [SAVE ERROR] Critical error saving listing:', {
+        name: listing.name,
+        url: listing.original_url,
+        errorType: error.name,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        fullError: error
+      });
+      
       this.log('ERROR', 'Failed to save listing', { 
         listing: listing.name,
-        error: error.message 
+        error: error.message,
+        errorCode: error.code,
+        errorDetails: error.details || 'No additional details'
       });
       this.totalErrors++;
       return false;
@@ -1368,6 +1389,7 @@ class EnhancedMultiScraper {
 
   // Batch save multiple listings efficiently
   async batchSaveListings(listings) {
+    console.log('🔍 [BATCH SAVE] Starting batch save for', listings.length, 'listings');
     if (!listings.length) return { created: 0, updated: 0, duplicates: 0, errors: 0 };
     
     let created = 0, updated = 0, duplicates = 0, errors = 0;
@@ -1399,6 +1421,15 @@ class EnhancedMultiScraper {
         }
       });
     }
+    
+    console.log('🔍 [BATCH SAVE COMPLETE] Results:', {
+      created,
+      updated,
+      duplicates,
+      errors,
+      total: listings.length,
+      successRate: `${Math.round(((created + updated) / listings.length) * 100)}%`
+    });
     
     return { created, updated, duplicates, errors };
   }
@@ -2218,6 +2249,14 @@ class EnhancedMultiScraper {
 
       // Stage 3: BATCH SAVE to database
       this.log('INFO', '💾 STAGE 3: Saving listings to database...');
+      console.log('🔍 [STAGE 3 DEBUG] Number of listings to save:', scrapedListings.length);
+      console.log('🔍 [STAGE 3 DEBUG] First 3 listings to save:', scrapedListings.slice(0, 3).map(l => ({
+        name: l.name,
+        url: l.original_url,
+        source: l.source,
+        hasDescription: !!l.description,
+        hasHighlights: !!l.highlights && l.highlights.length > 0
+      })));
       
       const saveResults = await this.batchSaveListings(scrapedListings);
       

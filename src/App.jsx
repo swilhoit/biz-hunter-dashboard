@@ -62,6 +62,7 @@ import Apps from './pages/settings/Apps';
 import Plans from './pages/settings/Plans';
 import Billing from './pages/settings/Billing';
 import Feedback from './pages/settings/Feedback';
+import ServerDiagnostics from './components/ServerDiagnostics';
 import Changelog from './pages/utility/Changelog';
 import Roadmap from './pages/utility/Roadmap';
 import Faqs from './pages/utility/Faqs';
@@ -155,6 +156,7 @@ function App() {
         <Route path="/settings/plans" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
         <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
         <Route path="/settings/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
+        <Route path="/settings/server-diagnostics" element={<ProtectedRoute><ServerDiagnostics /></ProtectedRoute>} />
         <Route path="/utility/changelog" element={<Changelog />} />
         <Route path="/utility/roadmap" element={<Roadmap />} />
         <Route path="/utility/faqs" element={<Faqs />} />

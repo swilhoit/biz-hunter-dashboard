@@ -7,10 +7,6 @@ import {
   LineChart, Layers, ArrowUpDown, Globe, DollarSign
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import { ExplorerProvider, useExplorer } from '../contexts/ExplorerContext';
 import { fetchProductDatabaseQuery, fetchDataForKeywords } from '../utils/explorer/junglescout';
 import { processData, updateSummary, formatNumberWithCommas } from '../utils/explorer/dataProcessing';
@@ -253,115 +249,142 @@ function ExplorerContent() {
             </div>
 
             {/* Search Bar */}
-            <Card className="mb-6">
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <Input
-                      type="text"
-                      placeholder="Enter keywords to search Amazon products (comma-separated)..."
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="pl-10"
-                    />
-                    <Button
-                      onClick={handleSearch}
-                      disabled={isLoading}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                      size="sm"
-                    >
-                      {isLoading ? 'Searching...' : 'Search'}
-                    </Button>
-                  </div>
+            <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl mb-6">
+              <div className="p-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Enter keywords to search Amazon products (comma-separated)..."
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="form-input w-full pl-10 pr-32"
+                  />
+                  <button
+                    onClick={handleSearch}
+                    disabled={isLoading}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 btn bg-violet-500 hover:bg-violet-600 text-white text-sm"
+                  >
+                    {isLoading ? 'Searching...' : 'Search'}
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {/* Error Display */}
             {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <div className="col-span-full mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-700 dark:text-red-400">{error}</p>
+                </div>
+              </div>
             )}
 
             {/* Summary Statistics */}
             {summaryData && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardDescription>Total Products</CardDescription>
-                    <CardTitle className="text-2xl">
-                      {filteredResults.length}
-                    </CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardDescription>Total Revenue</CardDescription>
-                    <CardTitle className="text-2xl">
-                      ${formatNumberWithCommas(summaryData.revenue)}
-                    </CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardDescription>Total Sales</CardDescription>
-                    <CardTitle className="text-2xl">
-                      {formatNumberWithCommas(summaryData.sales)}
-                    </CardTitle>
-                  </CardHeader>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardDescription>Avg Price</CardDescription>
-                    <CardTitle className="text-2xl">
-                      {summaryData.price}
-                    </CardTitle>
-                  </CardHeader>
-                </Card>
+              <div className="grid grid-cols-12 gap-6 mb-6">
+                <div className="col-span-full sm:col-span-6 xl:col-span-3">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <Package className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                      </div>
+                      <div className="ml-5">
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Products</p>
+                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                          {filteredResults.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-full sm:col-span-6 xl:col-span-3">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <DollarSign className="w-8 h-8 text-green-500" />
+                      </div>
+                      <div className="ml-5">
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Revenue</p>
+                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                          ${formatNumberWithCommas(summaryData.revenue)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-full sm:col-span-6 xl:col-span-3">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <TrendingUp className="w-8 h-8 text-blue-500" />
+                      </div>
+                      <div className="ml-5">
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Sales</p>
+                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                          {formatNumberWithCommas(summaryData.sales)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-full sm:col-span-6 xl:col-span-3">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <BarChart3 className="w-8 h-8 text-violet-500" />
+                      </div>
+                      <div className="ml-5">
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Avg Price</p>
+                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                          {summaryData.price}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Enhanced Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="flex-wrap h-auto p-1">
-                <TabsTrigger value="search" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Search className="w-4 h-4 mr-2" />
+              <TabsList className="flex flex-wrap gap-2 bg-white dark:bg-gray-800 p-1 rounded-lg shadow-sm">
+                <TabsTrigger value="search" className="flex items-center gap-2">
+                  <Search className="w-4 h-4" />
                   Search
                 </TabsTrigger>
-                <TabsTrigger value="keywords" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Key className="w-4 h-4 mr-2" />
+                <TabsTrigger value="keywords" className="flex items-center gap-2">
+                  <Key className="w-4 h-4" />
                   Keywords
                 </TabsTrigger>
-                <TabsTrigger value="segmentation" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Brain className="w-4 h-4 mr-2" />
+                <TabsTrigger value="segmentation" className="flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
                   AI Segmentation
                 </TabsTrigger>
-                <TabsTrigger value="comparison" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Layers className="w-4 h-4 mr-2" />
+                <TabsTrigger value="comparison" className="flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
                   Compare
                 </TabsTrigger>
-                <TabsTrigger value="analysis" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <BarChart3 className="w-4 h-4 mr-2" />
+                <TabsTrigger value="analysis" className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
                   Analysis
                 </TabsTrigger>
-                <TabsTrigger value="trends" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <TrendingUp className="w-4 h-4 mr-2" />
+                <TabsTrigger value="trends" className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
                   Trends
                 </TabsTrigger>
-                <TabsTrigger value="ads" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Eye className="w-4 h-4 mr-2" />
+                <TabsTrigger value="ads" className="flex items-center gap-2">
+                  <Eye className="w-4 h-4" />
                   Ad Creatives
                 </TabsTrigger>
-                <TabsTrigger value="import-export" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Database className="w-4 h-4 mr-2" />
+                <TabsTrigger value="import-export" className="flex items-center gap-2">
+                  <Database className="w-4 h-4" />
                   Import/Export
                 </TabsTrigger>
-                <TabsTrigger value="filters" className="data-[state=active]:bg-violet-500 data-[state=active]:text-white">
-                  <Filter className="w-4 h-4 mr-2" />
+                <TabsTrigger value="filters" className="flex items-center gap-2">
+                  <Filter className="w-4 h-4" />
                   Filters
                 </TabsTrigger>
               </TabsList>
@@ -418,17 +441,17 @@ function ExplorerContent() {
                     <PieCharts data={filteredResults} />
                   </div>
                 ) : (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Price Segment Analysis</CardTitle>
-                      <CardDescription>
+                  <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+                    <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+                      <h2 className="font-semibold text-gray-800 dark:text-gray-100">Price Segment Analysis</h2>
+                    </div>
+                    <div className="p-8 text-center">
+                      <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                      <p className="text-gray-500 dark:text-gray-400">
                         Search for products to see detailed analysis and visualizations
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-center py-8">
-                      <Package className="w-12 h-12 text-gray-400" />
-                    </CardContent>
-                  </Card>
+                      </p>
+                    </div>
+                  </div>
                 )}
               </TabsContent>
 
@@ -462,22 +485,21 @@ function ExplorerContent() {
               </TabsContent>
 
               <TabsContent value="filters">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Search Filters</CardTitle>
-                    <CardDescription>Refine your search results</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
+                <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+                  <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+                    <h2 className="font-semibold text-gray-800 dark:text-gray-100">Search Filters</h2>
+                  </header>
+                  <div className="p-5 space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Price Range: ${priceRange[0]} - ${priceRange[1]}
                       </label>
                       <div className="flex items-center gap-4">
-                        <Input
+                        <input
                           type="number"
                           value={priceRange[0]}
                           onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
-                          className="w-24"
+                          className="form-input w-24"
                           placeholder="Min"
                         />
                         <input
@@ -488,11 +510,11 @@ function ExplorerContent() {
                           onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
                           className="flex-1"
                         />
-                        <Input
+                        <input
                           type="number"
                           value={priceRange[1]}
                           onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
-                          className="w-24"
+                          className="form-input w-24"
                           placeholder="Max"
                         />
                       </div>
@@ -503,11 +525,11 @@ function ExplorerContent() {
                         Sales Range: {salesRange[0]} - {salesRange[1]}
                       </label>
                       <div className="flex items-center gap-4">
-                        <Input
+                        <input
                           type="number"
                           value={salesRange[0]}
                           onChange={(e) => setSalesRange([Number(e.target.value), salesRange[1]])}
-                          className="w-24"
+                          className="form-input w-24"
                           placeholder="Min"
                         />
                         <input
@@ -518,11 +540,11 @@ function ExplorerContent() {
                           onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
                           className="flex-1"
                         />
-                        <Input
+                        <input
                           type="number"
                           value={salesRange[1]}
                           onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
-                          className="w-24"
+                          className="form-input w-24"
                           placeholder="Max"
                         />
                       </div>
@@ -534,7 +556,7 @@ function ExplorerContent() {
                       </label>
                       <select 
                         value={settings.marketplace}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md dark:bg-gray-800"
+                        className="form-select w-full"
                         disabled
                       >
                         <option value="us">United States</option>
@@ -544,17 +566,16 @@ function ExplorerContent() {
                     </div>
 
                     <div>
-                      <Button
+                      <button
                         onClick={() => cache().clear()}
-                        variant="outline"
-                        className="w-full"
+                        className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300 w-full"
                       >
                         <Zap className="w-4 h-4 mr-2" />
                         Clear Cache
-                      </Button>
+                      </button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </div>

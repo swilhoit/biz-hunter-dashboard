@@ -509,60 +509,54 @@ export class DocumentAnalysisService {
       console.log('Converting PDF to images for Vision API analysis...');
       progressCallback?.('Loading PDF document...');
       
-      // Import PDF.js properly
+      // Import PDF.js with better error handling
       let pdfjsLib;
       try {
-        // Import the standard build
+        // Import the ES module version
         const pdfjs = await import('pdfjs-dist');
-        
-        // Log what we got
         console.log('PDF.js import result:', pdfjs);
         console.log('PDF.js keys:', Object.keys(pdfjs));
         
-        // The ES module exports everything directly
-        pdfjsLib = pdfjs;
-        
-        // Double-check for the function we need
-        if (!pdfjsLib.getDocument && pdfjs.default) {
+        // Handle different export patterns
+        if (pdfjs.getDocument) {
+          pdfjsLib = pdfjs;
+        } else if (pdfjs.default && pdfjs.default.getDocument) {
           pdfjsLib = pdfjs.default;
-        }
-        
-        // Last resort - check window
-        if (!pdfjsLib.getDocument && typeof window !== 'undefined' && (window as any).pdfjsLib) {
-          console.log('Using window.pdfjsLib');
+        } else if (typeof window !== 'undefined' && (window as any).pdfjsLib) {
+          console.log('Using window.pdfjsLib fallback');
           pdfjsLib = (window as any).pdfjsLib;
+        } else {
+          // Try to find getDocument in the module
+          const foundLib = Object.values(pdfjs).find((val: any) => val && typeof val.getDocument === 'function');
+          if (foundLib) {
+            pdfjsLib = foundLib;
+          }
         }
         
-        console.log('PDF.js loaded, getDocument available:', typeof pdfjsLib.getDocument);
+        console.log('PDF.js loaded, getDocument available:', typeof pdfjsLib?.getDocument);
       } catch (importError) {
         console.error('Failed to load PDF.js:', importError);
         throw new Error('PDF processing library failed to load. Please try uploading images or text files instead.');
       }
       
       // Ensure we have the getDocument function
-      if (!pdfjsLib.getDocument) {
-        console.error('PDF.js loaded but getDocument not found');
-        throw new Error('PDF.js loaded incorrectly. Please try uploading images or text files instead.');
+      if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
+        console.error('PDF.js loaded but getDocument not available');
+        throw new Error('PDF.js is not properly configured. Please try uploading images or text files instead.');
       }
       
-      // Configure worker - try multiple approaches
+      // Configure worker - PDF.js requires a worker source to be specified
       if (pdfjsLib.GlobalWorkerOptions) {
-        try {
-          // First try: Use a data URL with minimal worker
-          const workerCode = `
-            self.addEventListener('message', function(e) {
-              // Minimal fake worker
-            });
-          `;
-          const blob = new Blob([workerCode], { type: 'application/javascript' });
-          const workerUrl = URL.createObjectURL(blob);
-          pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-        } catch (e) {
-          console.warn('Could not create worker blob');
-        }
+        const version = pdfjsLib.version || '3.11.174';
+        console.log('Setting PDF.js worker for version:', version);
+        
+        // Use CDN worker source - this avoids local file CORS issues
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.js`;
+        
+        console.log('PDF.js worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc);
       }
       
-      // Load the PDF with fallback options
+      // Load the PDF with fallback options and timeout
       progressCallback?.('Opening PDF document...');
       const arrayBuffer = await file.arrayBuffer();
       
@@ -570,20 +564,41 @@ export class DocumentAnalysisService {
       try {
         const loadingOptions = {
           data: arrayBuffer,
-          disableWorker: true, // Always disable worker to avoid CORS
+          disableWorker: false, // Enable worker since we've configured it properly
           disableRange: true,  // Disable range requests
           disableStream: true, // Disable streaming
-          useSystemFonts: true,
+          useSystemFonts: false, // Don't use system fonts
           standardFontDataUrl: '', // Don't load external fonts
-          verbosity: 0
+          verbosity: 0,
+          isEvalSupported: false, // Disable eval for security
+          fontExtraProperties: false, // Reduce font processing
+          nativeImageDecoderSupport: 'none' // Use built-in image decoder
         };
         
         console.log('Attempting to load PDF with options:', loadingOptions);
+        
+        // Add timeout to prevent hanging
         const loadingTask = pdfjsLib.getDocument(loadingOptions);
-        pdf = await loadingTask.promise;
+        
+        // Race between PDF loading and timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('PDF loading timeout - file may be too large or complex')), 30000);
+        });
+        
+        pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
       } catch (loadError) {
         console.error('PDF loading error:', loadError);
-        throw new Error('Failed to open PDF. The file may be corrupted, password-protected, or in an unsupported format.');
+        
+        // Provide more specific error messages
+        if (loadError.message?.includes('timeout')) {
+          throw new Error('PDF loading timed out. The file may be too large or complex. Try converting to images first.');
+        } else if (loadError.message?.includes('password') || loadError.message?.includes('encrypted')) {
+          throw new Error('PDF is password-protected. Please remove the password and try again.');
+        } else if (loadError.message?.includes('Invalid') || loadError.message?.includes('format')) {
+          throw new Error('Invalid PDF format. The file may be corrupted or not a valid PDF.');
+        } else {
+          throw new Error(`Failed to open PDF: ${loadError.message || 'Unknown error'}. Try uploading images or text files instead.`);
+        }
       }
       
       console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
@@ -591,97 +606,203 @@ export class DocumentAnalysisService {
       // Limit pages to process but increase limit for better coverage
       const maxPages = Math.min(pdf.numPages, 10); // Increased from 5 to 10
       const pageTexts: string[] = [];
+      let pagesProcessed = 0;
+      let pagesWithText = 0;
       
       for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-        progressCallback?.(`Processing PDF page ${pageNum}/${maxPages}...`);
-        console.log(`Processing page ${pageNum}/${maxPages}...`);
+        const progressText = `Processing PDF page ${pageNum}/${maxPages}...`;
+        progressCallback?.(progressText);
+        console.log(progressText);
         
         try {
-          const page = await pdf.getPage(pageNum);
-          // Increase scale for better quality
-          const viewport = page.getViewport({ scale: 2.0 }); // Increased from 1.5 to 2.0
+          // Add timeout for page processing to prevent hanging
+          const pageProcessingPromise = (async () => {
+            const page = await pdf.getPage(pageNum);
+            
+            // Increase scale for better quality
+            const viewport = page.getViewport({ scale: 2.0 }); // Increased from 1.5 to 2.0
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            if (!context) throw new Error(`Failed to get canvas context for page ${pageNum}`);
+            
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            // Set better rendering quality
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            
+            // Render page with better quality settings and timeout
+            const renderTask = page.render({
+              canvasContext: context,
+              viewport: viewport,
+              intent: 'print' // Use print quality rendering
+            });
+            
+            await renderTask.promise;
+            
+            // Convert to base64 with higher quality
+            const imageData = canvas.toDataURL('image/png', 1.0); // Max quality
+            const base64Image = imageData.split(',')[1];
+            
+            // Debug: Log image size
+            console.log(`Page ${pageNum} canvas size:`, canvas.width, 'x', canvas.height);
+            console.log(`Page ${pageNum} base64 length:`, base64Image.length);
+            
+            // Check if the image is too small or empty
+            if (canvas.width < 100 || canvas.height < 100) {
+              console.warn(`Page ${pageNum} rendered very small:`, canvas.width, 'x', canvas.height);
+            }
+            
+            // Clean up canvas early to free memory
+            canvas.width = 0;
+            canvas.height = 0;
+            
+            return base64Image;
+          })();
           
-          // Create canvas
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
+          // Add timeout for page processing
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`Page ${pageNum} processing timeout`)), 15000);
+          });
           
-          if (!context) continue;
+          const base64Image = await Promise.race([pageProcessingPromise, timeoutPromise]);
           
-          canvas.height = viewport.height;
-          canvas.width = viewport.width;
-          
-          // Set better rendering quality
-          context.imageSmoothingEnabled = true;
-          context.imageSmoothingQuality = 'high';
-          
-          // Render page with better quality settings
-          await page.render({
-            canvasContext: context,
-            viewport: viewport,
-            intent: 'print' // Use print quality rendering
-          }).promise;
-          
-          // Convert to base64 with higher quality
-          const imageData = canvas.toDataURL('image/png', 1.0); // Max quality
-          const base64Image = imageData.split(',')[1];
-          
-          // Send to Vision API
+          // Send to Vision API with timeout
           progressCallback?.(`Extracting text from page ${pageNum}...`);
-          const pageText = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
-          if (pageText) {
+          console.log(`Sending page ${pageNum} to Vision API...`);
+          
+          // Debug: Create a test link for the first page
+          if (pageNum === 1) {
+            const debugLink = `data:image/png;base64,${base64Image}`;
+            console.log(`Page 1 debug image (copy to browser):`, debugLink.substring(0, 100) + '...');
+          }
+          
+          const visionPromise = this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
+          const visionTimeoutPromise = new Promise<string>((_, reject) => {
+            setTimeout(() => reject(new Error(`Vision API timeout for page ${pageNum}`)), 20000);
+          });
+          
+          const pageText = await Promise.race([visionPromise, visionTimeoutPromise]);
+          
+          if (pageText && pageText.trim().length > 50) {
             console.log(`Page ${pageNum} extracted text length:`, pageText.length);
             console.log(`Page ${pageNum} preview:`, pageText.substring(0, 200) + '...');
             pageTexts.push(pageText);
+            pagesWithText++;
+          } else {
+            console.warn(`Page ${pageNum} extracted very little text (${pageText?.length || 0} characters)`);
           }
           
-          // Clean up canvas to free memory
-          canvas.width = 0;
-          canvas.height = 0;
+          pagesProcessed++;
           
         } catch (error) {
           console.error(`Error processing page ${pageNum}:`, error);
+          pagesProcessed++;
+          
+          // If we're failing on multiple pages, try to continue but warn
+          if (pageNum <= 3 && pagesWithText === 0) {
+            console.warn(`Failed to process page ${pageNum}, continuing with next page...`);
+          }
+        }
+        
+        // Early exit if we're not getting any text from the first few pages
+        if (pageNum >= 3 && pagesWithText === 0) {
+          console.warn('No text extracted from first 3 pages, PDF may be image-based or corrupted');
+          break;
         }
       }
       
+      // Check if we extracted enough content
       if (pageTexts.length === 0) {
-        throw new Error('No content could be extracted from the PDF');
+        console.error(`No content extracted from PDF. Processed ${pagesProcessed} pages, ${pagesWithText} had text.`);
+        throw new Error(`No readable content could be extracted from the PDF. Processed ${pagesProcessed} pages but found no text. The document may be image-based, corrupted, or password-protected.`);
       }
+      
+      // Log extraction summary
+      console.log(`PDF extraction complete: ${pageTexts.length} pages with text out of ${pagesProcessed} processed`);
       
       // Combine and analyze
       progressCallback?.('Analyzing extracted content...');
       const combinedText = pageTexts.join('\n\n=== Page Break ===\n\n');
+      console.log(`Combined text length: ${combinedText.length} characters`);
+      
       return await this.analyzeTextWithVision(combinedText, file.name, client);
       
     } catch (error) {
       console.error('PDF processing error:', error);
       
-      // More detailed error messages
-      let errorMessage = 'PDF processing error: ';
+      // More detailed error messages with helpful guidance
+      let errorMessage = 'PDF processing failed: ';
+      let suggestions: string[] = [];
+      
       if (error instanceof Error) {
-        if (error.message.includes('No content')) {
-          errorMessage += 'Unable to extract readable text from PDF. The document may be scanned or image-based.';
-        } else if (error.message.includes('getDocument')) {
-          errorMessage += 'Failed to load PDF. The file may be corrupted or password-protected.';
+        if (error.message.includes('timeout')) {
+          errorMessage += 'Processing timed out. The PDF may be too large or complex.';
+          suggestions = [
+            '• Try a smaller PDF (fewer pages)',
+            '• Convert PDF to individual image files (PNG/JPG)',
+            '• Use a PDF with simpler formatting'
+          ];
+        } else if (error.message.includes('No readable content') || error.message.includes('No content')) {
+          errorMessage += 'Unable to extract readable text from PDF. The document may be image-based or scanned.';
+          suggestions = [
+            '• Take screenshots of important PDF pages and upload as PNG/JPG files',
+            '• Copy and paste text content into a .txt file',
+            '• Use OCR software to convert scanned PDF to searchable text'
+          ];
+        } else if (error.message.includes('password') || error.message.includes('encrypted')) {
+          errorMessage += 'PDF is password-protected or encrypted.';
+          suggestions = [
+            '• Remove password protection from the PDF',
+            '• Save as a new unprotected PDF',
+            '• Convert to images or text file instead'
+          ];
+        } else if (error.message.includes('corrupted') || error.message.includes('Invalid') || error.message.includes('format')) {
+          errorMessage += 'PDF file appears to be corrupted or invalid.';
+          suggestions = [
+            '• Try opening the PDF in a PDF viewer to verify it works',
+            '• Re-download or re-save the PDF',
+            '• Convert to images or text file instead'
+          ];
+        } else if (error.message.includes('load') || error.message.includes('getDocument')) {
+          errorMessage += 'Failed to load PDF processing library.';
+          suggestions = [
+            '• Try refreshing the page',
+            '• Upload images (PNG/JPG) or text files instead',
+            '• Check your internet connection'
+          ];
         } else {
           errorMessage += error.message;
+          suggestions = [
+            '• Try uploading images (PNG/JPG) or text files instead',
+            '• Ensure the PDF is not corrupted or password-protected'
+          ];
         }
       } else {
         errorMessage += 'Unknown error occurred';
+        suggestions = ['• Try uploading images or text files instead'];
       }
       
-      // Provide helpful guidance if PDF processing fails
+      // Return helpful error analysis instead of throwing
       return {
         businessName: null,
         confidence: 0,
         keyFindings: [
-          errorMessage,
+          `❌ ${errorMessage}`,
+          '',
           '💡 Suggestions for better results:',
-          '• Try taking screenshots of the PDF pages and uploading as PNG/JPG files',
-          '• Copy the text content and save as a .txt file',
-          '• Ensure the PDF is not password-protected or corrupted',
-          '• For scanned documents, use OCR software first'
+          ...suggestions,
+          '',
+          '📝 Alternative approaches:',
+          '• Upload individual page screenshots as PNG/JPG files',
+          '• Copy text content and save as .txt file',
+          '• Use Excel/CSV format for financial data'
         ],
-        missingCriticalInfo: ['Unable to process PDF - please try alternative formats']
+        missingCriticalInfo: ['PDF processing failed - please try alternative file formats']
       };
     }
   }
@@ -703,11 +824,9 @@ export class DocumentAnalysisService {
           content: [
             {
               type: 'text',
-              text: `You are analyzing page ${fileName.includes('Page') ? fileName.split('Page')[1] : ''} of a business-for-sale document. This is likely a broker listing, marketplace listing, or business summary.
+              text: `Extract all text from this document image. Return ONLY the text content, no commentary or refusal. This is a business document being processed for data entry purposes.
 
-CRITICAL INSTRUCTION: Extract EVERY piece of text visible in this image, maintaining the exact format and structure. Do not summarize or skip anything.
-
-Pay special attention to:
+Focus on extracting:
 
 1. Business Information:
    - Business name/title
@@ -747,15 +866,17 @@ Pay special attention to:
    - Real estate included
    - Listing ID/reference number
 
-EXTRACTION RULES:
-- Extract text EXACTLY as shown in the image
-- Include ALL numbers, even if context is unclear
-- Preserve formatting of financial figures (e.g., "$1,234,567")
-- Don't skip sections - extract everything visible
-- If tables are present, extract all data maintaining structure
-- Include headers, footers, and any fine print
+Please extract:
+- All headers and titles
+- All paragraphs of text
+- All numbers and financial figures (prices, revenue, etc.)
+- Contact information (names, emails, phone numbers)
+- Any tables or structured data
+- Any fine print or footer text
 
-Return the COMPLETE extracted text, maintaining the original structure as much as possible.`
+Important: This is standard OCR text extraction from a business document. Simply transcribe all visible text from the image in order, maintaining the structure. If you cannot read certain parts, indicate [illegible] for those sections.
+
+Return the complete text transcription.`
             },
             {
               type: 'image_url',
@@ -784,7 +905,7 @@ Return the COMPLETE extracted text, maintaining the original structure as much a
     return extractedText;
   }
 
-  private static async analyzeOfficeWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+  private static async analyzeOfficeWithVision(file: File, _client: OpenAI): Promise<DocumentAnalysis> {
     // For Office files, we can't easily convert to images in the browser
     // Provide guidance to the user
     const guidance = `Office document detected: "${file.name}"
@@ -1113,7 +1234,7 @@ Extraction Instructions:
     };
   }
 
-  private static fallbackAnalysis(text: string): DocumentAnalysis {
+  private static _fallbackAnalysis(text: string): DocumentAnalysis {
     const analysis: DocumentAnalysis = {
       confidence: 30,
       keyFindings: ['Used fallback analysis due to AI processing error']

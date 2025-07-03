@@ -1,6 +1,9 @@
 import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '../ui/chart';
 import { ProcessedProduct } from '../../utils/explorer/dataProcessing';
+import { useThemeProvider } from '../../utils/ThemeContext';
+import { chartColors } from '../../charts/ChartjsConfig';
 
 interface PieChartsProps {
   data: ProcessedProduct[];
@@ -22,11 +25,18 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0];
     return (
-      <div className="bg-white dark:bg-gray-800 p-2 rounded shadow-lg border border-gray-200 dark:border-gray-700">
-        <p className="text-sm font-semibold">{data.name}</p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Count: {data.value} ({data.payload.percentage.toFixed(1)}%)
-        </p>
+      <div className="grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-xs shadow-xl">
+        <div className="font-medium text-gray-800 dark:text-gray-100">{data.name}</div>
+        <div className="grid gap-1.5">
+          <div className="flex justify-between">
+            <span className="text-gray-500 dark:text-gray-400">Count:</span>
+            <span className="font-mono font-medium">{data.value}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500 dark:text-gray-400">Percentage:</span>
+            <span className="font-mono font-medium">{data.payload.percentage.toFixed(1)}%</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -91,20 +101,33 @@ export const PieCharts: React.FC<PieChartsProps> = ({ data }) => {
 
     if (chartData.length === 0) {
       return (
-        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-4">
-          <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">{title}</h3>
-          <p className="text-gray-500 dark:text-gray-400 text-center">No data available</p>
+        <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">{title}</h3>
+          </header>
+          <div className="p-5 text-center">
+            <p className="text-gray-500 dark:text-gray-400">No data available</p>
+          </div>
         </div>
       );
     }
 
+    const chartConfig = chartData.reduce((acc, item, index) => {
+      acc[item.name.toLowerCase().replace(/\s+/g, '')] = {
+        label: item.name,
+        color: COLORS[index % COLORS.length],
+      };
+      return acc;
+    }, {} as any);
+
     return (
-      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+      <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
         <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
           <h3 className="font-semibold text-gray-800 dark:text-gray-100">{title}</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Distribution analysis of {type.replace(/([A-Z])/g, ' $1').toLowerCase()}</p>
         </header>
-        <div className="p-4">
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="p-5">
+          <ChartContainer config={chartConfig} className="h-[350px]">
             <PieChart>
               <Pie
                 data={chartData}
@@ -112,32 +135,32 @@ export const PieCharts: React.FC<PieChartsProps> = ({ data }) => {
                 cy="50%"
                 labelLine={false}
                 label={(entry) => entry.percentage > 5 ? `${entry.percentage.toFixed(1)}%` : ''}
-                outerRadius={80}
+                outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
+                stroke="none"
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend 
-                verticalAlign="bottom" 
-                height={36}
-                formatter={(value, entry: any) => `${value} (${entry.payload.value})`}
+              <ChartTooltip content={<CustomTooltip />} />
+              <ChartLegend 
+                content={<ChartLegendContent />}
+                className="flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center"
               />
             </PieChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {renderPieChart('fulfillment', 'Fulfillment Type Distribution')}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {renderPieChart('fulfillment', 'Fulfillment Distribution')}
       {renderPieChart('brand', 'Brand Distribution')}
-      {renderPieChart('sellerCountry', 'Seller Country Distribution')}
+      {renderPieChart('sellerCountry', 'Seller Geography')}
     </div>
   );
 };

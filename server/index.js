@@ -2383,6 +2383,11 @@ app.get('/api/sites', async (req, res) => {
 });
 
 app.post('/api/scrape', async (req, res) => {
+  console.log('\n🚨 [DEBUG] /api/scrape endpoint HIT at:', new Date().toISOString());
+  console.log('🚨 [DEBUG] Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🚨 [DEBUG] Request method:', req.method);
+  console.log('🚨 [DEBUG] Request URL:', req.url);
+  
   const requestStartTime = Date.now();
   const MAX_EXECUTION_TIME = 180000; // 180 seconds (3 minutes) to allow for ScraperAPI delays
   let timeoutId;
@@ -2978,6 +2983,65 @@ app.delete('/api/clear', async (req, res) => {
     res.status(500).json({
       success: false,
       message: `Clear failed: ${error.message}`
+    });
+  }
+});
+
+// Server status and environment check endpoint
+app.get('/api/server-status', async (req, res) => {
+  try {
+    // Check environment variables
+    const envVars = {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? '✅ Set' : '❌ Missing',
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing',
+      SCRAPER_API_KEY: process.env.SCRAPER_API_KEY ? '✅ Set' : '❌ Missing',
+      VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY ? '✅ Set' : '❌ Missing',
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      PORT: process.env.PORT || '3001'
+    };
+
+    // Test Supabase connection
+    let supabaseStatus = '❌ Not connected';
+    try {
+      const { data, error } = await supabase
+        .from('business_listings')
+        .select('count')
+        .limit(1);
+      
+      if (!error) {
+        supabaseStatus = '✅ Connected';
+      } else {
+        supabaseStatus = `⚠️ Error: ${error.message}`;
+      }
+    } catch (error) {
+      supabaseStatus = `⚠️ Error: ${error.message}`;
+    }
+
+    // Test ScraperAPI
+    let scraperApiStatus = '❌ Not configured';
+    if (SCRAPER_API_KEY) {
+      scraperApiStatus = '✅ Configured';
+    }
+
+    res.json({
+      success: true,
+      serverStatus: '✅ Running',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT,
+      environmentVariables: envVars,
+      services: {
+        supabase: supabaseStatus,
+        scraperApi: scraperApiStatus,
+        openAi: process.env.VITE_OPENAI_API_KEY ? '✅ Configured' : '❌ Not configured'
+      }
+    });
+  } catch (error) {
+    console.error('Error checking server status:', error);
+    res.status(500).json({
+      success: false,
+      serverStatus: '⚠️ Error',
+      error: error.message
     });
   }
 });

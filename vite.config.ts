@@ -28,6 +28,11 @@ export default defineConfig({
     format: 'es'
   },
   optimizeDeps: {
-    exclude: ['pdfjs-dist']
+    exclude: ['pdfjs-dist'],
+    include: ['pdfjs-dist/build/pdf.min.js']
+  },
+  define: {
+    // Disable PDF.js worker in development to avoid CORS issues
+    global: 'globalThis',
   }
 })

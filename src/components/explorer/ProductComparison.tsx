@@ -80,8 +80,8 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
 
         {/* Product Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {comparisonProducts.map((product) => (
-            <div key={product.asin} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          {comparisonProducts.map((product, index) => (
+            <div key={`${product.asin}-${index}`} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="relative mb-3">
                 <img
                   src={product.imageUrl || 'https://via.placeholder.com/150'}
@@ -124,8 +124,8 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                     Metric
                   </th>
-                  {comparisonProducts.map((product) => (
-                    <th key={product.asin} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {comparisonProducts.map((product, index) => (
+                    <th key={`${product.asin}-header-${index}`} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
                       <div className="line-clamp-2">{product.title}</div>
                     </th>
                   ))}
@@ -137,11 +137,11 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {metric.label}
                     </td>
-                    {comparisonProducts.map((product) => {
+                    {comparisonProducts.map((product, index) => {
                       const comparison = getMetricComparison(product, metric.key);
                       const Icon = comparison.icon;
                       return (
-                        <td key={product.asin} className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                        <td key={`${product.asin}-${metric.key}-${index}`} className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                           <div className="flex items-center gap-2">
                             <span>{metric.format(product[metric.key])}</span>
                             <Icon className={`w-4 h-4 ${comparison.color}`} />
@@ -155,8 +155,8 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
                   <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
                     Fulfillment
                   </td>
-                  {comparisonProducts.map((product) => (
-                    <td key={product.asin} className="px-6 py-4 text-sm">
+                  {comparisonProducts.map((product, index) => (
+                    <td key={`${product.asin}-fulfillment-${index}`} className="px-6 py-4 text-sm">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         product.fulfillment === 'FBA' 
                           ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
@@ -187,8 +187,8 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                           Feature
                         </th>
-                        {comparisonProducts.map((product) => (
-                          <th key={product.asin} className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {comparisonProducts.map((product, index) => (
+                          <th key={`${product.asin}-feature-header-${index}`} className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
                             <div className="line-clamp-1">{product.title}</div>
                           </th>
                         ))}
@@ -207,8 +207,8 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
                           <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                             {feature}
                           </td>
-                          {comparisonProducts.map((product) => (
-                            <td key={product.asin} className="px-4 py-3 text-center">
+                          {comparisonProducts.map((product, productIndex) => (
+                            <td key={`${product.asin}-feature-${index}-${productIndex}`} className="px-4 py-3 text-center">
                               {product.featureBullets?.includes(feature) ? (
                                 <Check className="w-5 h-5 text-green-500 mx-auto" />
                               ) : (
