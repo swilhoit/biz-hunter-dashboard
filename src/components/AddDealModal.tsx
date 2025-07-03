@@ -554,6 +554,21 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                           </div>
                         </div>
                       )}
+                      {analysis.status === 'error' && (
+                        <div className="flex items-center">
+                          <span className="text-xs text-red-600 mr-2">
+                            {analysis.error?.includes('OpenAI API key') ? 'API Key Missing' : 'Processing Failed'}
+                          </span>
+                          <button
+                            onClick={() => {
+                              alert(analysis.error);
+                            }}
+                            className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 transition-colors"
+                          >
+                            View Error
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   </div>

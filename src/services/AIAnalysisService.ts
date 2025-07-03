@@ -410,7 +410,16 @@ export class DocumentAnalysisService {
       const apiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.REACT_APP_OPENAI_API_KEY;
       if (!apiKey) {
         console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env file');
-        throw new Error('OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.');
+        const isDev = import.meta.env.DEV;
+        const envFile = isDev ? '.env.local' : '.env.production';
+        throw new Error(
+          `OpenAI API key not configured.\n\n` +
+          `To enable AI document analysis:\n` +
+          `1. Add your OpenAI API key to ${envFile}\n` +
+          `2. Add this line: VITE_OPENAI_API_KEY=your_api_key_here\n` +
+          `3. Restart the application\n\n` +
+          `For now, you can still upload images or text files for analysis.`
+        );
       }
       
       // Create a temporary client instance for static methods

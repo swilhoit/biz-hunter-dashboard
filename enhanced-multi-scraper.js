@@ -153,8 +153,8 @@ class EnhancedMultiScraper {
   async fetchPage(url, retries = 2) { // Reduced retries for speed
     this.log('INFO', 'Fetching page', { url });
     
-    // Very aggressive timeout for parallel processing
-    const REQUEST_TIMEOUT = 8000; // 8 seconds per request
+    // Increased timeout for ScraperAPI requests
+    const REQUEST_TIMEOUT = 20000; // 20 seconds per request
     
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
