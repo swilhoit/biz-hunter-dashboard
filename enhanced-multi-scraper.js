@@ -29,7 +29,7 @@ class EnhancedMultiScraper {
         url: 'https://quietlight.com/amazon-fba-businesses-for-sale/',
         feedMethod: 'scrapeQuietLightFeed',
         detailMethod: 'scrapeQuietLightListing',
-        timeout: 30000,  // Increased timeout for ScraperAPI
+        timeout: 60000,  // Increased timeout for ScraperAPI (60 seconds)
         pagination: true,
         maxPages: 3
       },
@@ -38,7 +38,7 @@ class EnhancedMultiScraper {
         url: 'https://www.bizbuysell.com/amazon-stores-for-sale/',
         feedMethod: 'scrapeBizBuySellFeed',
         detailMethod: 'scrapeBizBuySellListing',
-        timeout: 8000,
+        timeout: 60000,  // Increased timeout for ScraperAPI (60 seconds)
         pagination: true,
         maxPages: 5
       },
@@ -47,7 +47,7 @@ class EnhancedMultiScraper {
         url: 'https://flippa.com/buy/monetization/amazon-fba',
         feedMethod: 'scrapeFlippaFeed',
         detailMethod: 'scrapeFlippaListing',
-        timeout: 8000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -56,7 +56,7 @@ class EnhancedMultiScraper {
         url: 'https://www.loopnet.com/biz/amazon-stores-for-sale/',
         feedMethod: 'scrapeLoopNetFeed',
         detailMethod: 'scrapeLoopNetListing',
-        timeout: 8000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -65,7 +65,7 @@ class EnhancedMultiScraper {
         url: 'https://empireflippers.com/marketplace/amazon-fba-businesses-for-sale/',
         feedMethod: 'scrapeEmpireFlippersFeed',
         detailMethod: 'scrapeEmpireFlippersListing',
-        timeout: 10000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -74,7 +74,7 @@ class EnhancedMultiScraper {
         url: 'https://investors.club/tech-stack/amazon-fba/',
         feedMethod: 'scrapeInvestorsClubFeed',
         detailMethod: 'scrapeInvestorsClubListing',
-        timeout: 8000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 2
       },
@@ -83,7 +83,7 @@ class EnhancedMultiScraper {
         url: 'https://websiteproperties.com/amazon-fba-business-for-sale/',
         feedMethod: 'scrapeWebsitePropertiesFeed',
         detailMethod: 'scrapeWebsitePropertiesListing',
-        timeout: 8000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -92,7 +92,7 @@ class EnhancedMultiScraper {
         url: 'https://www.bizquest.com/amazon-business-for-sale/',
         feedMethod: 'scrapeBizQuestFeed',
         detailMethod: 'scrapeBizQuestListing',
-        timeout: 8000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -101,7 +101,7 @@ class EnhancedMultiScraper {
         url: 'https://acquire.com/amazon-fba-for-sale/',
         feedMethod: 'scrapeAcquireFeed',
         detailMethod: 'scrapeAcquireListing',
-        timeout: 10000,
+        timeout: 45000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 2
       }
@@ -687,9 +687,12 @@ class EnhancedMultiScraper {
             const jsonText = $(elem).html();
             const data = JSON.parse(jsonText);
             
-            // Check if this contains a list of products
-            if (data['@type'] === 'ItemList' && data.itemListElement) {
-              this.log('INFO', `Found structured data with ${data.itemListElement.length} items`);
+            // BizBuySell uses SearchResultsPage with listings in 'about' array
+            if (data['@type'] === 'SearchResultsPage' && data.about) {
+              this.log('INFO', `Found SearchResultsPage with ${data.about.length} items`);
+              structuredListings = data.about;
+            } else if (data['@type'] === 'ItemList' && data.itemListElement) {
+              this.log('INFO', `Found ItemList with ${data.itemListElement.length} items`);
               structuredListings = data.itemListElement;
             } else if (data['@graph']) {
               // Sometimes it's in a graph structure
@@ -700,7 +703,7 @@ class EnhancedMultiScraper {
               }
             }
           } catch (e) {
-            this.log('WARN', 'Failed to parse JSON-LD', { error: e.message });
+            // Silent fail - we'll try other scripts
           }
         });
 
@@ -709,12 +712,22 @@ class EnhancedMultiScraper {
           this.log('INFO', `Processing ${structuredListings.length} structured listings`);
           
           structuredListings.forEach((listingItem, index) => {
+            // Handle both ItemList format and SearchResultsPage format
             const item = listingItem.item || listingItem;
-            if (item && item['@type'] === 'Product') {
+            
+            // SearchResultsPage uses 'Thing' type with name and url
+            if (item && (item['@type'] === 'Product' || item['@type'] === 'Thing')) {
               const title = item.name || '';
-              const url = item.url || '';
-              const priceText = item.offers?.price ? `$${item.offers.price.toLocaleString()}` : 'Contact for price';
-              const location = item.offers?.availableAtOrFrom?.address?.addressLocality || 'Online';
+              const url = item.url || item['@id'] || '';
+              
+              // Price might be in offers or not available
+              let priceText = 'Contact for price';
+              if (item.offers?.price) {
+                priceText = `$${item.offers.price.toLocaleString()}`;
+              }
+              
+              const location = item.offers?.availableAtOrFrom?.address?.addressLocality || 
+                              item.location?.name || 'Online';
               
               if (url && title) {
                 listings.push({
@@ -1796,9 +1809,9 @@ class EnhancedMultiScraper {
             }
           })();
           
-          // Individual listing timeout (10 seconds per listing)
+          // Individual listing timeout (30 seconds per listing - increased for ScraperAPI)
           const listingTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Individual listing timeout')), 10000);
+            setTimeout(() => reject(new Error('Individual listing timeout')), 30000);
           });
           
           const listing = await Promise.race([scrapingPromise, listingTimeout]);
@@ -1893,14 +1906,27 @@ class EnhancedMultiScraper {
         const createSourcePromise = async (func, siteName, timeoutMs) => {
           const sourcePromise = func.call(this, pagesForSite);
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error(`${siteName} timed out`)), timeoutMs);
+            setTimeout(() => reject(new Error(`${siteName} timed out after ${timeoutMs}ms`)), timeoutMs);
           });
-          return Promise.race([sourcePromise, timeoutPromise])
-            .catch(error => {
-              // Return empty array on timeout/error but log it
-              this.log('WARN', `${siteName} scraping failed`, { error: error.message });
-              return [];
-            });
+          
+          try {
+            const result = await Promise.race([sourcePromise, timeoutPromise]);
+            // If we got a result, return it
+            return result || [];
+          } catch (error) {
+            // Log the specific error
+            if (error.message.includes('timed out')) {
+              this.log('WARN', `${siteName} scraping timed out`, { 
+                error: error.message,
+                timeout: `${timeoutMs}ms`,
+                suggestion: 'Consider increasing timeout or checking network speed'
+              });
+            } else {
+              this.log('ERROR', `${siteName} scraping failed`, { error: error.message });
+            }
+            // Return empty array on timeout/error
+            return [];
+          }
         };
         
         sourcePromises.push(createSourcePromise(

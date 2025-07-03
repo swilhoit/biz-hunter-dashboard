@@ -89,7 +89,10 @@
       "Bash(brew upgrade:*)",
       "Bash(npm uninstall:*)",
       "Bash(kill:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git pull:*)",
+      "WebFetch(domain:railway.com)",
+      "WebFetch(domain:docs.railway.com)"
     ],
     "deny": []
   }
