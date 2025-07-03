@@ -161,7 +161,7 @@ class EnhancedMultiScraper {
         // Try ScraperAPI first if available
         if (SCRAPER_API_KEY && attempt === 1) {
           try {
-            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=us`;
+            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&country_code=us`;
             
             // Create timeout controller
             const controller = new AbortController();
