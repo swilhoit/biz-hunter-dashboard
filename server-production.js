@@ -15,12 +15,20 @@ console.log('=== Server Starting ===');
 console.log('Port:', PORT);
 console.log('Node Environment:', process.env.NODE_ENV);
 console.log('Server Time:', new Date().toISOString());
+console.log('Railway Environment:', process.env.RAILWAY_ENVIRONMENT || 'NOT SET');
 console.log('Environment variables:');
 Object.keys(process.env).forEach(key => {
-  if (key.startsWith('VITE_') || key === 'PORT' || key === 'NODE_ENV') {
+  if (key.startsWith('VITE_') || key === 'PORT' || key === 'NODE_ENV' || key === 'OPENAI_API_KEY') {
     console.log(`  ${key}: ${process.env[key] ? 'SET' : 'NOT SET'}`);
   }
 });
+
+// Specifically check for critical vars
+console.log('\nCritical environment check:');
+console.log('  VITE_OPENAI_API_KEY:', process.env.VITE_OPENAI_API_KEY ? 'SET' : 'MISSING!');
+console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'MISSING!');
+console.log('  VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? 'SET' : 'MISSING!');
+console.log('  VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'MISSING!');
 
 // Log all requests
 app.use((req, res, next) => {

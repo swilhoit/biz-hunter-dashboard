@@ -2402,17 +2402,25 @@ app.post('/api/scrape', async (req, res) => {
     const errors = [];
     const siteBreakdown = {};
     
+    // Helper to capture logs for the client
+    const addLog = (level, message, data = {}) => {
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        ...data
+      };
+      logs.push(logEntry);
+      console.log(`[${level.toUpperCase()}] ${message}`, data);
+    };
+    
     console.log('\n========================================');
     console.log(`🚀 [API SCRAPE] Starting ${method} scraping...`);
     console.log(`🕒 [API SCRAPE] Request time: ${new Date().toISOString()}`);
     console.log(`⏰ [API SCRAPE] Timeout protection: ${MAX_EXECUTION_TIME/1000}s`);
     console.log('========================================');
     
-    logs.push({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message: `Starting ${method} scraping method with ${MAX_EXECUTION_TIME/1000}s timeout`
-    });
+    addLog('info', `Starting ${method} scraping method with ${MAX_EXECUTION_TIME/1000}s timeout`);
     
     // Force ScrapeGraph method if requested
     if (method === 'scrapegraph') {
@@ -2634,19 +2642,31 @@ app.post('/api/scrape', async (req, res) => {
     
     // Traditional scraping method with timeout protection
     console.log('\n🔄 [SCRAPING FLOW] Method: Traditional scraping selected');
+    addLog('info', 'Method: Traditional scraping selected');
+    
     console.log('📋 [SCRAPING FLOW] Checking Enhanced Multi-Scraper availability...');
     console.log('🔍 [GRANULAR LOG] EnhancedMultiScraper:', typeof EnhancedMultiScraper);
     console.log('🔍 [GRANULAR LOG] EnhancedMultiScraper truthy:', !!EnhancedMultiScraper);
     
+    addLog('info', 'Checking Enhanced Multi-Scraper availability', {
+      type: typeof EnhancedMultiScraper,
+      available: !!EnhancedMultiScraper
+    });
+    
     // Try Enhanced Multi-Scraper first for two-stage scraping with descriptions
     if (EnhancedMultiScraper) {
       console.log('✅ [SCRAPING FLOW] Enhanced Multi-Scraper class found and loaded');
+      addLog('success', 'Enhanced Multi-Scraper loaded successfully');
       try {
         console.log('🔧 [SCRAPING FLOW] Initializing Enhanced Multi-Scraper...');
+        addLog('info', 'Initializing Enhanced Multi-Scraper...');
+        
         const scraper = new EnhancedMultiScraper();
         console.log('✅ [SCRAPING FLOW] Enhanced Multi-Scraper instance created');
+        addLog('success', 'Enhanced Multi-Scraper instance created');
         
         console.log('🚀 [SCRAPING FLOW] Starting two-stage enhanced scraping process...');
+        addLog('info', 'Starting two-stage enhanced scraping process...');
         
         // Extract site selection options from request body
         const {
@@ -2660,14 +2680,28 @@ app.post('/api/scrape', async (req, res) => {
         console.log(`   📄 Max pages per site: ${maxPagesPerSite || 'site defaults'}`);
         console.log(`   📋 Max listings per source: ${maxListingsPerSource}`);
         
+        addLog('info', 'Site selection options', {
+          selectedSites,
+          maxPagesPerSite: maxPagesPerSite || 'site defaults',
+          maxListingsPerSource
+        });
+        
         // Add progress tracking
         const progressInterval = setInterval(() => {
-          console.log(`⏳ [SCRAPING PROGRESS] Still scraping... Elapsed: ${Math.round((Date.now() - startTime) / 1000)}s`);
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          console.log(`⏳ [SCRAPING PROGRESS] Still scraping... Elapsed: ${elapsed}s`);
+          addLog('info', `Still scraping... Elapsed: ${elapsed}s`);
         }, 10000); // Log every 10 seconds
         
         // Wrap enhanced scraping with timeout
         console.log('🎬 [SCRAPING FLOW] Calling runTwoStageScraping...');
         console.log('🔍 [GRANULAR LOG] runTwoStageScraping parameters:', {
+          selectedSites,
+          maxPagesPerSite,
+          maxListingsPerSource
+        });
+        
+        addLog('info', 'Calling runTwoStageScraping...', {
           selectedSites,
           maxPagesPerSite,
           maxListingsPerSource
@@ -2682,13 +2716,28 @@ app.post('/api/scrape', async (req, res) => {
         console.log('🔍 [GRANULAR LOG] Promise created, type:', typeof enhancedScrapingPromise);
         console.log('🔍 [GRANULAR LOG] Is Promise?', enhancedScrapingPromise instanceof Promise);
         
+        addLog('info', 'Scraping promise created', {
+          promiseType: typeof enhancedScrapingPromise,
+          isPromise: enhancedScrapingPromise instanceof Promise
+        });
+        
         // Add timeout handling
         let enhancedResult;
         try {
           console.log('⏱️ [SCRAPING FLOW] Waiting for scraper to complete (timeout: 180s)...');
           console.log('🔍 [GRANULAR LOG] Starting Promise.race at:', new Date().toISOString());
+          
+          addLog('info', 'Waiting for scraper to complete (timeout: 180s)...');
+          addLog('info', 'Starting scraping execution', {
+            timestamp: new Date().toISOString()
+          });
+          
           enhancedResult = await Promise.race([enhancedScrapingPromise, timeoutPromise]);
+          
           console.log('🔍 [GRANULAR LOG] Promise.race completed at:', new Date().toISOString());
+          addLog('success', 'Scraping execution completed', {
+            timestamp: new Date().toISOString()
+          });
         } catch (timeoutError) {
           clearInterval(progressInterval); // Stop progress logging
           clearTimeout(timeoutId);
@@ -2725,6 +2774,12 @@ app.post('/api/scrape', async (req, res) => {
         console.log(`   🎯 Success: ${enhancedResult.success}`);
         console.log(`   📋 Total saved: ${enhancedResult.totalSaved || 0}`);
         console.log(`   🏢 Sources processed: ${Object.keys(enhancedResult.bySource || {}).length}`);
+        
+        // Add all detailed logs from the scraper to our logs array
+        if (scraper.detailedLogs && scraper.detailedLogs.length > 0) {
+          console.log(`📝 [SCRAPING FLOW] Adding ${scraper.detailedLogs.length} detailed logs from scraper`);
+          logs.push(...scraper.detailedLogs);
+        }
         
         if (enhancedResult.bySource) {
           console.log('📊 [SCRAPING FLOW] Breakdown by source:');

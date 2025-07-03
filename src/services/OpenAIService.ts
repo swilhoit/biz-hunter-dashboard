@@ -33,6 +33,13 @@ export class OpenAIService {
   private readonly model = 'gpt-4o-mini'; // OpenAI's fastest model
 
   constructor() {
+    // Delay client initialization until it's actually needed
+    this.client = null as any;
+  }
+
+  private ensureClient() {
+    if (this.client) return;
+    
     const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
                    import.meta.env.VITE_OPENAI_API_KEY || 
                    import.meta.env.OPENAI_API_KEY ||
@@ -40,7 +47,9 @@ export class OpenAIService {
                    (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.OPENAI_API_KEY);
     
     if (!apiKey) {
-      console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY or OPENAI_API_KEY environment variable.');
+      const errorMsg = 'OpenAI API key not found. Please set VITE_OPENAI_API_KEY environment variable.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
     
     this.client = new OpenAI({
@@ -72,6 +81,7 @@ export class OpenAIService {
     const prompt = this.createSegmentationPrompt(products);
     
     try {
+      this.ensureClient();
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -143,6 +153,7 @@ export class OpenAIService {
     const prompt = this.createSegmentationPrompt(products);
     
     try {
+      this.ensureClient();
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -291,6 +302,7 @@ Provide a comprehensive analysis including:
 Format as JSON with these keys: topPerformers, riskFactors, opportunities, overallScore, analysis`;
 
     try {
+      this.ensureClient();
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -355,6 +367,7 @@ ${text}
 Return only the ASIN codes, one per line, without any additional text or formatting.`;
 
     try {
+      this.ensureClient();
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [

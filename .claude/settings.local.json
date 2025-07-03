@@ -94,7 +94,8 @@
       "WebFetch(domain:railway.com)",
       "WebFetch(domain:docs.railway.com)",
       "Bash(grep -n -B5 -A20 \"saveToDB\\|saveListingsToDB\" server/index.js)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "WebFetch(domain:fbahunter.up.railway.app)"
     ],
     "deny": []
   }
