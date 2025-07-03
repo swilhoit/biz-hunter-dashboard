@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, CheckCircle, AlertCircle, Clock, Globe, Database, Zap, TrendingUp, Loader2, AlertTriangle, Activity } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Clock, Globe, Database, Zap, TrendingUp, Loader2, AlertTriangle, Activity, Copy, Check } from 'lucide-react';
 
 const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComplete, selectedSites, onSitesChange }) => {
   const [progress, setProgress] = useState(0);
@@ -15,6 +15,7 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showSiteSelection, setShowSiteSelection] = useState(true);
   const [localSelectedSites, setLocalSelectedSites] = useState(selectedSites || ['quietlight', 'bizbuysell']);
+  const [copiedLogs, setCopiedLogs] = useState(false);
   const logContainerRef = useRef(null);
   const eventSourceRef = useRef(null);
   
@@ -283,6 +284,38 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     }
   };
 
+  const copyLogsToClipboard = async () => {
+    const logText = logs.map(log => {
+      const timestamp = new Date(log.timestamp).toLocaleTimeString();
+      const site = log.site ? `[${log.site}] ` : '';
+      return `${timestamp} ${site}${log.message}`;
+    }).join('\n');
+    
+    const summaryText = `
+=== SCRAPING SUMMARY ===
+Method: ${method === 'scrapegraph' ? 'AI-Powered' : 'Traditional'}
+Duration: ${formatDuration(startTime)}
+Sites: ${localSelectedSites.join(', ')}
+${isComplete && finalResults ? `
+Results:
+- Total Found: ${finalResults.totalFound || 0}
+- Total Saved: ${finalResults.totalSaved || 0}
+- Duplicates Skipped: ${finalResults.duplicatesSkipped || 0}
+` : 'Status: In Progress'}
+=== ACTIVITY LOG ===
+${logText}
+    `.trim();
+    
+    try {
+      await navigator.clipboard.writeText(summaryText);
+      setCopiedLogs(true);
+      setTimeout(() => setCopiedLogs(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy logs:', err);
+      addLog('error', 'Failed to copy logs to clipboard');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -478,17 +511,38 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
                       <Activity className="w-4 h-4 mr-2" />
                       Live Activity Log ({logs.length})
                     </h4>
-                    <button
-                      onClick={() => setLogs([])}
-                      className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                    >
-                      Clear
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={copyLogsToClipboard}
+                        className="flex items-center text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                        title="Copy logs to clipboard"
+                      >
+                        {copiedLogs ? (
+                          <>
+                            <Check className="w-3 h-3 mr-1 text-green-500" />
+                            <span className="text-green-500">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 mr-1" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                      <span className="text-gray-400">|</span>
+                      <button
+                        onClick={() => setLogs([])}
+                        className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
                   
                   <div 
                     ref={logContainerRef}
                     className="bg-gray-900 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-600 p-3 h-96 overflow-y-auto font-mono text-xs"
+                    title="Click 'Copy' button above to copy all logs to clipboard"
                   >
                     {logs.length === 0 ? (
                       <div className="text-gray-500 dark:text-gray-400 text-center py-8">
