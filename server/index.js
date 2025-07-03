@@ -2109,6 +2109,276 @@ app.post('/api/track-view', async (req, res) => {
   }
 });
 
+// Portfolio Management API Routes
+// Get user's portfolios with aggregate metrics
+app.get('/api/portfolio/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get portfolios with metrics
+    const { data: portfolios, error: portfolioError } = await supabase
+      .from('portfolio_metrics')
+      .select('*')
+      .eq('user_id', userId)
+      .order('portfolio_name');
+    
+    if (portfolioError) throw portfolioError;
+    
+    // Get user-level summary
+    const { data: summary, error: summaryError } = await supabase
+      .from('user_portfolio_summary')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (summaryError && summaryError.code !== 'PGRST116') throw summaryError;
+    
+    res.json({ 
+      success: true, 
+      data: {
+        portfolios: portfolios || [],
+        summary: summary || {
+          total_portfolios: 0,
+          total_asins: 0,
+          active_asins: 0,
+          total_monthly_revenue: 0,
+          total_monthly_profit: 0,
+          total_monthly_units: 0,
+          avg_profit_margin: 0,
+          avg_rating: 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching portfolio data:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Create new portfolio
+app.post('/api/portfolio', async (req, res) => {
+  try {
+    const { userId, name, description } = req.body;
+    
+    if (!userId || !name) {
+      return res.status(400).json({ success: false, message: 'userId and name are required' });
+    }
+    
+    const { data: portfolio, error } = await supabase
+      .from('user_portfolios')
+      .insert([{ user_id: userId, name, description }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: portfolio });
+  } catch (error) {
+    console.error('Error creating portfolio:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update portfolio
+app.put('/api/portfolio/:portfolioId', async (req, res) => {
+  try {
+    const { portfolioId } = req.params;
+    const { name, description } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'name is required' });
+    }
+    
+    const { data: portfolio, error } = await supabase
+      .from('user_portfolios')
+      .update({ name, description })
+      .eq('id', portfolioId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: portfolio });
+  } catch (error) {
+    console.error('Error updating portfolio:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete portfolio
+app.delete('/api/portfolio/:portfolioId', async (req, res) => {
+  try {
+    const { portfolioId } = req.params;
+    
+    const { error } = await supabase
+      .from('user_portfolios')
+      .delete()
+      .eq('id', portfolioId);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting portfolio:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get ASINs for a specific portfolio
+app.get('/api/portfolio/:portfolioId/asins', async (req, res) => {
+  try {
+    const { portfolioId } = req.params;
+    
+    const { data: asins, error } = await supabase
+      .from('user_asins')
+      .select('*')
+      .eq('portfolio_id', portfolioId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: asins || [] });
+  } catch (error) {
+    console.error('Error fetching portfolio ASINs:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Add ASIN to portfolio
+app.post('/api/portfolio/:portfolioId/asins', async (req, res) => {
+  try {
+    const { portfolioId } = req.params;
+    const { 
+      userId, 
+      asin, 
+      productName, 
+      brand, 
+      category, 
+      subcategory,
+      currentPrice,
+      monthlyRevenue,
+      monthlyProfit,
+      monthlyUnitsSold,
+      profitMargin
+    } = req.body;
+    
+    if (!userId || !asin) {
+      return res.status(400).json({ success: false, message: 'userId and asin are required' });
+    }
+    
+    const { data: userAsin, error } = await supabase
+      .from('user_asins')
+      .insert([{
+        user_id: userId,
+        portfolio_id: portfolioId,
+        asin: asin.toUpperCase(),
+        product_name: productName,
+        brand,
+        category,
+        subcategory,
+        current_price: currentPrice,
+        monthly_revenue: monthlyRevenue,
+        monthly_profit: monthlyProfit,
+        monthly_units_sold: monthlyUnitsSold,
+        profit_margin: profitMargin
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: userAsin });
+  } catch (error) {
+    console.error('Error adding ASIN to portfolio:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update ASIN in portfolio
+app.put('/api/portfolio/asins/:asinId', async (req, res) => {
+  try {
+    const { asinId } = req.params;
+    const { 
+      productName, 
+      brand, 
+      category, 
+      subcategory,
+      currentPrice,
+      monthlyRevenue,
+      monthlyProfit,
+      monthlyUnitsSold,
+      profitMargin,
+      isActive
+    } = req.body;
+    
+    const { data: userAsin, error } = await supabase
+      .from('user_asins')
+      .update({
+        product_name: productName,
+        brand,
+        category,
+        subcategory,
+        current_price: currentPrice,
+        monthly_revenue: monthlyRevenue,
+        monthly_profit: monthlyProfit,
+        monthly_units_sold: monthlyUnitsSold,
+        profit_margin: profitMargin,
+        is_active: isActive
+      })
+      .eq('id', asinId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: userAsin });
+  } catch (error) {
+    console.error('Error updating ASIN:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete ASIN from portfolio
+app.delete('/api/portfolio/asins/:asinId', async (req, res) => {
+  try {
+    const { asinId } = req.params;
+    
+    const { error } = await supabase
+      .from('user_asins')
+      .delete()
+      .eq('id', asinId);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting ASIN:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get ASIN performance history
+app.get('/api/portfolio/asins/:asinId/metrics', async (req, res) => {
+  try {
+    const { asinId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const { data: metrics, error } = await supabase
+      .from('user_asin_metrics')
+      .select('*')
+      .eq('user_asin_id', asinId)
+      .gte('recorded_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+      .order('recorded_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: metrics || [] });
+  } catch (error) {
+    console.error('Error fetching ASIN metrics:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ 
