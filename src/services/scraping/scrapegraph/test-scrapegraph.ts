@@ -1,8 +1,11 @@
 import { createScrapeGraphService } from './ScrapeGraphService';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 // Load environment variables from root .env file
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 async function testScrapeGraph() {

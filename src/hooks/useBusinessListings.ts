@@ -96,7 +96,7 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
     queryKey: ['business-listings', options?.hideDuplicates],
     queryFn: async () => {
       console.log('\n========================================');
-      console.log('🔍 [FRONTEND] Fetching Amazon FBA business listings from database...');
+      console.log('🔍 [FRONTEND] Fetching business listings from database...');
       console.log(`🕒 [FRONTEND] Query time: ${new Date().toISOString()}`);
       console.log(`🔧 [FRONTEND] Options: hideDuplicates=${options?.hideDuplicates}`);
       
@@ -104,10 +104,7 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
         .from('business_listings')
         .select('*')
         .eq('status', 'active')
-        .or('industry.ilike.%amazon%,description.ilike.%amazon%,description.ilike.%fba%,industry.ilike.%fba%')
         .not('name', 'eq', 'Unknown Business') // Exclude invalid demo listings
-        .lt('asking_price', 1000000000) // Exclude prices over $1 billion (invalid)
-        .gt('asking_price', 1000) // Exclude prices under $1,000 (likely invalid)
         .order('created_at', { ascending: false });
       
       // Filter out non-primary duplicates if requested
@@ -118,7 +115,7 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
       const { data, error } = await query;
       
       if (error) {
-        console.error('❌ [FRONTEND] Error fetching Amazon FBA business listings:', error);
+        console.error('❌ [FRONTEND] Error fetching business listings:', error);
         throw error;
       }
       
@@ -129,15 +126,15 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
       });
       
       
-      // Transform to market feed format and filter out invalid data
+      // Transform to market feed format with relaxed filtering
       console.log('🔄 [FRONTEND] Starting data transformation...');
       const transformedData = data?.map(transformToMarketListing).filter(listing => {
-        // Additional client-side validation
+        // More relaxed client-side validation - only exclude truly invalid data
         const isValid = listing.name && 
                listing.name !== 'Unknown Business' &&
-               listing.asking_price && 
-               listing.asking_price < 1000000000 &&
-               listing.asking_price > 1000;
+               listing.name.trim().length > 0 &&
+               listing.source &&
+               (!listing.asking_price || (listing.asking_price >= 100 && listing.asking_price < 1000000000));
         
         if (!isValid) {
           console.log(`⚠️ [FRONTEND] Filtered out invalid listing: ${listing.name} - Price: ${listing.asking_price}`);
@@ -151,7 +148,7 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
       return transformedData as BusinessListing[];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000 // 10 minutes
+    gcTime: 10 * 60 * 1000 // 10 minutes
   });
 };
 
@@ -248,7 +245,7 @@ export const useFavorites = (userId?: string) => {
     enabled: !!userId,
     retry: 1,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000 // 10 minutes
+    gcTime: 10 * 60 * 1000 // 10 minutes
   });
 };
 

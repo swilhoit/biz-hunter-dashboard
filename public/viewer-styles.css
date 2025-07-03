@@ -1,0 +1,132 @@
+/* File Viewer Specific Styles */
+
+/* PDF Viewer styles */
+.react-pdf__Page {
+  margin-bottom: 1rem;
+}
+
+.react-pdf__Page__canvas {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* CSV/Excel Table styles */
+.viewer-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.viewer-table th,
+.viewer-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.dark .viewer-table th,
+.dark .viewer-table td {
+  border-color: #374151;
+}
+
+.viewer-table th {
+  background-color: #f9fafb;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dark .viewer-table th {
+  background-color: #1f2937;
+}
+
+/* Highlighted search terms */
+mark {
+  background-color: #fef08a;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark mark {
+  background-color: #92400e;
+  color: #fef3c7;
+}
+
+/* Image viewer styles */
+.image-viewer-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.image-viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+/* Document viewer prose styles */
+.document-content {
+  line-height: 1.6;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+.document-content h1,
+.document-content h2,
+.document-content h3,
+.document-content h4,
+.document-content h5,
+.document-content h6 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.document-content p {
+  margin-bottom: 1rem;
+}
+
+.document-content ul,
+.document-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.document-content li {
+  margin-bottom: 0.25rem;
+}
+
+/* Scrollbar styles */
+.viewer-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.viewer-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.viewer-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.viewer-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark .viewer-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark .viewer-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark .viewer-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}

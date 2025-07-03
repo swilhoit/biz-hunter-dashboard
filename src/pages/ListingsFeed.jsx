@@ -9,7 +9,9 @@ import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
 import { DuplicateManager } from '../components/DuplicateManager';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import ScrapingResultsModal from '../components/ScrapingResultsModal';
+import ScrapingProgressModal from '../components/ScrapingProgressModal';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown } from 'lucide-react';
 
 function ListingsFeed() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,6 +21,9 @@ function ListingsFeed() {
   const [selectedListings, setSelectedListings] = useState([]);
   const [hideDuplicates, setHideDuplicates] = useState(false);
   const [showDuplicateManager, setShowDuplicateManager] = useState(false);
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const [selectedSites, setSelectedSites] = useState(['quietlight', 'bizbuysell']);
 
   // Fetch real business listings data
   const { 
@@ -46,8 +51,34 @@ function ListingsFeed() {
   
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
-  const { checkForNewListings, isChecking, progress, currentScraper } = useManualScraping();
+  const { 
+    checkForNewListings, 
+    checkForNewListingsWithProgress, 
+    isChecking, 
+    progress, 
+    currentScraper, 
+    lastResults, 
+    clearResults,
+    showProgressModal,
+    currentMethod,
+    handleProgressModalClose,
+    handleProgressModalComplete
+  } = useManualScraping();
   const { user } = useAuth();
+
+  // Close admin dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showAdminDropdown && !event.target.closest('.admin-dropdown')) {
+        setShowAdminDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAdminDropdown]);
 
   const filteredListings = listings.filter(listing => 
     listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -149,10 +180,14 @@ function ListingsFeed() {
 
   const handleCheckForNewListings = (method = 'traditional') => {
     console.log(`🚀 [LISTINGS FEED] Starting ${method} scraping...`);
-    checkForNewListings(() => {
+    checkForNewListings((results) => {
       console.log('✅ [LISTINGS FEED] Scraping completed, refetching listings...');
       // Refetch listings after scraping completes
       refetch();
+      // Show results modal
+      if (results) {
+        setShowResultsModal(true);
+      }
     }, method);
   };
 
@@ -201,45 +236,101 @@ function ListingsFeed() {
               </div>
 
               <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
-                {/* Traditional Scraper Button */}
-                <button 
-                  onClick={() => handleCheckForNewListings('traditional')}
-                  disabled={isChecking || isLoading}
-                  className="btn bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Use traditional HTML scrapers (ScraperAPI)"
-                >
-                  {isChecking && currentScraper && !currentScraper.includes('AI') ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {currentScraper ? `${currentScraper}... ${progress}%` : 'Checking...'}
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" />
-                      Check (Traditional)
-                    </>
+                {/* Admin Dropdown */}
+                <div className="relative admin-dropdown">
+                  <button 
+                    onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                    className="btn bg-gray-900 text-white hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Admin
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </button>
+                  
+                  {showAdminDropdown && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                      <div className="p-2">
+                        {/* Traditional Scraper Button */}
+                        <button 
+                          onClick={() => {
+                            checkForNewListingsWithProgress('traditional', selectedSites);
+                            setShowAdminDropdown(false);
+                          }}
+                          disabled={isChecking || isLoading}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isChecking && currentScraper && !currentScraper.includes('AI') ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-3 animate-spin text-violet-600" />
+                              In Progress...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-4 h-4 mr-3 text-violet-600" />
+                              Check New Listings (Traditional)
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* ScrapeGraph AI Button */}
+                        <button 
+                          onClick={() => {
+                            checkForNewListingsWithProgress('scrapegraph', selectedSites);
+                            setShowAdminDropdown(false);
+                          }}
+                          disabled={isChecking || isLoading}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isChecking && currentScraper && currentScraper.includes('AI') ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-3 animate-spin text-emerald-600" />
+                              AI Scraping...
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-4 h-4 mr-3 text-emerald-600" />
+                              Check New Listings (AI-Powered)
+                            </>
+                          )}
+                        </button>
+                        
+                        <div className="my-1 border-t border-gray-200 dark:border-gray-600"></div>
+                        
+                        {/* Duplicate Management */}
+                        <button 
+                          onClick={() => {
+                            setShowDuplicateManager(true);
+                            setShowAdminDropdown(false);
+                          }}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        >
+                          <AlertTriangle className="w-4 h-4 mr-3 text-amber-600" />
+                          Manage Duplicates
+                        </button>
+                        
+                        <button 
+                          onClick={() => {
+                            setHideDuplicates(!hideDuplicates);
+                            setShowAdminDropdown(false);
+                          }}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        >
+                          {hideDuplicates ? (
+                            <>
+                              <Eye className="w-4 h-4 mr-3 text-green-600" />
+                              Show All Listings
+                            </>
+                          ) : (
+                            <>
+                              <EyeOff className="w-4 h-4 mr-3 text-gray-600" />
+                              Hide Duplicate Listings
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   )}
-                </button>
-                
-                {/* ScrapeGraph AI Button */}
-                <button 
-                  onClick={() => handleCheckForNewListings('scrapegraph')}
-                  disabled={isChecking || isLoading}
-                  className="btn bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Use AI-powered scraping (ScrapeGraph)"
-                >
-                  {isChecking && currentScraper && currentScraper.includes('AI') ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {currentScraper ? `${currentScraper}... ${progress}%` : 'AI Scraping...'}
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-4 h-4 mr-2" />
-                      Check (AI-Powered)
-                    </>
-                  )}
-                </button>
+                </div>
                 
                 <button 
                   onClick={handleRefresh}
@@ -252,36 +343,6 @@ function ListingsFeed() {
                     <RefreshCw className="w-4 h-4 mr-2" />
                   )}
                   Refresh
-                </button>
-                {/* Duplicate Management */}
-                <button 
-                  onClick={() => setShowDuplicateManager(true)}
-                  className="btn bg-amber-600 text-white hover:bg-amber-700"
-                  title="Manage duplicate listings"
-                >
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  Manage Duplicates
-                </button>
-                
-                <button 
-                  onClick={() => setHideDuplicates(!hideDuplicates)}
-                  className={`btn ${hideDuplicates 
-                    ? 'bg-green-600 text-white hover:bg-green-700' 
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
-                  }`}
-                  title={hideDuplicates ? 'Show all listings' : 'Hide duplicate listings'}
-                >
-                  {hideDuplicates ? (
-                    <>
-                      <Eye className="w-4 h-4 mr-2" />
-                      Show All
-                    </>
-                  ) : (
-                    <>
-                      <EyeOff className="w-4 h-4 mr-2" />
-                      Hide Duplicates
-                    </>
-                  )}
                 </button>
 
                 <button className="btn bg-indigo-600 text-white hover:bg-indigo-700">
@@ -299,30 +360,21 @@ function ListingsFeed() {
               </div>
             </div>
 
-            {/* Scraping Progress Indicator */}
+            {/* Scraping Status Indicator */}
             {isChecking && (
               <div className="bg-violet-50 dark:bg-violet-900/20 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                    <Loader2 className="w-5 h-5 mr-3 animate-spin text-violet-600 dark:text-violet-400" />
+                <div className="flex items-center">
+                  <Loader2 className="w-5 h-5 mr-3 animate-spin text-violet-600 dark:text-violet-400" />
+                  <div>
                     <span className="text-violet-800 dark:text-violet-200 font-medium">
-                      Checking for new listings from all sources...
+                      Scraping in progress...
                     </span>
+                    {currentScraper && (
+                      <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
+                        {currentScraper}
+                      </p>
+                    )}
                   </div>
-                  <span className="text-violet-600 dark:text-violet-400 font-semibold">
-                    {progress}%
-                  </span>
-                </div>
-                {currentScraper && (
-                  <p className="text-sm text-violet-700 dark:text-violet-300 ml-8">
-                    Currently checking: {currentScraper}
-                  </p>
-                )}
-                <div className="w-full bg-violet-200 dark:bg-violet-800 rounded-full h-2 mt-3">
-                  <div 
-                    className="bg-violet-600 dark:bg-violet-400 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
                 </div>
               </div>
             )}
@@ -508,6 +560,30 @@ function ListingsFeed() {
       <DuplicateManager 
         isOpen={showDuplicateManager}
         onClose={() => setShowDuplicateManager(false)}
+      />
+      
+      {/* Scraping Results Modal */}
+      <ScrapingResultsModal 
+        isOpen={showResultsModal}
+        onClose={() => {
+          setShowResultsModal(false);
+          clearResults();
+        }}
+        results={lastResults}
+      />
+      
+      {/* Scraping Progress Modal */}
+      <ScrapingProgressModal 
+        isOpen={showProgressModal}
+        onClose={handleProgressModalClose}
+        method={currentMethod}
+        selectedSites={selectedSites}
+        onSitesChange={setSelectedSites}
+        onComplete={(results) => {
+          handleProgressModalComplete(results);
+          // Refresh listings after scraping completes
+          refetch();
+        }}
       />
     </div>
   );

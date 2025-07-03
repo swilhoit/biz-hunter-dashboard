@@ -1,11 +1,17 @@
-const dotenv = require('dotenv');
-dotenv.config();
+import dotenv from 'dotenv';
+dotenv.config({ path: '../.env' });
+
+// Debug environment variables
+console.log('🔧 ScrapeGraph environment check:');
+console.log('VITE_SCRAPEGRAPH_API_KEY:', process.env.VITE_SCRAPEGRAPH_API_KEY ? 'Set' : 'Missing');
+console.log('SCRAPEGRAPH_API_KEY:', process.env.SCRAPEGRAPH_API_KEY ? 'Set' : 'Missing');
 
 // Import the ScrapeGraph service (we'll need to compile TS first)
 let ScrapeGraphService;
 try {
   // Try to import compiled version
-  ScrapeGraphService = require('../../dist/services/scraping/scrapegraph/ScrapeGraphService').ScrapeGraphService;
+  const module = await import('../../dist/services/scraping/scrapegraph/ScrapeGraphService.js');
+  ScrapeGraphService = module.ScrapeGraphService;
 } catch (error) {
   console.warn('ScrapeGraphService not compiled, using mock implementation');
 }
@@ -120,7 +126,7 @@ class ScrapeGraphScraper {
     if (!this.apiKey) return false;
     
     try {
-      const axios = require('axios');
+      const { default: axios } = await import('axios');
       const response = await axios.get('https://api.scrapegraphai.com/v1/credits', {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -142,34 +148,18 @@ class ScrapeGraphScraper {
   }
   
   /**
-   * Fallback: Use mock data when no credits
+   * Fallback: Return empty results when no credits or API unavailable
    */
   async scrapeUsingAPI(sites, maxPages, query) {
-    console.log('⚠️  Using mock data (no API credits available)');
+    console.log('⚠️  No ScrapeGraph credits or API unavailable - returning empty results');
     
-    // Return realistic mock data
     return {
-      listings: [
-        {
-          name: 'Amazon FBA Health Supplements Business',
-          description: 'Established FBA business selling premium health supplements',
-          askingPrice: 250000,
-          revenue: 520000,
-          cashFlow: 156000,
-          multiple: 1.6,
-          location: 'USA',
-          url: 'https://example.com/listing/12345',
-          source: 'QuietLight',
-          industry: 'Health & Wellness',
-          dateListed: new Date().toISOString(),
-          isFBA: true
-        }
-      ],
-      errors: [],
+      listings: [],
+      errors: ['No ScrapeGraph credits available or API unavailable'],
       summary: {
-        total: 1,
-        fbaCount: 1,
-        bySource: { QuietLight: 1 }
+        total: 0,
+        fbaCount: 0,
+        bySource: {}
       }
     };
   }
@@ -228,4 +218,4 @@ class ScrapeGraphScraper {
   }
 }
 
-module.exports = ScrapeGraphScraper;
+export default ScrapeGraphScraper;

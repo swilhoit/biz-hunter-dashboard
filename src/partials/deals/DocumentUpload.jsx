@@ -7,7 +7,7 @@ function DocumentUpload({ selectedDeal, dealId, onUploadSuccess }) {
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [documentType, setDocumentType] = useState('financial_statements');
+  const [documentType, setDocumentType] = useState('general');
   const [selectedDealId, setSelectedDealId] = useState(dealId || 'deal-1');
   const [tags, setTags] = useState('');
   const [recentUploads, setRecentUploads] = useState([]);
@@ -135,7 +135,7 @@ function DocumentUpload({ selectedDeal, dealId, onUploadSuccess }) {
       
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError(error.message);
+      setUploadError(error.message || 'Upload failed. Please try again.');
       setUploadProgress(null);
       setIsUploading(false);
     }
@@ -213,22 +213,6 @@ function DocumentUpload({ selectedDeal, dealId, onUploadSuccess }) {
           </div>
         )}
         
-        {/* Document Type Selector */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Document Type
-          </label>
-          <select 
-            value={documentType}
-            onChange={(e) => setDocumentType(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
-            disabled={isUploading}
-          >
-            {documentTypes.map(type => (
-              <option key={type.value} value={type.value}>{type.label}</option>
-            ))}
-          </select>
-        </div>
         
         {/* Deal Assignment */}
         {selectedDeal === 'all' && (
@@ -302,7 +286,7 @@ function DocumentUpload({ selectedDeal, dealId, onUploadSuccess }) {
                           {file.file_name}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {timeAgo} • {file.category?.replace('_', ' ')}
+                          {timeAgo}
                         </div>
                       </div>
                     </div>

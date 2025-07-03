@@ -8,6 +8,7 @@ import Header from '../partials/Header';
 import PipelineColumn from '../partials/deals/PipelineColumn';
 import DealCard from '../partials/deals/DealCard';
 import PipelineStats from '../partials/deals/PipelineStats';
+import AddDealModal from '../components/AddDealModal';
 import { Deal, DealStatus } from '../types/deal';
 import { dbAdapter, mapDealStatus } from '../lib/database-adapter';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,6 +31,7 @@ function DealPipelineIntegrated() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [addDealModalOpen, setAddDealModalOpen] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -92,8 +94,12 @@ function DealPipelineIntegrated() {
   };
 
   const handleAddDeal = () => {
-    // Navigate to deal creation form or open modal
-    navigate('/deals/new');
+    setAddDealModalOpen(true);
+  };
+
+  const handleDealCreated = (newDeal: Deal) => {
+    setDeals(prevDeals => [newDeal, ...prevDeals]);
+    setAddDealModalOpen(false);
   };
 
   const handleEditDeal = async (dealId: string, updates: Partial<Deal>) => {
@@ -265,7 +271,7 @@ function DealPipelineIntegrated() {
                               <div className="flex items-center">
                                 <div>
                                   <button
-                                    onClick={() => navigate(`/deals/${deal.id}`)}
+                                    onClick={() => navigate(`/deal/${deal.id}`)}
                                     className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-left transition-colors"
                                   >
                                     {deal.business_name || 'Unnamed Business'}
@@ -309,7 +315,7 @@ function DealPipelineIntegrated() {
                             <td className="px-4 py-4 text-sm">
                               <div className="flex items-center space-x-2">
                                 <button
-                                  onClick={() => navigate(`/deals/${deal.id}`)}
+                                  onClick={() => navigate(`/deal/${deal.id}`)}
                                   className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                   title="View details"
                                 >
@@ -364,6 +370,13 @@ function DealPipelineIntegrated() {
           </div>
         </main>
       </div>
+
+      {/* Add Deal Modal */}
+      <AddDealModal
+        isOpen={addDealModalOpen}
+        onClose={() => setAddDealModalOpen(false)}
+        onDealCreated={handleDealCreated}
+      />
     </div>
   );
 }

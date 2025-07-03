@@ -34,6 +34,7 @@ export interface Deal {
   is_on_market?: boolean;
   listing_url?: string;
   original_listing_id?: string;
+  description?: string;
   amazon_store_name?: string;
   amazon_store_url?: string;
   amazon_category?: string;

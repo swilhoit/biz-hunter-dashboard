@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Eye, Upload, Folder, Calendar, User } from 'lucide-react';
+import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2 } from 'lucide-react';
 import { filesAdapter } from '../../lib/database-adapter';
+import FileViewerModal from '../../components/FileViewerModal';
+import StorageTest from '../../components/StorageTest';
 
 interface DealFilesProps {
   dealId: string;
@@ -13,6 +15,10 @@ function DealFiles({ dealId }: DealFilesProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
 
   // Load files on component mount
   useEffect(() => {
@@ -94,7 +100,10 @@ function DealFiles({ dealId }: DealFilesProps) {
     { id: 'other', name: 'Other', icon: '📁' },
   ];
 
-  const getFileIcon = (fileName: string) => {
+  const getFileIcon = (fileName: string | undefined) => {
+    if (!fileName || typeof fileName !== 'string') {
+      return '📄'; // Default icon for unknown files
+    }
     const extension = fileName.split('.').pop()?.toLowerCase();
     switch (extension) {
       case 'pdf': return '📄';
@@ -172,14 +181,69 @@ function DealFiles({ dealId }: DealFilesProps) {
     }
   };
 
+  const handleDeleteFile = async (fileId: string, fileName: string) => {
+    if (!confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingFileId(fileId);
+    try {
+      console.log('Attempting to delete file:', { fileId, fileName });
+      
+      const result = await filesAdapter.deleteFile(fileId);
+      console.log('Delete result:', result);
+      
+      // Refresh the file list
+      await loadFiles();
+      
+      // Show success message
+      alert(`Successfully deleted "${fileName}"`);
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      
+      // More detailed error message
+      let errorMessage = 'Failed to delete file';
+      if (error.message) {
+        errorMessage += `: ${error.message}`;
+      }
+      if (error.code) {
+        errorMessage += ` (Code: ${error.code})`;
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
+  const handleViewFile = (fileId: string, fileName: string) => {
+    setSelectedFileId(fileId);
+    setSelectedFileName(fileName);
+    setViewerOpen(true);
+  };
+
+  const handleDownloadFile = async (fileId: string, fileName: string) => {
+    try {
+      const { url } = await filesAdapter.getFileUrl(fileId);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      console.error('Download error:', error);
+      alert(`Failed to download file: ${error.message}`);
+    }
+  };
+
   const displayFiles = files.length > 0 ? files : mockFiles;
-  const groupedFiles = fileCategories.reduce((acc, category) => {
-    acc[category.id] = displayFiles.filter(file => file.category === category.id);
-    return acc;
-  }, {} as Record<string, typeof displayFiles>);
 
   return (
     <div className="space-y-6">
+      {/* Storage Diagnostics - Temporary */}
+      <StorageTest />
+      
       {/* Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex justify-between items-center mb-4">
@@ -245,82 +309,115 @@ function DealFiles({ dealId }: DealFilesProps) {
         </div>
       </div>
 
-      {/* Files by Category */}
+      {/* All Files */}
       {isLoading ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading files...</p>
         </div>
       ) : (
-        <div className="space-y-4">
-        {fileCategories.map(category => {
-          const categoryFiles = groupedFiles[category.id];
-          if (!categoryFiles || categoryFiles.length === 0) return null;
-
-          return (
-            <div 
-              key={category.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
-            >
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center">
-                  <span className="text-2xl mr-3">{category.icon}</span>
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                    {category.name}
-                  </h4>
-                  <span className="ml-2 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
-                    {categoryFiles.length}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <div className="space-y-3">
-                  {categoryFiles.map(file => (
-                    <div 
-                      key={file.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      <div className="flex items-center min-w-0 flex-1">
-                        <span className="text-2xl mr-3">{getFileIcon(file.name)}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center">
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                              {file.name}
-                            </p>
-                            {file.is_confidential && (
-                              <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full">
-                                Confidential
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            <Calendar className="w-3 h-3 mr-1" />
-                            <span>{new Date(file.uploaded_date).toLocaleDateString()}</span>
-                            <span className="mx-2">•</span>
-                            <User className="w-3 h-3 mr-1" />
-                            <span>{file.uploaded_by}</span>
-                            <span className="mx-2">•</span>
-                            <span>{file.size}</span>
-                          </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center">
+              <Folder className="w-6 h-6 mr-3 text-gray-500" />
+              <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                All Files
+              </h4>
+              <span className="ml-2 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
+                {displayFiles.length}
+              </span>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {displayFiles.length > 0 ? (
+              <div className="space-y-3">
+                {displayFiles.map(file => (
+                  <div 
+                    key={file.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div className="flex items-center min-w-0 flex-1">
+                      <span className="text-2xl mr-3">{getFileIcon(file.file_name || file.name)}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {file.file_name || file.name || 'Unknown File'}
+                          </p>
+                          {file.is_confidential && (
+                            <span className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full">
+                              Confidential
+                            </span>
+                          )}
+                          {file.category && (
+                            <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+                              {getCategoryName(file.category)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          <span>
+                            {file.uploaded_at || file.uploaded_date 
+                              ? new Date(file.uploaded_at || file.uploaded_date).toLocaleDateString()
+                              : 'Unknown date'
+                            }
+                          </span>
+                          <span className="mx-2">•</span>
+                          <User className="w-3 h-3 mr-1" />
+                          <span>{file.uploaded_by || 'Unknown user'}</span>
+                          <span className="mx-2">•</span>
+                          <span>
+                            {file.file_size 
+                              ? `${Math.round(file.file_size / 1024 / 1024 * 100) / 100} MB`
+                              : file.size || 'Unknown size'
+                            }
+                          </span>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center space-x-2 ml-4">
-                        <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
                     </div>
-                  ))}
-                </div>
+                    
+                    <div className="flex items-center space-x-2 ml-4">
+                      <button 
+                        onClick={() => handleViewFile(file.id, file.file_name || file.name || 'Unknown File')}
+                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        title="View file"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDownloadFile(file.id, file.file_name || file.name || 'Unknown File')}
+                        className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                        title="Download file"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteFile(file.id, file.file_name || file.name || 'Unknown File')}
+                        disabled={deletingFileId === file.id}
+                        className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Delete file"
+                      >
+                        {deletingFileId === file.id ? (
+                          <div className="w-4 h-4 animate-spin border-2 border-red-500 border-t-transparent rounded-full"></div>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          );
-        })}
+            ) : (
+              <div className="text-center py-8">
+                <Folder className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">No files uploaded yet</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                  Use the upload area above to add files
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -352,6 +449,20 @@ function DealFiles({ dealId }: DealFilesProps) {
           </div>
         </div>
       </div>
+      
+      {/* File Viewer Modal */}
+      {selectedFileId && (
+        <FileViewerModal
+          fileId={selectedFileId}
+          fileName={selectedFileName}
+          isOpen={viewerOpen}
+          onClose={() => {
+            setViewerOpen(false);
+            setSelectedFileId(null);
+            setSelectedFileName('');
+          }}
+        />
+      )}
     </div>
   );
 }

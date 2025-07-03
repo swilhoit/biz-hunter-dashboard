@@ -19,8 +19,6 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
   const [isDeleting, setIsDeleting] = useState(false);
   const [editedDeal, setEditedDeal] = useState(deal);
   
-  // Debug log to check if onEdit is received
-  console.log(`DealCard for ${deal.id}: onEdit prop is ${onEdit ? 'present' : 'missing'}`);
   const {
     attributes,
     listeners,
@@ -62,44 +60,27 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
   const handleClick = (e: React.MouseEvent) => {
     // Don't navigate when dragging, editing, or if clicked on action buttons
     if (sortableDragging || isDragging || isEditing) {
-      console.log('Click prevented - dragging or editing');
       return;
     }
     
     const target = e.target as HTMLElement;
     if (target.closest('.drag-handle') || target.closest('.action-button')) {
-      console.log('Click on action button or drag handle - not navigating');
       e.stopPropagation();
       return;
     }
     
-    console.log('Navigating to deal details');
-    navigate(`/deals/${deal.id}`);
+    navigate(`/deal/${deal.id}`);
   };
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('Edit button clicked for deal:', deal.id);
-    console.log('onEdit prop available:', !!onEdit);
-    console.log('Current isEditing state:', isEditing);
     setIsEditing(true);
-    console.log('isEditing set to true');
   };
 
   const handleSave = async () => {
-    console.log('Save button clicked, onEdit available:', !!onEdit);
     if (onEdit) {
       try {
-        console.log('Attempting to save deal updates:', {
-          business_name: editedDeal.business_name,
-          asking_price: editedDeal.asking_price,
-          annual_revenue: editedDeal.annual_revenue,
-          annual_profit: editedDeal.annual_profit,
-          valuation_multiple: editedDeal.valuation_multiple,
-          priority: editedDeal.priority,
-          notes: editedDeal.notes
-        });
         await onEdit(deal.id, {
           business_name: editedDeal.business_name,
           asking_price: editedDeal.asking_price,
@@ -109,15 +90,11 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
           priority: editedDeal.priority,
           notes: editedDeal.notes
         });
-        console.log('Deal saved successfully');
         setIsEditing(false);
       } catch (error) {
         console.error('Error saving deal:', error);
-        alert('Failed to save deal. Check console for details.');
+        alert('Failed to save deal. Please try again.');
       }
-    } else {
-      console.error('onEdit prop not available');
-      alert('Edit functionality not properly connected');
     }
   };
 
@@ -208,16 +185,6 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
         )}
       </div>
 
-      {/* Test button - temporary */}
-      <button 
-        onClick={(e) => {
-          e.stopPropagation();
-          alert(`Edit button test for deal: ${deal.business_name}`);
-        }}
-        className="bg-red-500 text-white px-2 py-1 rounded text-xs mb-2"
-      >
-        Test Edit
-      </button>
 
       {/* Header */}
       <div className="flex items-start justify-between mb-3 pr-12">

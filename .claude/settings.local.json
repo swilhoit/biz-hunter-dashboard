@@ -79,7 +79,14 @@
       "Bash(git config:*)",
       "Bash(timeout:*)",
       "Bash(open test-button-integration.html)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(mv:*)",
+      "Bash(npx eslint:*)",
+      "mcp__ide__executeCode",
+      "Bash(supabase:*)",
+      "Bash(env)",
+      "Bash(supabase:*)",
+      "Bash(brew upgrade:*)"
     ],
     "deny": []
   }

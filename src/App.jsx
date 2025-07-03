@@ -111,6 +111,7 @@ function App() {
         <Route path="/deals/asins/:asinId" element={<ProtectedRoute><ASINDetail /></ProtectedRoute>} />
         <Route path="/deals/amazon-portfolio" element={<ProtectedRoute><AmazonPortfolioAnalyzer /></ProtectedRoute>} />
         <Route path="/deals/documents" element={<ProtectedRoute><DocumentManager /></ProtectedRoute>} />
+        <Route path="/deal/:id" element={<ProtectedRoute><DealDetails /></ProtectedRoute>} />
         <Route path="/deals/:id" element={<ProtectedRoute><DealDetails /></ProtectedRoute>} />
         <Route path="/listings" element={<ProtectedRoute><ListingsFeed /></ProtectedRoute>} />
         <Route path="/listings/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />

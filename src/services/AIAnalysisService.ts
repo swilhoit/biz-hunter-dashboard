@@ -404,17 +404,30 @@ Write a 2-3 paragraph executive summary highlighting the key investment thesis, 
 export class DocumentAnalysisService {
   static async analyzeDocument(file: File): Promise<DocumentAnalysis> {
     try {
+      console.log('Starting document analysis for file:', file.name, 'Type:', file.type, 'Size:', file.size);
+      
+      // Check if API key is available
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.REACT_APP_OPENAI_API_KEY;
+      if (!apiKey) {
+        console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env file');
+        throw new Error('OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.');
+      }
+      
       // Create a temporary client instance for static methods
       const client = new OpenAI({
-        apiKey: import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.REACT_APP_OPENAI_API_KEY,
+        apiKey: apiKey,
         dangerouslyAllowBrowser: true,
       });
 
       // Convert file to text based on type
+      console.log('Extracting text from file...');
       const text = await this.extractTextFromFile(file, client);
+      console.log('Text extracted, length:', text.length);
       
       // Analyze text using AI
+      console.log('Analyzing text with AI...');
       const analysis = await this.analyzeText(text, file.name, client);
+      console.log('Analysis complete:', analysis);
       
       return analysis;
     } catch (error) {
@@ -535,18 +548,27 @@ Basic document metadata extracted where possible.`;
 
   private static async analyzeText(text: string, fileName: string, client: OpenAI): Promise<DocumentAnalysis> {
     try {
-      const prompt = `Analyze this business document and extract the following information in JSON format. Return ONLY valid JSON with the exact structure shown:
+      const prompt = `You are analyzing a business listing document to extract information for a deal entry form. Extract ALL possible fields that could help fill out a comprehensive business acquisition deal form.
+
+IMPORTANT: Look for and extract EVERY piece of information that could be relevant to evaluating and contacting about this business opportunity.
+
+Analyze this document and return ONLY valid JSON with this exact structure:
 
 {
   "businessName": "string or null",
+  "description": "string or null (comprehensive business description, products sold, unique selling points, business model)",
   "askingPrice": number or null,
   "annualRevenue": number or null,
   "annualProfit": number or null,
   "monthlyRevenue": number or null,
   "monthlyProfit": number or null,
+  "valuationMultiple": number or null (calculate if price and profit available),
   "businessAge": number or null,
+  "dateListed": "string or null (ISO date if found)",
   "industry": "string or null",
-  "location": "string or null",
+  "location": "string or null (city, state, country)",
+  "listingUrl": "string or null",
+  "websiteUrl": "string or null",
   "brokerInfo": {
     "name": "string or null",
     "company": "string or null", 
@@ -559,34 +581,52 @@ Basic document metadata extracted where possible.`;
     "phone": "string or null"
   },
   "amazonInfo": {
+    "storeName": "string or null",
+    "storeUrl": "string or null",
     "category": "string or null",
     "subcategory": "string or null",
-    "storeUrl": "string or null",
-    "fbaPercentage": number or null
+    "fbaPercentage": number or null,
+    "accountHealth": "string or null",
+    "asinCount": number or null,
+    "topProducts": ["array of product names or ASINs"]
+  },
+  "additionalInfo": {
+    "inventoryValue": number or null,
+    "employeeCount": number or null,
+    "reasonForSelling": "string or null",
+    "growthOpportunities": "string or null",
+    "includesRealEstate": boolean or null,
+    "trainingProvided": boolean or null
   },
   "keyFindings": ["array of key information found"],
+  "missingCriticalInfo": ["array of important missing fields"],
   "confidence": number between 0-100
 }
 
 Document content:
 ${text}
 
-Instructions:
-- Extract numerical values without currency symbols or commas
-- For business age, if you find a founding year, calculate current age
-- For SDE/Seller's Discretionary Earnings, use as annual profit
-- Look for Amazon store URLs, FBA percentages, product categories
-- Identify contact information and determine if broker vs seller based on context
-- Set confidence based on amount and quality of information extracted
-- Include key findings as human-readable summary of what was found
-- Return only the JSON object, no other text`;
+Extraction Instructions:
+- Extract ALL numerical values without currency symbols or commas
+- For business age: if you find "established 2020" or "founded in 2020", calculate age from current year (2025)
+- For valuation multiple: if asking price and annual profit exist, calculate price/profit
+- For SDE/Seller's Discretionary Earnings/Cash Flow: treat as annual profit
+- Look for ALL URLs mentioned (listing sites, Amazon stores, company websites)
+- Extract complete business description including what they sell, how they operate, competitive advantages
+- Identify ALL contact information and classify as broker vs seller based on context clues
+- For Amazon businesses: look for FBA%, seller account health, number of ASINs/SKUs, product categories
+- Extract any mention of inventory value, number of employees, reason for selling
+- Look for growth opportunities, expansion potential, or improvement areas mentioned
+- Set confidence based on completeness - 90%+ if most fields filled, 70%+ if key fields filled, 50%+ if basic info present
+- List missing critical information (like no price, no revenue, no contact info)
+- Return ONLY the JSON object, no other text or explanation`;
 
       const response = await client.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'You are an expert at extracting business information from documents. Always return valid JSON in the exact format requested.'
+            content: 'You are an expert business analyst specializing in extracting comprehensive information from business-for-sale listings. Your goal is to extract EVERY piece of information that could be useful for evaluating a business acquisition opportunity. Always return valid JSON in the exact format requested, and be thorough in looking for all data points.'
           },
           {
             role: 'user',
@@ -605,17 +645,22 @@ Instructions:
       // Parse the JSON response
       const analysis = JSON.parse(aiResponse);
       
-      // Validate and ensure proper structure
+      // Validate and ensure proper structure with ALL fields
       const structuredAnalysis = {
         businessName: analysis.businessName || null,
+        description: analysis.description || null,
         askingPrice: this.parseNumber(analysis.askingPrice),
         annualRevenue: this.parseNumber(analysis.annualRevenue),
         annualProfit: this.parseNumber(analysis.annualProfit),
         monthlyRevenue: this.parseNumber(analysis.monthlyRevenue),
         monthlyProfit: this.parseNumber(analysis.monthlyProfit),
+        valuationMultiple: this.parseNumber(analysis.valuationMultiple),
         businessAge: this.parseNumber(analysis.businessAge),
+        dateListed: analysis.dateListed || null,
         industry: analysis.industry || null,
         location: analysis.location || null,
+        listingUrl: analysis.listingUrl || null,
+        websiteUrl: analysis.websiteUrl || null,
         brokerInfo: {
           name: analysis.brokerInfo?.name || null,
           company: analysis.brokerInfo?.company || null,
@@ -628,12 +673,25 @@ Instructions:
           phone: analysis.sellerInfo?.phone || null
         },
         amazonInfo: {
+          storeName: analysis.amazonInfo?.storeName || null,
           category: analysis.amazonInfo?.category || null,
           subcategory: analysis.amazonInfo?.subcategory || null,
           storeUrl: analysis.amazonInfo?.storeUrl || null,
-          fbaPercentage: this.parseNumber(analysis.amazonInfo?.fbaPercentage)
+          fbaPercentage: this.parseNumber(analysis.amazonInfo?.fbaPercentage),
+          accountHealth: analysis.amazonInfo?.accountHealth || null,
+          asinCount: this.parseNumber(analysis.amazonInfo?.asinCount),
+          topProducts: Array.isArray(analysis.amazonInfo?.topProducts) ? analysis.amazonInfo.topProducts : []
+        },
+        additionalInfo: {
+          inventoryValue: this.parseNumber(analysis.additionalInfo?.inventoryValue),
+          employeeCount: this.parseNumber(analysis.additionalInfo?.employeeCount),
+          reasonForSelling: analysis.additionalInfo?.reasonForSelling || null,
+          growthOpportunities: analysis.additionalInfo?.growthOpportunities || null,
+          includesRealEstate: analysis.additionalInfo?.includesRealEstate || null,
+          trainingProvided: analysis.additionalInfo?.trainingProvided || null
         },
         keyFindings: Array.isArray(analysis.keyFindings) ? analysis.keyFindings : ['AI analysis completed'],
+        missingCriticalInfo: Array.isArray(analysis.missingCriticalInfo) ? analysis.missingCriticalInfo : [],
         confidence: Math.min(100, Math.max(0, analysis.confidence || 0))
       };
 
@@ -806,14 +864,19 @@ Instructions:
 // Document analysis interface for Add Deal Modal
 export interface DocumentAnalysis {
   businessName?: string;
+  description?: string;
   askingPrice?: number;
   annualRevenue?: number;
   annualProfit?: number;
   monthlyRevenue?: number;
   monthlyProfit?: number;
+  valuationMultiple?: number;
   businessAge?: number;
+  dateListed?: string;
   industry?: string;
   location?: string;
+  listingUrl?: string;
+  websiteUrl?: string;
   brokerInfo?: {
     name?: string;
     company?: string;
@@ -826,12 +889,25 @@ export interface DocumentAnalysis {
     phone?: string;
   };
   amazonInfo?: {
+    storeName?: string;
     category?: string;
     subcategory?: string;
     storeUrl?: string;
     fbaPercentage?: number;
+    accountHealth?: string;
+    asinCount?: number;
+    topProducts?: string[];
+  };
+  additionalInfo?: {
+    inventoryValue?: number;
+    employeeCount?: number;
+    reasonForSelling?: string;
+    growthOpportunities?: string;
+    includesRealEstate?: boolean;
+    trainingProvided?: boolean;
   };
   keyFindings?: string[];
+  missingCriticalInfo?: string[];
   confidence: number;
 }
 
