@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import { ExternalLink, Plus, Building2, Calendar, DollarSign, TrendingUp, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -175,20 +175,6 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
         </div>
       </div>
 
-      {/* Amazon Metrics */}
-      <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4">
-        <div className="flex items-center">
-          <Package className="w-4 h-4 mr-1" />
-          <span>{Array.isArray(listing.asin_list) ? listing.asin_list.length : 'Unknown'} ASINs</span>
-        </div>
-        <div className="flex items-center">
-          <span className="text-orange-600 dark:text-orange-400">{listing.fba_percentage || 'Unknown'}% FBA</span>
-        </div>
-        <div className="flex items-center">
-          <Star className="w-4 h-4 text-yellow-400 mr-1" />
-          <span>{listing.seller_account_health || 'Unknown'}</span>
-        </div>
-      </div>
 
       {/* Tags */}
       {listing.tags && listing.tags.length > 0 && (

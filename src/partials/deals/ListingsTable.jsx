@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, ImageIcon, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2 } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -86,9 +86,6 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 Revenue & Profit
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Amazon Metrics
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Listed
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -165,20 +162,6 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     Profit: {listing.annual_profit ? formatCurrency(listing.annual_profit) : 'TBD'}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-gray-100">
-                    {Array.isArray(listing.asin_list) ? listing.asin_list.length : 'Unknown'} ASINs
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {listing.fba_percentage || 'Unknown'}% FBA
-                  </div>
-                  <div className="flex items-center mt-1">
-                    <Star className="w-3 h-3 text-yellow-400 mr-1" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {listing.seller_account_health || 'Unknown'}
-                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
