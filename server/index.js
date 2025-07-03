@@ -8,7 +8,7 @@ import net from 'net';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
-dotenv.config({ path: '../.env' });
+dotenv.config();
 
 // Log environment variables for debugging
 console.log('🔧 Environment check:');
