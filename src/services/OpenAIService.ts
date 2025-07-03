@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getConfigValue } from '../config/runtime-config';
 
 interface ProductData {
   asin: string;
@@ -32,8 +33,16 @@ export class OpenAIService {
   private readonly model = 'gpt-4o-mini'; // OpenAI's fastest model
 
   constructor() {
+    const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
+                   import.meta.env.VITE_OPENAI_API_KEY || 
+                   import.meta.env.REACT_APP_OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY environment variable.');
+    }
+    
     this.client = new OpenAI({
-      apiKey: process.env.REACT_APP_OPENAI_API_KEY,
+      apiKey: apiKey,
       dangerouslyAllowBrowser: true,
     });
   }
