@@ -4,14 +4,20 @@ import { formatPrice } from '../utils/dataProcessor';
 
 // Use Node-compatible supabase client when running in Node environment
 let supabase: any;
-if (typeof window === 'undefined') {
-  // Node.js environment
-  const { supabase: nodeSupabase } = require('../../../lib/supabase-node');
-  supabase = nodeSupabase;
-} else {
-  // Browser environment
-  const { supabase: browserSupabase } = require('../../../lib/supabase');
-  supabase = browserSupabase;
+
+async function getSupabase() {
+  if (!supabase) {
+    if (typeof window === 'undefined') {
+      // Node.js environment
+      const { supabase: nodeSupabase } = await import('../../../lib/supabase-node');
+      supabase = nodeSupabase;
+    } else {
+      // Browser environment
+      const { supabase: browserSupabase } = await import('../../../lib/supabase');
+      supabase = browserSupabase;
+    }
+  }
+  return supabase;
 }
 
 // Define the exact schema we need for business listings
@@ -114,6 +120,14 @@ const SCRAPER_SITES: Record<string, ScraperSite> = {
       - isFBA: true if mentions Amazon/FBA/ecommerce
       
       Return valid JSON with "listings" array.`,
+    detailPrompt: `Extract complete business details from this BizBuySell listing page:
+      - All financial metrics (revenue, profit, cash flow)
+      - Complete business description
+      - Location details
+      - Business history and establishment date
+      - Employee count
+      - Business model and operations
+      - For Amazon/FBA businesses: product categories and Amazon-specific details`,
     pagination: {
       type: 'page',
       parameter: 'page',
@@ -371,11 +385,11 @@ export class ScrapeGraphService {
       established_year: this.parseYear(listing.established),
       employees: this.parseNumber(listing.employees),
       highlights: listing.highlights || [],
-      listing_status: 'active',
-      scraped_at: new Date().toISOString().split('T')[0]
+      listing_status: 'active'
     }));
     
-    const { error } = await supabase
+    const supabaseClient = await getSupabase();
+    const { error } = await supabaseClient
       .from('business_listings')
       .upsert(formattedListings, {
         onConflict: 'original_url',
