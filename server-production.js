@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 console.log('=== Server Starting ===');
 console.log('Port:', PORT);
 console.log('Node Environment:', process.env.NODE_ENV);
+console.log('Server Time:', new Date().toISOString());
 console.log('Environment variables:');
 Object.keys(process.env).forEach(key => {
   if (key.startsWith('VITE_') || key === 'PORT' || key === 'NODE_ENV') {
