@@ -2227,8 +2227,9 @@ app.post('/api/scrape', async (req, res) => {
                   annual_revenue: listing.revenue || 0,
                   location: listing.location || 'Online',
                   original_url: listing.url,
+                  source: listing.source || 'ScrapeGraph AI',
                   industry: listing.isFBA ? 'Amazon FBA' : (listing.industry || 'E-commerce'),
-                  highlights: Array.isArray(listing.highlights) ? listing.highlights.join(', ') : (listing.highlights || 'Amazon FBA, ScrapeGraph Mock'),
+                  highlights: Array.isArray(listing.highlights) ? listing.highlights : (listing.highlights ? [listing.highlights] : ['Amazon FBA', 'ScrapeGraph Mock']),
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()
                 };
@@ -2243,16 +2244,30 @@ app.post('/api/scrape', async (req, res) => {
               
               if (formattedListings.length > 0) {
                 console.log(`💾 [DATABASE] Upserting ${formattedListings.length} listings...`);
+                
+                // Debug: Check if original_url is present
+                console.log('🔍 [DEBUG] Sample listing URLs:');
+                formattedListings.slice(0, 3).forEach((listing, idx) => {
+                  console.log(`   ${idx + 1}. ${listing.name}: ${listing.original_url || 'NO URL!'}`);
+                });
+                
+                // Filter out listings without URLs
+                const validListings = formattedListings.filter(listing => listing.original_url);
+                const invalidCount = formattedListings.length - validListings.length;
+                if (invalidCount > 0) {
+                  console.log(`   ⚠️  WARNING: ${invalidCount} listings have no URL and will be skipped!`);
+                }
 
-                const listingsToInsert = formattedListings.map(listing => ({
+                const listingsToInsert = validListings.map(listing => ({
                   name: listing.name,
                   asking_price: listing.asking_price || 0,
                   annual_revenue: listing.annual_revenue || 0,
                   industry: listing.industry || 'Business',
                   location: listing.location || 'Online',
                   description: listing.description || '',
-                  highlights: listing.highlights || 'Amazon FBA, ScrapeGraph Mock',
-                  original_url: listing.original_url,
+                  highlights: listing.highlights, // Already an array from formattedListings
+                  original_url: listing.original_url, // This is correctly mapped from listing.url in formattedListings
+                  source: listing.source || 'ScrapeGraph AI', // Add source field from listing or default
                   created_at: listing.created_at,
                   updated_at: listing.updated_at
                 }));
@@ -2264,10 +2279,19 @@ app.post('/api/scrape', async (req, res) => {
 
                 if (error) {
                   console.error(`   ❌ Failed to save listings: ${error.message}`);
+                  console.error(`   📋 Error details:`, error);
+                  console.error(`   🔍 First listing being saved:`, JSON.stringify(listingsToInsert[0], null, 2));
                 } else {
                   savedCount = data ? data.length : 0;
-                  duplicateCount = formattedListings.length - savedCount;
+                  duplicateCount = validListings.length - savedCount;
                   console.log(`   ✅ Successfully saved ${savedCount} listings, skipped ${duplicateCount} duplicates.`);
+                  if (savedCount === 0 && validListings.length > 0) {
+                    console.log(`   ⚠️  WARNING: No listings were saved! All ${validListings.length} listings might be duplicates.`);
+                    console.log(`   🔍 Sample URLs that were attempted:`);
+                    listingsToInsert.slice(0, 3).forEach((listing, idx) => {
+                      console.log(`      ${idx + 1}. ${listing.original_url}`);
+                    });
+                  }
                 }
               }
               

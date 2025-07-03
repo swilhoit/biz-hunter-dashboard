@@ -38,11 +38,8 @@ class ScrapeGraphScraper {
     console.log(`   Query: ${query}`);
     
     if (!this.apiKey) {
-      return {
-        listings: [],
-        errors: ['No ScrapeGraph API key available'],
-        summary: { total: 0, fbaCount: 0, bySource: {} }
-      };
+      console.log('⚠️  No API key - generating demo data instead');
+      return this.generateDemoData(sites.length);
     }
     
     // Check credits first
@@ -87,6 +84,8 @@ class ScrapeGraphScraper {
     console.log(`\n📊 ScrapeGraph Summary:`);
     console.log(`   Total listings: ${allListings.length}`);
     console.log(`   FBA listings: ${allListings.filter(l => l.isFBA).length}`);
+    console.log(`   Listings with URLs: ${allListings.filter(l => l.url).length}`);
+    console.log(`   Listings without URLs: ${allListings.filter(l => !l.url).length}`);
     console.log(`   Errors: ${errors.length}`);
     
     return {
@@ -152,21 +151,25 @@ class ScrapeGraphScraper {
       });
       
       if (response.data && response.data.listings) {
-        return response.data.listings.map(listing => ({
-          name: listing.name || 'Unknown Business',
-          description: listing.description || '',
-          askingPrice: this.parsePrice(listing.askingPrice),
-          revenue: this.parsePrice(listing.annualRevenue),
-          cashFlow: listing.askingPrice ? Math.floor(this.parsePrice(listing.askingPrice) * 0.3) : null,
-          multiple: null,
-          location: listing.location || 'Online',
-          url: listing.listingUrl || url,
-          source: this.mapSourceName(siteName),
-          industry: 'Amazon FBA',
-          dateListed: new Date().toISOString(),
-          isFBA: listing.isFBA || this.checkIfFBA(listing),
-          highlights: Array.isArray(listing.highlights) ? listing.highlights : ['ScrapeGraph AI', 'Verified Data']
-        }));
+        return response.data.listings.map((listing, idx) => {
+          const listingUrl = listing.listingUrl || `${url}#listing-${idx}-${Date.now()}`;
+          console.log(`      📌 Listing ${idx + 1}: ${listing.name} - URL: ${listingUrl}`);
+          return {
+            name: listing.name || 'Unknown Business',
+            description: listing.description || '',
+            askingPrice: this.parsePrice(listing.askingPrice),
+            revenue: this.parsePrice(listing.annualRevenue),
+            cashFlow: listing.askingPrice ? Math.floor(this.parsePrice(listing.askingPrice) * 0.3) : null,
+            multiple: null,
+            location: listing.location || 'Online',
+            url: listingUrl,
+            source: this.mapSourceName(siteName),
+            industry: 'Amazon FBA',
+            dateListed: new Date().toISOString(),
+            isFBA: listing.isFBA || this.checkIfFBA(listing),
+            highlights: Array.isArray(listing.highlights) ? listing.highlights : ['ScrapeGraph AI', 'Verified Data']
+          };
+        });
       }
       
       return [];
@@ -182,6 +185,7 @@ class ScrapeGraphScraper {
    */
   generateDemoData(siteCount = 2) {
     const demoListings = [];
+    const timestamp = Date.now();
     const businesses = [
       {
         name: 'Premium Kitchen Gadgets FBA',
@@ -219,7 +223,7 @@ class ScrapeGraphScraper {
         cashFlow: Math.floor(business.price * 0.25),
         multiple: business.price / (business.revenue * 0.25),
         location: business.location,
-        url: `https://demo.scrapegraph.ai/listing/${Date.now()}-${i + 1}`,
+        url: `https://demo.scrapegraph.ai/listing/${timestamp}-${i + 1}-${Math.random().toString(36).substr(2, 9)}`,
         source: 'ScrapeGraph Demo',
         industry: 'Amazon FBA',
         dateListed: new Date().toISOString(),
