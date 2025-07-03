@@ -33,7 +33,7 @@ app.get('/api/test-env', (req, res) => {
   // More detailed debug info
   const envVars = {};
   Object.keys(process.env).forEach(key => {
-    if (key.startsWith('VITE_') || key.startsWith('RAILWAY_') || key === 'PORT' || key === 'NODE_ENV') {
+    if (key.startsWith('VITE_') || key.startsWith('RAILWAY_') || key === 'PORT' || key === 'NODE_ENV' || key === 'OPENAI_API_KEY') {
       // Show first 10 chars of value for debugging
       const value = process.env[key];
       if (value && value.length > 10) {
@@ -49,12 +49,15 @@ app.get('/api/test-env', (req, res) => {
     timestamp: new Date().toISOString(),
     env: {
       VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET',
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
       VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
       NODE_ENV: process.env.NODE_ENV || 'not set',
       PORT: process.env.PORT || 'not set'
     },
-    debug: envVars
+    debug: envVars,
+    distExists: fs.existsSync(path.join(__dirname, 'dist')),
+    distIndexExists: fs.existsSync(path.join(__dirname, 'dist', 'index.html'))
   });
 });
 
@@ -71,7 +74,8 @@ app.get('/', (req, res) => {
   
   // Inject runtime configuration
   const runtimeConfig = {
-    VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY || '',
+    VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '',
     VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || '',
     VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || ''
   };
@@ -97,7 +101,8 @@ app.get('*', (req, res) => {
   
   // Inject runtime configuration
   const runtimeConfig = {
-    VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY || '',
+    VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '',
     VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || '',
     VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || ''
   };

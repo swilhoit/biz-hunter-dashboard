@@ -35,10 +35,12 @@ export class OpenAIService {
   constructor() {
     const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
                    import.meta.env.VITE_OPENAI_API_KEY || 
-                   import.meta.env.REACT_APP_OPENAI_API_KEY;
+                   import.meta.env.OPENAI_API_KEY ||
+                   import.meta.env.REACT_APP_OPENAI_API_KEY ||
+                   (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.OPENAI_API_KEY);
     
     if (!apiKey) {
-      console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY environment variable.');
+      console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY or OPENAI_API_KEY environment variable.');
     }
     
     this.client = new OpenAI({
