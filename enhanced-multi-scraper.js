@@ -162,6 +162,7 @@ class EnhancedMultiScraper {
         if (SCRAPER_API_KEY && attempt === 1) {
           try {
             // No rendering needed - saves API credits
+            // Note: Not using parse mode, getting raw HTML
             const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&country_code=us`;
             
             // Create timeout controller
@@ -402,15 +403,56 @@ class EnhancedMultiScraper {
         const html = await this.fetchPage(feedUrl);
         const $ = cheerio.load(html);
 
-        // Use the specific selector that works for QuietLight
-        const listingElements = $('.listing-card');
+        // Debug: Check what selectors are available
+        this.log('DEBUG', 'Checking available selectors:', {
+          '.listing-card': $('.listing-card').length,
+          'div[class*="listing"]': $('div[class*="listing"]').length,
+          'a[href*="/listings/"]': $('a[href*="/listings/"]').length,
+          '.listing-grid': $('.listing-grid').length
+        });
         
-        if (listingElements.length > 0) {
-          this.log('INFO', `Found ${listingElements.length} listing cards on page ${page}`);
-        } else {
-          this.log('WARN', `No listings found on page ${page}`);
-          break;
+        // Try to find individual listing cards
+        let listingElements = $('.listing-card');
+        
+        if (listingElements.length === 0) {
+          // Fallback: try to find links directly
+          this.log('WARN', 'No .listing-card elements found, trying direct link search');
+          const listingLinks = $('a[href*="/listings/"]');
+          this.log('INFO', `Found ${listingLinks.length} listing links`);
+          
+          if (listingLinks.length === 0) {
+            this.log('ERROR', `No listings found on page ${page}`);
+            break;
+          }
+          
+          // Convert links to listing elements format
+          const tempListings = [];
+          listingLinks.each((i, elem) => {
+            const $link = $(elem);
+            const href = $link.attr('href');
+            const title = $link.text().trim() || $link.attr('title') || 'Untitled';
+            
+            if (href && href.includes('/listings/')) {
+              tempListings.push({ href, title });
+            }
+          });
+          
+          // Process these differently
+          tempListings.forEach(({ href, title }) => {
+            const fullUrl = href.startsWith('http') ? href : `https://quietlight.com${href}`;
+            listings.push({
+              url: fullUrl,
+              title,
+              priceText: 'Contact for price',
+              source: 'QuietLight'
+            });
+            this.logFoundListing('QuietLight', title, fullUrl);
+          });
+          
+          continue; // Skip the normal processing
         }
+        
+        this.log('INFO', `Found ${listingElements.length} listing cards on page ${page}`);
 
         // Extract listing URLs from QuietLight cards
         listingElements.each((i, elem) => {
@@ -445,7 +487,10 @@ class EnhancedMultiScraper {
       }
     }
 
-    this.log('SUCCESS', 'QuietLight feed scraping complete', { foundUrls: listings.length });
+    this.log('SUCCESS', 'QuietLight feed scraping complete', { 
+      foundUrls: listings.length,
+      listings: listings.slice(0, 5).map(l => ({ title: l.title, url: l.url })) // Log first 5 for debugging
+    });
     return listings;
   }
 
@@ -635,6 +680,19 @@ class EnhancedMultiScraper {
         const pageTitle = $('h1').text();
         this.log('INFO', `BizBuySell page title: ${pageTitle}`);
 
+        // Debug what we're getting
+        this.log('DEBUG', 'BizBuySell selectors:', {
+          '.listing': $('.listing').length,
+          'h3 a': $('h3 a').length,
+          '.listingTitle': $('.listingTitle').length,
+          'a[href*="/Business-Opportunity/"]': $('a[href*="/Business-Opportunity/"]').length
+        });
+        
+        // Check if we're on the right page by looking for Amazon/FBA mentions
+        const pageContent = $('body').text();
+        const hasAmazonContent = pageContent.toLowerCase().includes('amazon') || pageContent.toLowerCase().includes('fba');
+        this.log('INFO', `Page contains Amazon/FBA content: ${hasAmazonContent}`);
+        
         // BizBuySell structure: .listing contains each listing
         const listingElements = $('.listing');
         this.log('INFO', `Found ${listingElements.length} listings on page ${page + 1}`);
@@ -693,7 +751,10 @@ class EnhancedMultiScraper {
       }
     }
 
-    this.log('SUCCESS', 'BizBuySell feed scraping complete', { totalListings: listings.length });
+    this.log('SUCCESS', 'BizBuySell feed scraping complete', { 
+      totalListings: listings.length,
+      listings: listings.slice(0, 5).map(l => ({ title: l.title, url: l.url })) // Log first 5 for debugging
+    });
     return listings;
   }
 
