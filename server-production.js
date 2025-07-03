@@ -30,6 +30,20 @@ app.use((req, res, next) => {
 
 // Test endpoint to verify environment variables
 app.get('/api/test-env', (req, res) => {
+  // More detailed debug info
+  const envVars = {};
+  Object.keys(process.env).forEach(key => {
+    if (key.startsWith('VITE_') || key.startsWith('RAILWAY_') || key === 'PORT' || key === 'NODE_ENV') {
+      // Show first 10 chars of value for debugging
+      const value = process.env[key];
+      if (value && value.length > 10) {
+        envVars[key] = value.substring(0, 10) + '...' + (value.length) + ' chars';
+      } else {
+        envVars[key] = value || 'NOT SET';
+      }
+    }
+  });
+  
   res.json({
     server: 'production-server',
     timestamp: new Date().toISOString(),
@@ -39,7 +53,8 @@ app.get('/api/test-env', (req, res) => {
       VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
       NODE_ENV: process.env.NODE_ENV || 'not set',
       PORT: process.env.PORT || 'not set'
-    }
+    },
+    debug: envVars
   });
 });
 
