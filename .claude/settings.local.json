@@ -86,7 +86,8 @@
       "Bash(supabase:*)",
       "Bash(env)",
       "Bash(supabase:*)",
-      "Bash(brew upgrade:*)"
+      "Bash(brew upgrade:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": []
   }

@@ -29,10 +29,20 @@ const initialDealData: Partial<Deal> = {
   monthly_revenue: 0,
   monthly_profit: 0,
   valuation_multiple: 0,
+  ebitda: 0,
+  sde: 0,
   business_age: 0,
+  employee_count: 0,
+  inventory_value: 0,
   date_listed: '',
   listing_url: '',
   website_url: '',
+  city: '',
+  state: '',
+  country: 'USA',
+  industry: '',
+  sub_industry: '',
+  niche_keywords: [],
   seller_name: '',
   seller_email: '',
   seller_phone: '',
@@ -46,6 +56,9 @@ const initialDealData: Partial<Deal> = {
   amazon_store_url: '',
   seller_account_health: '',
   fba_percentage: 0,
+  monthly_sessions: 0,
+  conversion_rate: 0,
+  brand_names: [],
   notes: '',
   tags: []
 };
@@ -211,6 +224,31 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     if (analysis.websiteUrl && !dealData.website_url) {
       updates.website_url = analysis.websiteUrl;
     }
+    // Additional business details from nested structures
+    if (analysis.additionalInfo?.employeeCount && !dealData.employee_count) {
+      updates.employee_count = analysis.additionalInfo.employeeCount;
+    }
+    if (analysis.additionalInfo?.inventoryValue && !dealData.inventory_value) {
+      updates.inventory_value = analysis.additionalInfo.inventoryValue;
+    }
+    if (analysis.amazonInfo?.storeName && !dealData.amazon_store_name) {
+      updates.amazon_store_name = analysis.amazonInfo.storeName;
+    }
+    if (analysis.amazonInfo?.subcategory && !dealData.amazon_subcategory) {
+      updates.amazon_subcategory = analysis.amazonInfo.subcategory;
+    }
+    if (analysis.amazonInfo?.storeUrl && !dealData.amazon_store_url) {
+      updates.amazon_store_url = analysis.amazonInfo.storeUrl;
+    }
+    if (analysis.amazonInfo?.fbaPercentage && !dealData.fba_percentage) {
+      updates.fba_percentage = analysis.amazonInfo.fbaPercentage;
+    }
+    if (analysis.amazonInfo?.accountHealth && !dealData.seller_account_health) {
+      updates.seller_account_health = analysis.amazonInfo.accountHealth;
+    }
+    if (analysis.amazonInfo?.category && !dealData.amazon_category) {
+      updates.amazon_category = analysis.amazonInfo.category;
+    }
 
     // Contact Information
     if (analysis.brokerInfo?.name && !dealData.broker_name) {
@@ -235,25 +273,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
       updates.seller_phone = analysis.sellerInfo.phone;
     }
 
-    // Amazon Information
-    if (analysis.amazonInfo?.storeName && !dealData.amazon_store_name) {
-      updates.amazon_store_name = analysis.amazonInfo.storeName;
-    }
-    if (analysis.amazonInfo?.category && !dealData.amazon_category) {
-      updates.amazon_category = analysis.amazonInfo.category;
-    }
-    if (analysis.amazonInfo?.subcategory && !dealData.amazon_subcategory) {
-      updates.amazon_subcategory = analysis.amazonInfo.subcategory;
-    }
-    if (analysis.amazonInfo?.storeUrl && !dealData.amazon_store_url) {
-      updates.amazon_store_url = analysis.amazonInfo.storeUrl;
-    }
-    if (analysis.amazonInfo?.fbaPercentage && !dealData.fba_percentage) {
-      updates.fba_percentage = analysis.amazonInfo.fbaPercentage;
-    }
-    if (analysis.amazonInfo?.accountHealth && !dealData.seller_account_health) {
-      updates.seller_account_health = analysis.amazonInfo.accountHealth;
-    }
+    // Amazon Information (consolidated with above mapping)
 
     // Additional Information to Notes
     const additionalNotes: string[] = [];
@@ -630,6 +650,187 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      EBITDA ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.ebitda || ''}
+                      onChange={(e) => handleInputChange('ebitda', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      SDE ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.sde || ''}
+                      onChange={(e) => handleInputChange('sde', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Revenue ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_revenue || ''}
+                      onChange={(e) => handleInputChange('monthly_revenue', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Profit ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_profit || ''}
+                      onChange={(e) => handleInputChange('monthly_profit', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Employee Count
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.employee_count || ''}
+                      onChange={(e) => handleInputChange('employee_count', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Inventory Value ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.inventory_value || ''}
+                      onChange={(e) => handleInputChange('inventory_value', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Business & Industry Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                  <Building className="w-5 h-5 mr-2 text-indigo-600" />
+                  Business & Industry
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.industry || ''}
+                      onChange={(e) => handleInputChange('industry', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., E-commerce, SaaS, Manufacturing"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Sub-Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.sub_industry || ''}
+                      onChange={(e) => handleInputChange('sub_industry', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., Pet Supplies, B2B Software"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.city || ''}
+                      onChange={(e) => handleInputChange('city', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.state || ''}
+                      onChange={(e) => handleInputChange('state', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="State"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.country || ''}
+                      onChange={(e) => handleInputChange('country', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="Country"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    value={dealData.website_url || ''}
+                    onChange={(e) => handleInputChange('website_url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="https://company-website.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Listing URL
+                  </label>
+                  <input
+                    type="url"
+                    value={dealData.listing_url || ''}
+                    onChange={(e) => handleInputChange('listing_url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="https://marketplace-listing.com"
+                  />
+                </div>
               </div>
 
               {/* Contact Information */}
@@ -726,6 +927,19 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Amazon Store Name
+                  </label>
+                  <input
+                    type="text"
+                    value={dealData.amazon_store_name || ''}
+                    onChange={(e) => handleInputChange('amazon_store_name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="Amazon store name"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -741,6 +955,21 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Amazon Subcategory
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.amazon_subcategory || ''}
+                      onChange={(e) => handleInputChange('amazon_subcategory', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., Kitchen & Dining"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       FBA Percentage (%)
                     </label>
                     <input
@@ -751,6 +980,52 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                       onChange={(e) => handleInputChange('fba_percentage', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
                       placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Seller Account Health
+                    </label>
+                    <select
+                      value={dealData.seller_account_health || ''}
+                      onChange={(e) => handleInputChange('seller_account_health', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="">Select account health</option>
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Poor">Poor</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Sessions
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_sessions || ''}
+                      onChange={(e) => handleInputChange('monthly_sessions', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Conversion Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={dealData.conversion_rate || ''}
+                      onChange={(e) => handleInputChange('conversion_rate', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0.0"
                     />
                   </div>
                 </div>

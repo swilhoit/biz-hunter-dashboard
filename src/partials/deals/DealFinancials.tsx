@@ -136,6 +136,20 @@ function DealFinancials({ deal }: DealFinancialsProps) {
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     },
     {
+      title: 'EBITDA',
+      value: formatCurrency(deal.ebitda),
+      icon: TrendingUp,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+    },
+    {
+      title: 'SDE',
+      value: formatCurrency(deal.sde),
+      icon: Calculator,
+      color: 'text-teal-600 dark:text-teal-400',
+      bgColor: 'bg-teal-50 dark:bg-teal-900/20',
+    },
+    {
       title: 'Asking Price',
       value: formatCurrency(deal.asking_price),
       icon: Calculator,
@@ -154,7 +168,7 @@ function DealFinancials({ deal }: DealFinancialsProps) {
   return (
     <div className="space-y-6">
       {/* Key Financial Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {keyMetrics.map((metric, index) => {
           const Icon = metric.icon;
           return (
@@ -208,6 +222,38 @@ function DealFinancials({ deal }: DealFinancialsProps) {
                 {formatCurrency(deal.monthly_profit)}
               </span>
             </div>
+            {deal.ebitda && (
+              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-600 dark:text-gray-400">EBITDA</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {formatCurrency(deal.ebitda)}
+                </span>
+              </div>
+            )}
+            {deal.sde && (
+              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-600 dark:text-gray-400">SDE</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {formatCurrency(deal.sde)}
+                </span>
+              </div>
+            )}
+            {deal.employee_count && (
+              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-600 dark:text-gray-400">Employees</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {deal.employee_count}
+                </span>
+              </div>
+            )}
+            {deal.inventory_value && (
+              <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-600 dark:text-gray-400">Inventory Value</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {formatCurrency(deal.inventory_value)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

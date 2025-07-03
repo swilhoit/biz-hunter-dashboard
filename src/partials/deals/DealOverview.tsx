@@ -142,12 +142,40 @@ function DealOverview({ deal }: DealOverviewProps) {
               </div>
             </div>
 
+            {deal.industry && (
+              <div className="flex items-center">
+                <Building2 className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Industry</p>
+                  <p className="text-gray-900 dark:text-gray-100">{deal.industry}</p>
+                  {deal.sub_industry && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{deal.sub_industry}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(deal.city || deal.state) && (
+              <div className="flex items-center">
+                <Globe className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Location</p>
+                  <p className="text-gray-900 dark:text-gray-100">
+                    {[deal.city, deal.state, deal.country].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {deal.amazon_category && (
               <div className="flex items-center">
                 <Package className="w-5 h-5 text-gray-400 mr-3" />
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Amazon Category</p>
                   <p className="text-gray-900 dark:text-gray-100">{deal.amazon_category}</p>
+                  {deal.amazon_subcategory && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{deal.amazon_subcategory}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -158,6 +186,16 @@ function DealOverview({ deal }: DealOverviewProps) {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">FBA Percentage</p>
                   <p className="text-gray-900 dark:text-gray-100">{deal.fba_percentage}%</p>
+                </div>
+              </div>
+            )}
+
+            {deal.employee_count && (
+              <div className="flex items-center">
+                <User className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Employees</p>
+                  <p className="text-gray-900 dark:text-gray-100">{deal.employee_count}</p>
                 </div>
               </div>
             )}

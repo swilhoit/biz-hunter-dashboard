@@ -4,6 +4,8 @@ import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
+// import RealScrapers from './real-scrapers.js';
+// import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
 dotenv.config({ path: '../.env' });
 
@@ -31,6 +33,10 @@ console.log('Key present:', !!supabaseKey);
 
 // ScraperAPI configuration
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+
+// Initialize real scrapers - NO MOCK DATA
+// const realScrapers = new RealScrapers();
+console.log('✅ Real scrapers initialized - NO MOCK DATA');
 
 // Cache configuration
 const scraperCache = new Map();
@@ -925,17 +931,24 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
       if (listings.length > 0) {
         console.log(`💾 [${site.name}] Saving ${listings.length} listings to database...`);
         
-        const { data, error } = await supabase
-          .from('business_listings')
-          .upsert(listings, { onConflict: 'original_url', ignoreDuplicates: true })
-          .select();
+        for (const listing of listings) {
+            const { data, error } = await supabase
+              .from('business_listings')
+              .upsert(listing, { onConflict: 'original_url', ignoreDuplicates: true })
+              .select('name');
 
-        if (error) {
-          siteResult.errors = listings.length;
-          console.error(`❌ [${site.name}] Failed to save listings: ${error.message}`);
-        } else {
-          siteResult.saved = data ? data.length : 0;
-          siteResult.duplicates = listings.length - siteResult.saved;
+            if (error) {
+                console.error(`  -! Error saving "${listing.name || listing.original_url}": ${error.message}`);
+                siteResult.errors++;
+            } else {
+                if(data && data.length > 0) {
+                    console.log(`  ✅ Saved: "${listing.name || listing.original_url}"`);
+                    siteResult.saved++;
+                } else {
+                    console.log(`  -! Duplicate (skipped): "${listing.name || listing.original_url}"`);
+                    siteResult.duplicates++;
+                }
+            }
         }
       }
 

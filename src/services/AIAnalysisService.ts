@@ -468,119 +468,83 @@ export class DocumentAnalysisService {
     try {
       console.log('Converting PDF to images for Vision API analysis...');
       
-      // Import PDF.js
+      // Dynamic import of PDF.js
       const pdfjsLib = await import('pdfjs-dist');
       
-      // Set up the worker - use our local proxy worker
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
+      // Configure PDF.js to work without external worker to avoid CORS issues
+      // This will use a fallback fake worker that runs in the main thread
+      pdfjsLib.GlobalWorkerOptions.workerSrc = undefined;
       
-      // Load the PDF
+      // Load the PDF with additional options to handle worker fallback
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const loadingTask = pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        // Disable the worker to avoid CORS issues
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true
+      });
       const pdf = await loadingTask.promise;
       
       console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
       
-      // Limit pages to process (to avoid API limits and costs)
-      const maxPages = Math.min(pdf.numPages, 5); // Process up to 5 pages
-      const pageImages: string[] = [];
+      // Limit pages to process
+      const maxPages = Math.min(pdf.numPages, 5);
+      const pageTexts: string[] = [];
       
       for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-        console.log(`Converting page ${pageNum}/${maxPages} to image...`);
+        console.log(`Processing page ${pageNum}/${maxPages}...`);
         
         try {
           const page = await pdf.getPage(pageNum);
-          
-          // Use a scale that balances quality and file size
-          const scale = 1.5;
-          const viewport = page.getViewport({ scale });
+          const viewport = page.getViewport({ scale: 1.5 });
           
           // Create canvas
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           
-          if (!context) {
-            console.error('Could not create canvas context');
-            continue;
-          }
+          if (!context) continue;
           
           canvas.height = viewport.height;
           canvas.width = viewport.width;
           
-          // Render PDF page to canvas
-          const renderContext = {
+          // Render page
+          await page.render({
             canvasContext: context,
             viewport: viewport
-          };
+          }).promise;
           
-          await page.render(renderContext).promise;
-          
-          // Convert to base64 PNG
+          // Convert to base64
           const imageData = canvas.toDataURL('image/png');
           const base64Image = imageData.split(',')[1];
           
-          // Send this page to Vision API
-          console.log(`Analyzing page ${pageNum} with Vision API...`);
+          // Send to Vision API
           const pageText = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
+          if (pageText) pageTexts.push(pageText);
           
-          if (pageText && pageText.length > 0) {
-            pageImages.push(pageText);
-          }
-          
-        } catch (pageError) {
-          console.error(`Error processing page ${pageNum}:`, pageError);
-          // Continue with other pages even if one fails
+        } catch (error) {
+          console.error(`Error processing page ${pageNum}:`, error);
         }
       }
       
-      if (pageImages.length === 0) {
+      if (pageTexts.length === 0) {
         throw new Error('No content could be extracted from the PDF');
       }
       
-      // Combine all page texts
-      const combinedText = pageImages.join('\n\n=== Page Break ===\n\n');
-      
-      console.log('All pages processed. Analyzing combined content...');
-      
-      // Analyze the combined text to extract structured business data
+      // Combine and analyze
+      const combinedText = pageTexts.join('\n\n=== Page Break ===\n\n');
       return await this.analyzeTextWithVision(combinedText, file.name, client);
       
     } catch (error) {
-      console.error('PDF Vision analysis error:', error);
+      console.error('PDF processing error:', error);
       
-      // If PDF processing fails completely, try basic text extraction as fallback
-      if (error instanceof Error && error.message.includes('worker')) {
-        console.log('Worker error detected, attempting fallback text extraction...');
-        
-        try {
-          // Try to extract text without rendering
-          const pdfjsLib = await import('pdfjs-dist');
-          pdfjsLib.GlobalWorkerOptions.workerSrc = null as any; // Disable worker
-          
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          
-          let fullText = '';
-          const maxPages = Math.min(pdf.numPages, 10);
-          
-          for (let i = 1; i <= maxPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items
-              .map((item: any) => item.str)
-              .join(' ');
-            fullText += `\nPage ${i}:\n${pageText}\n`;
-          }
-          
-          if (fullText.trim().length > 100) {
-            return await this.analyzeTextWithVision(fullText, file.name, client);
-          }
-        } catch (fallbackError) {
-          console.error('Fallback text extraction also failed:', fallbackError);
-        }
-      }
-      
-      throw new Error(`Failed to analyze PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Provide helpful guidance if PDF processing fails
+      return {
+        businessName: null,
+        confidence: 0,
+        keyFindings: [`PDF processing error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try converting the PDF to images (PNG/JPG) for best results.`],
+        missingCriticalInfo: ['Unable to process PDF - please convert to images']
+      };
     }
   }
 
@@ -818,7 +782,6 @@ Extraction Instructions:
     };
   }
 
-
   private static async fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -830,7 +793,6 @@ Extraction Instructions:
       reader.readAsDataURL(file);
     });
   }
-
 
   private static parseNumber(value: any): number | null {
     if (value === null || value === undefined) return null;
@@ -953,7 +915,7 @@ Extraction Instructions:
     }
 
     // Basic phone extraction
-    const phoneMatch = text.match(/(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/);
+    const phoneMatch = text.match(/(\(?\d{3}\)?[-.\\s]?\d{3}[-.\\s]?\d{4})/);
     if (phoneMatch) {
       if (!analysis.brokerInfo) analysis.brokerInfo = {};
       analysis.brokerInfo.phone = phoneMatch[1];
@@ -968,16 +930,6 @@ Extraction Instructions:
     }
 
     return analysis;
-  }
-
-  private static getContextAroundMatch(text: string, match: string, contextLength: number): string {
-    const index = text.indexOf(match);
-    if (index === -1) return '';
-    
-    const start = Math.max(0, index - contextLength);
-    const end = Math.min(text.length, index + match.length + contextLength);
-    
-    return text.substring(start, end);
   }
 }
 
