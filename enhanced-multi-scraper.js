@@ -161,14 +161,12 @@ class EnhancedMultiScraper {
         // Try ScraperAPI first if available
         if (SCRAPER_API_KEY && attempt === 1) {
           try {
-            // Enable rendering for QuietLight listings to bypass Cloudflare
-            const needsRendering = url.includes('quietlight.com/listings/');
-            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=${needsRendering}&country_code=us`;
+            // No rendering needed - saves API credits
+            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&country_code=us`;
             
-            // Create timeout controller - longer timeout for rendered pages
+            // Create timeout controller
             const controller = new AbortController();
-            const timeoutForRequest = needsRendering ? 45000 : REQUEST_TIMEOUT;
-            const timeoutId = setTimeout(() => controller.abort(), timeoutForRequest);
+            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
             
             const response = await fetch(scraperUrl, { 
               signal: controller.signal,
@@ -184,8 +182,7 @@ class EnhancedMultiScraper {
               const html = await response.text();
               this.log('SUCCESS', 'Fetched with ScraperAPI', { 
                 url, 
-                htmlLength: html.length,
-                rendered: needsRendering 
+                htmlLength: html.length
               });
               return html;
             }
