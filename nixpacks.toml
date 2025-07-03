@@ -1,0 +1,17 @@
+# Nixpacks configuration for Railway deployment
+# This ensures environment variables are available during the build process
+
+[phases.setup]
+nixPkgs = ["nodejs", "npm"]
+
+[phases.build]
+# Ensure environment variables are available during build
+cmds = [
+    "echo 'Environment variables available during build:'",
+    "env | grep VITE_ | sed 's/=.*/=SET/' || echo 'No VITE_ variables found'",
+    "npm ci",
+    "npm run build"
+]
+
+[start]
+cmd = "npm start"

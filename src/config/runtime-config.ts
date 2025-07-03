@@ -23,8 +23,28 @@ export function getRuntimeConfig(): RuntimeConfig {
   };
 }
 
-// Helper function to get a specific config value
+// Helper function to get a specific config value with multiple fallbacks
 export function getConfigValue(key: keyof RuntimeConfig): string | undefined {
-  const config = getRuntimeConfig();
-  return config[key] || import.meta.env[key];
+  // First try runtime config
+  if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__ && (window as any).__RUNTIME_CONFIG__[key]) {
+    return (window as any).__RUNTIME_CONFIG__[key];
+  }
+  
+  // Then try import.meta.env
+  if (import.meta.env[key]) {
+    return import.meta.env[key];
+  }
+  
+  // Try without VITE_ prefix for backward compatibility
+  const keyWithoutPrefix = key.replace('VITE_', '');
+  if (import.meta.env[keyWithoutPrefix]) {
+    return import.meta.env[keyWithoutPrefix];
+  }
+  
+  // Last resort - check if we're in development and log warning
+  if (import.meta.env.DEV) {
+    console.warn(`Config value ${key} not found in runtime or build-time config`);
+  }
+  
+  return undefined;
 }
