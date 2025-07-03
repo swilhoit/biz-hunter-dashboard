@@ -825,11 +825,10 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
             asking_price: Math.floor(Math.random() * 500000) + 100000,
             annual_revenue: Math.floor(Math.random() * 300000) + 50000,
             location: 'Online',
-            source: 'QuietLight',
-            original_url: `https://quietlight.com/listing/mock-${i + 1}`,
+            original_url: `https://quietlight.com/listing/mock-${Date.now()}-${i + 1}`,
             industry: 'E-commerce',
-            status: 'active',
-            scraped_at: new Date().toISOString()
+            highlights: ['Amazon FBA', 'Established Brand', 'Premium Listing'].join(', '),
+            source: 'QuietLight'
           }));
           console.log(`✅ [QuietLight] Generated ${mockListings.length} mock listings`);
           return mockListings;
@@ -853,11 +852,10 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
             asking_price: Math.floor(Math.random() * 800000) + 200000,
             annual_revenue: Math.floor(Math.random() * 400000) + 100000,
             location: 'USA',
-            source: 'Empire Flippers',
-            original_url: `https://empireflippers.com/listing/mock-${i + 1}`,
+            original_url: `https://empireflippers.com/listing/mock-${Date.now()}-${i + 1}`,
             industry: 'Amazon FBA',
-            status: 'active',
-            scraped_at: new Date().toISOString()
+            highlights: ['Multiple SKUs', 'High Margin', 'Vetted Business'].join(', '),
+            source: 'Empire Flippers'
           }));
           console.log(`✅ [EmpireFlippers] Generated ${mockListings.length} mock listings`);
           return mockListings;
@@ -881,11 +879,10 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
             asking_price: Math.floor(Math.random() * 300000) + 50000,
             annual_revenue: Math.floor(Math.random() * 200000) + 30000,
             location: 'Global',
-            source: 'Flippa',
-            original_url: `https://flippa.com/listing/mock-${i + 1}`,
+            original_url: `https://flippa.com/listing/mock-${Date.now()}-${i + 1}`,
             industry: 'E-commerce',
-            status: 'active',
-            scraped_at: new Date().toISOString()
+            highlights: ['Growing Revenue', 'Low Competition', 'Automated Operations'].join(', '),
+            source: 'Flippa'
           }));
           console.log(`✅ [Flippa] Generated ${mockListings.length} mock listings`);
           return mockListings;
@@ -928,44 +925,21 @@ async function scrapeWithParallelProcessing(selectedSites = null) {
       if (listings.length > 0) {
         console.log(`💾 [${site.name}] Saving ${listings.length} listings to database...`);
         
-        // Process database saves in parallel for this site
-        const savePromises = listings.map(async (listing) => {
-          try {
-            // Check for duplicates
-            const { data: existing } = await supabase
-              .from('business_listings')
-              .select('id')
-              .eq('original_url', listing.original_url)
-              .single();
-            
-            if (!existing) {
-              const { error } = await supabase
-                .from('business_listings')
-                .insert(listing);
-              
-              if (!error) {
-                return { saved: true, duplicate: false };
-              } else {
-                console.error(`❌ [${site.name}] Failed to save: ${error.message}`);
-                return { saved: false, duplicate: false, error: error.message };
-              }
-            } else {
-              return { saved: false, duplicate: true };
-            }
-          } catch (error) {
-            console.error(`❌ [${site.name}] Database error: ${error.message}`);
-            return { saved: false, duplicate: false, error: error.message };
-          }
-        });
+        const { data, error } = await supabase
+          .from('business_listings')
+          .upsert(listings, { onConflict: 'original_url', ignoreDuplicates: true })
+          .select();
 
-        const saveResults = await Promise.all(savePromises);
-        
-        siteResult.saved = saveResults.filter(r => r.saved).length;
-        siteResult.duplicates = saveResults.filter(r => r.duplicate).length;
-        siteResult.errors = saveResults.filter(r => r.error).length;
+        if (error) {
+          siteResult.errors = listings.length;
+          console.error(`❌ [${site.name}] Failed to save listings: ${error.message}`);
+        } else {
+          siteResult.saved = data ? data.length : 0;
+          siteResult.duplicates = listings.length - siteResult.saved;
+        }
       }
 
-      siteResult.success = true;
+      siteResult.success = !siteResult.errors;
       siteResult.executionTime = Math.round((Date.now() - siteStartTime) / 1000);
       
       console.log(`✅ [${site.name}] Completed: ${siteResult.saved} saved, ${siteResult.duplicates} duplicates, ${siteResult.errors} errors`);
@@ -1176,7 +1150,7 @@ async function scrapeWithDuplicatePrevention() {
     
     const { data, error } = await supabase
       .from('business_listings')
-      .insert(preparedListings)
+      .upsert(preparedListings, { onConflict: 'original_url', ignoreDuplicates: true })
       .select();
     
     const insertTime = Math.round((Date.now() - insertStartTime) / 1000);
@@ -2272,50 +2246,37 @@ app.post('/api/scrape', async (req, res) => {
               let savedCount = 0;
               let duplicateCount = 0;
               
-              for (const [index, listing] of formattedListings.entries()) {
-                console.log(`💾 [DATABASE] Processing listing ${index + 1}/${formattedListings.length}: ${listing.name}`);
-                
-                // Check for duplicates
-                console.log(`   🔍 Checking for duplicates by URL: ${listing.original_url}`);
-                const { data: existing } = await supabase
+              if (formattedListings.length > 0) {
+                console.log(`💾 [DATABASE] Upserting ${formattedListings.length} listings...`);
+
+                const listingsToInsert = formattedListings.map(listing => ({
+                  name: listing.name,
+                  asking_price: listing.asking_price || 0,
+                  annual_revenue: listing.annual_revenue || 0,
+                  industry: listing.industry || 'Business',
+                  location: listing.location || 'Online',
+                  description: listing.description || '',
+                  highlights: listing.highlights || 'Amazon FBA, ScrapeGraph Mock',
+                  original_url: listing.original_url,
+                  created_at: listing.created_at,
+                  updated_at: listing.updated_at
+                }));
+
+                const { data, error } = await supabase
                   .from('business_listings')
-                  .select('id')
-                  .eq('original_url', listing.original_url)
-                  .single();
-                
-                if (!existing) {
-                  console.log('   ✅ No duplicate found, inserting new listing...');
-                  
-                  // Only use valid database columns 
-                  const listingToInsert = {
-                    name: listing.name,
-                    asking_price: listing.asking_price || 0,
-                    annual_revenue: listing.annual_revenue || 0,
-                    industry: listing.industry || 'Business',
-                    location: listing.location || 'Online',
-                    description: listing.description || '',
-                    highlights: listing.highlights || 'Amazon FBA, ScrapeGraph Mock',
-                    original_url: listing.original_url,
-                    created_at: listing.created_at,
-                    updated_at: listing.updated_at
-                  };
-                  
-                  const { error } = await supabase
-                    .from('business_listings')
-                    .insert(listingToInsert);
-                  
-                  if (!error) {
-                    savedCount++;
-                    console.log(`   ✅ Successfully saved listing: ${listing.name}`);
-                  } else {
-                    console.error(`   ❌ Failed to save listing: ${error.message}`);
-                  }
+                  .upsert(listingsToInsert, { onConflict: 'original_url', ignoreDuplicates: true })
+                  .select();
+
+                if (error) {
+                  console.error(`   ❌ Failed to save listings: ${error.message}`);
                 } else {
-                  duplicateCount++;
-                  console.log(`   ⚠️ Duplicate found, skipping: ${listing.name}`);
+                  savedCount = data ? data.length : 0;
+                  duplicateCount = formattedListings.length - savedCount;
+                  console.log(`   ✅ Successfully saved ${savedCount} listings, skipped ${duplicateCount} duplicates.`);
                 }
               }
               
+              const totalTime = Math.round((Date.now() - startTime) / 1000);
               console.log(`\n📊 [DATABASE] Save process completed:`);
               console.log(`   ✅ Saved: ${savedCount} new listings`);
               console.log(`   ⚠️ Skipped: ${duplicateCount} duplicates`);
@@ -2442,7 +2403,34 @@ app.post('/api/scrape', async (req, res) => {
           maxPagesPerSite,
           maxListingsPerSource
         });
-        const enhancedResult = await Promise.race([enhancedScrapingPromise, timeoutPromise]);
+        
+        // Add timeout handling
+        let enhancedResult;
+        try {
+          enhancedResult = await Promise.race([enhancedScrapingPromise, timeoutPromise]);
+        } catch (timeoutError) {
+          clearTimeout(timeoutId);
+          console.error('⏰ [SCRAPING FLOW] Operation timed out after 60 seconds');
+          
+          // Return partial results if available
+          return res.json({
+            success: false,
+            count: 0,
+            totalFound: 0,
+            totalSaved: 0,
+            duplicatesSkipped: 0,
+            method: method,
+            executionTime: 60,
+            logs: logs,
+            errors: [{
+              source: 'Timeout',
+              message: 'Scraping operation timed out after 60 seconds. The database save may still be running in the background.'
+            }],
+            siteBreakdown: {},
+            message: 'Operation timed out. Try reducing the number of sites or pages to scrape.'
+          });
+        }
+        
         clearTimeout(timeoutId);
         isCompleted = true;
         
@@ -2729,36 +2717,24 @@ async function quickFallbackScraper() {
   
   console.log('💾 [QUICK FALLBACK] Attempting to save mock listings...');
   
-  for (const listing of mockListings) {
-    try {
-      // Check for duplicates by URL
-      const { data: existing } = await supabase
-        .from('business_listings')
-        .select('id')
-        .eq('original_url', listing.original_url)
-        .single();
-      
-      if (!existing) {
-        const { error } = await supabase
-          .from('business_listings')
-          .insert({
-            ...listing,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-        
-        if (!error) {
-          savedCount++;
-          console.log(`✅ [QUICK FALLBACK] Saved: ${listing.name}`);
-        } else {
-          console.log(`❌ [QUICK FALLBACK] Failed to save: ${listing.name} - ${error.message}`);
-        }
-      } else {
-        duplicatesSkipped++;
-        console.log(`⚠️ [QUICK FALLBACK] Duplicate skipped: ${listing.name}`);
-      }
-    } catch (error) {
-      console.log(`❌ [QUICK FALLBACK] Error processing ${listing.name}: ${error.message}`);
+  if (mockListings.length > 0) {
+    const listingsToInsert = mockListings.map(listing => ({
+      ...listing,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+
+    const { data, error } = await supabase
+      .from('business_listings')
+      .upsert(listingsToInsert, { onConflict: 'original_url', ignoreDuplicates: true })
+      .select();
+
+    if (error) {
+      console.log(`❌ [QUICK FALLBACK] Failed to save listings: ${error.message}`);
+    } else {
+      savedCount = data ? data.length : 0;
+      duplicatesSkipped = mockListings.length - savedCount;
+      console.log(`✅ [QUICK FALLBACK] Saved: ${savedCount}, Duplicates skipped: ${duplicatesSkipped}`);
     }
   }
   

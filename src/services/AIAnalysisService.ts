@@ -468,60 +468,119 @@ export class DocumentAnalysisService {
     try {
       console.log('Converting PDF to images for Vision API analysis...');
       
+      // Import PDF.js
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
       
+      // Set up the worker - use our local proxy worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
+      
+      // Load the PDF
       const arrayBuffer = await file.arrayBuffer();
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       
-      console.log(`PDF has ${pdf.numPages} pages. Processing each page...`);
+      console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
       
-      // Convert each page to an image and analyze
-      const pageAnalyses: string[] = [];
-      const maxPages = Math.min(pdf.numPages, 10); // Limit to 10 pages to avoid API limits
+      // Limit pages to process (to avoid API limits and costs)
+      const maxPages = Math.min(pdf.numPages, 5); // Process up to 5 pages
+      const pageImages: string[] = [];
       
       for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-        console.log(`Processing page ${pageNum}/${maxPages}...`);
+        console.log(`Converting page ${pageNum}/${maxPages} to image...`);
         
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
-        
-        // Create canvas to render PDF page
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        if (!context) throw new Error('Could not create canvas context');
-        
-        // Render PDF page to canvas
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-        
-        // Convert canvas to base64
-        const base64Image = canvas.toDataURL('image/png').split(',')[1];
-        
-        // Analyze this page with Vision API
-        const pageAnalysis = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
-        pageAnalyses.push(pageAnalysis);
+        try {
+          const page = await pdf.getPage(pageNum);
+          
+          // Use a scale that balances quality and file size
+          const scale = 1.5;
+          const viewport = page.getViewport({ scale });
+          
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          
+          if (!context) {
+            console.error('Could not create canvas context');
+            continue;
+          }
+          
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          
+          // Render PDF page to canvas
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          
+          await page.render(renderContext).promise;
+          
+          // Convert to base64 PNG
+          const imageData = canvas.toDataURL('image/png');
+          const base64Image = imageData.split(',')[1];
+          
+          // Send this page to Vision API
+          console.log(`Analyzing page ${pageNum} with Vision API...`);
+          const pageText = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
+          
+          if (pageText && pageText.length > 0) {
+            pageImages.push(pageText);
+          }
+          
+        } catch (pageError) {
+          console.error(`Error processing page ${pageNum}:`, pageError);
+          // Continue with other pages even if one fails
+        }
       }
       
-      if (pdf.numPages > maxPages) {
-        console.log(`Note: Only analyzed first ${maxPages} pages of ${pdf.numPages} total pages`);
+      if (pageImages.length === 0) {
+        throw new Error('No content could be extracted from the PDF');
       }
       
-      // Combine all page analyses
-      const combinedText = pageAnalyses.join('\n\n--- Next Page ---\n\n');
+      // Combine all page texts
+      const combinedText = pageImages.join('\n\n=== Page Break ===\n\n');
       
-      // Now analyze the combined text to extract structured data
+      console.log('All pages processed. Analyzing combined content...');
+      
+      // Analyze the combined text to extract structured business data
       return await this.analyzeTextWithVision(combinedText, file.name, client);
       
     } catch (error) {
       console.error('PDF Vision analysis error:', error);
-      throw new Error(`Failed to analyze PDF with Vision API: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // If PDF processing fails completely, try basic text extraction as fallback
+      if (error instanceof Error && error.message.includes('worker')) {
+        console.log('Worker error detected, attempting fallback text extraction...');
+        
+        try {
+          // Try to extract text without rendering
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = null as any; // Disable worker
+          
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          
+          let fullText = '';
+          const maxPages = Math.min(pdf.numPages, 10);
+          
+          for (let i = 1; i <= maxPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item: any) => item.str)
+              .join(' ');
+            fullText += `\nPage ${i}:\n${pageText}\n`;
+          }
+          
+          if (fullText.trim().length > 100) {
+            return await this.analyzeTextWithVision(fullText, file.name, client);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback text extraction also failed:', fallbackError);
+        }
+      }
+      
+      throw new Error(`Failed to analyze PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
