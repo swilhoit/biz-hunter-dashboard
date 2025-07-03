@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getConfigValue } from '../config/runtime-config';
 
 interface DealData {
   id: string;

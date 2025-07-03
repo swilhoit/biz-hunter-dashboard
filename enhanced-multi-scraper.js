@@ -153,15 +153,15 @@ class EnhancedMultiScraper {
   async fetchPage(url, retries = 2) { // Reduced retries for speed
     this.log('INFO', 'Fetching page', { url });
     
-    // Increased timeout for ScraperAPI requests
-    const REQUEST_TIMEOUT = 20000; // 20 seconds per request
+    // Increased timeout for ScraperAPI requests with rendering
+    const REQUEST_TIMEOUT = 30000; // 30 seconds per request for rendering
     
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         // Try ScraperAPI first if available
         if (SCRAPER_API_KEY && attempt === 1) {
           try {
-            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&country_code=us`;
+            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=us`;
             
             // Create timeout controller
             const controller = new AbortController();
