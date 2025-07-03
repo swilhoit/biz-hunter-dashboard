@@ -63,7 +63,7 @@ export async function testStorageAccess() {
     
     if (listError) {
       console.error('Cannot list buckets:', listError);
-      return { canAccess: false, error: listError.message };
+      return { success: false, canAccess: false, error: listError.message };
     }
     
     console.log('Can access storage. Buckets:', buckets?.map(b => b.name));
@@ -75,15 +75,20 @@ export async function testStorageAccess() {
     
     if (filesError) {
       console.error('Cannot access deal-documents bucket:', filesError);
-      return { canAccess: false, error: filesError.message };
+      return { success: false, canAccess: false, error: filesError.message };
     }
     
     console.log('Can access deal-documents bucket. File count:', files?.length || 0);
     
-    return { canAccess: true, buckets: buckets?.map(b => b.name), fileCount: files?.length || 0 };
+    return { 
+      success: true,
+      canAccess: true, 
+      buckets: buckets?.map(b => b.name), 
+      fileCount: files?.length || 0 
+    };
     
   } catch (error: any) {
     console.error('Error testing storage access:', error);
-    return { canAccess: false, error: error.message };
+    return { success: false, canAccess: false, error: error.message };
   }
 }

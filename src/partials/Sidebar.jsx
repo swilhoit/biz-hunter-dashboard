@@ -158,6 +158,45 @@ function Sidebar({
                   </div>
                 </NavLink>
               </li>
+              {/* Portfolio */}
+              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
+                <NavLink
+                  end
+                  to="/portfolio"
+                  className={({ isActive }) =>
+                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
+                  }
+                >
+                  <div className="flex items-center">
+                    <svg className={`shrink-0 fill-current ${pathname.includes('portfolio') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+                      <path d="M6 2a2 2 0 0 0-2 2v1H2.5A1.5 1.5 0 0 0 1 6.5v7A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 13.5 5H12V4a2 2 0 0 0-2-2H6zm4 1a1 1 0 0 1 1 1v1H5V4a1 1 0 0 1 1-1h4zm-7.5 3h11a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5z"/>
+                    </svg>
+                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
+                      Portfolio
+                    </span>
+                  </div>
+                </NavLink>
+              </li>
+              {/* Explorer */}
+              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
+                <NavLink
+                  end
+                  to="/explorer"
+                  className={({ isActive }) =>
+                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
+                  }
+                >
+                  <div className="flex items-center">
+                    <svg className={`shrink-0 fill-current ${pathname.includes('explorer') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                      <path d="M8 3v5l3.5 3.5"/>
+                    </svg>
+                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
+                      Explorer
+                    </span>
+                  </div>
+                </NavLink>
+              </li>
               {/* Settings */}
               <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
                 <NavLink

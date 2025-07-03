@@ -23,6 +23,8 @@ import ASINTracker from './pages/ASINTracker';
 import ASINDetail from './pages/ASINDetail';
 import AmazonPortfolioAnalyzer from './pages/AmazonPortfolioAnalyzer';
 import DocumentManager from './pages/DocumentManager';
+import Portfolio from './pages/Portfolio';
+import Explorer from './pages/Explorer';
 import Fintech from './pages/Fintech';
 import Customers from './pages/ecommerce/Customers';
 import Orders from './pages/ecommerce/Orders';
@@ -114,6 +116,8 @@ function App() {
         <Route path="/deals/:id" element={<ProtectedRoute><DealDetails /></ProtectedRoute>} />
         <Route path="/listings" element={<ProtectedRoute><ListingsFeed /></ProtectedRoute>} />
         <Route path="/listings/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
+        <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+        <Route path="/explorer" element={<ProtectedRoute><Explorer /></ProtectedRoute>} />
         <Route path="/dashboard/fintech" element={<ProtectedRoute><Fintech /></ProtectedRoute>} />
         <Route path="/ecommerce/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/ecommerce/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
