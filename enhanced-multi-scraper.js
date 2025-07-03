@@ -12,6 +12,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ScraperAPI configuration
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+console.log('🔧 [EnhancedMultiScraper] SCRAPER_API_KEY:', SCRAPER_API_KEY ? 'Set' : 'Missing');
 
 class EnhancedMultiScraper {
   constructor() {
@@ -151,24 +152,38 @@ class EnhancedMultiScraper {
   }
 
   async fetchPage(url, retries = 2) { // Reduced retries for speed
+    console.log(`\n🔍 [GRANULAR LOG - fetchPage] Called at: ${new Date().toISOString()}`);
+    console.log(`🔍 [GRANULAR LOG - fetchPage] URL: ${url}`);
+    console.log(`🔍 [GRANULAR LOG - fetchPage] Retries: ${retries}`);
+    console.log(`🔍 [GRANULAR LOG - fetchPage] SCRAPER_API_KEY: ${SCRAPER_API_KEY ? 'SET' : 'NOT SET'}`);
+    
     this.log('INFO', 'Fetching page', { url });
     
     // Increased timeout for ScraperAPI requests with rendering
-    const REQUEST_TIMEOUT = 20000; // 20 seconds per request - optimized for ScraperAPI
+    const REQUEST_TIMEOUT = 45000; // 45 seconds per request - needed for ScraperAPI with render=true
     
     for (let attempt = 1; attempt <= retries; attempt++) {
+      console.log(`🔍 [GRANULAR LOG - fetchPage] Attempt ${attempt}/${retries}`);
+      
       try {
         // Try ScraperAPI first if available
         if (SCRAPER_API_KEY && attempt === 1) {
+          console.log(`🔍 [GRANULAR LOG - fetchPage] Using ScraperAPI`);
+          
           try {
-            // No rendering needed - saves API credits
-            // Note: Not using parse mode, getting raw HTML
-            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&country_code=us`;
+            // Enable rendering to bypass Cloudflare protection
+            // Note: This uses more API credits but is necessary for protected sites
+            const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=us`;
+            console.log(`🔍 [GRANULAR LOG - fetchPage] ScraperAPI URL constructed`);
             
             // Create timeout controller
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+            const timeoutId = setTimeout(() => {
+              console.log(`🔍 [GRANULAR LOG - fetchPage] Timeout triggered after ${REQUEST_TIMEOUT}ms`);
+              controller.abort();
+            }, REQUEST_TIMEOUT);
             
+            console.log(`🔍 [GRANULAR LOG - fetchPage] Starting fetch at:`, new Date().toISOString());
             const response = await fetch(scraperUrl, { 
               signal: controller.signal,
               headers: {
@@ -176,56 +191,39 @@ class EnhancedMultiScraper {
                 'Accept-Language': 'en-US,en;q=0.9'
               }
             });
+            console.log(`🔍 [GRANULAR LOG - fetchPage] Fetch completed at:`, new Date().toISOString());
             
             clearTimeout(timeoutId);
+            console.log(`🔍 [GRANULAR LOG - fetchPage] Response status: ${response.status} ${response.statusText}`);
             
             if (response.ok) {
+              console.log(`🔍 [GRANULAR LOG - fetchPage] Reading response text...`);
               const html = await response.text();
+              console.log(`🔍 [GRANULAR LOG - fetchPage] Got HTML: ${html.length} characters`);
               this.log('SUCCESS', 'Fetched with ScraperAPI', { 
                 url, 
                 htmlLength: html.length
               });
               return html;
+            } else {
+              console.log(`🔍 [GRANULAR LOG - fetchPage] Response not OK: ${response.status}`);
             }
           } catch (error) {
             if (error.name === 'AbortError') {
-              this.log('WARN', 'ScraperAPI request timed out, falling back to direct fetch', { url, timeout: REQUEST_TIMEOUT });
+              this.log('ERROR', 'ScraperAPI request timed out', { url, timeout: REQUEST_TIMEOUT });
+              throw new Error(`ScraperAPI timeout after ${REQUEST_TIMEOUT}ms`);
             } else {
-              this.log('WARN', 'ScraperAPI failed, falling back to direct fetch', { error: error.message });
+              this.log('ERROR', 'ScraperAPI failed', { error: error.message });
+              throw error;
             }
           }
+        } else if (!SCRAPER_API_KEY) {
+          // No ScraperAPI key configured
+          throw new Error('SCRAPER_API_KEY not configured - cannot bypass Cloudflare protection');
         }
 
-        // Direct fetch with timeout and improved headers
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-        
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Cache-Control': 'max-age=0'
-          }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const html = await response.text();
-        this.log('SUCCESS', 'Fetched directly', { url, htmlLength: html.length, attempt });
-        return html;
+        // NO DIRECT FETCH - Only use ScraperAPI to avoid Cloudflare blocks
+        throw new Error('ScraperAPI is required to bypass Cloudflare protection');
       } catch (error) {
         if (error.name === 'AbortError') {
           this.log('ERROR', `Fetch attempt ${attempt} timed out after ${REQUEST_TIMEOUT}ms`, { url });
@@ -403,16 +401,22 @@ class EnhancedMultiScraper {
 
   // STAGE 1: Extract listing URLs from feed pages
   async scrapeQuietLightFeed(maxPages = 3) {
+    console.log('\n🔍 [GRANULAR LOG - QuietLight] Feed scraper called at:', new Date().toISOString());
+    console.log('🔍 [GRANULAR LOG - QuietLight] maxPages:', maxPages);
     this.log('INFO', '=== Stage 1: QuietLight Feed Scraper ===');
     const listings = [];
 
     for (let page = 1; page <= maxPages; page++) {
       try {
+        console.log(`\n🔍 [GRANULAR LOG - QuietLight] Processing page ${page}/${maxPages}`);
         const feedUrl = page === 1
           ? 'https://quietlight.com/amazon-fba-businesses-for-sale/'
           : `https://quietlight.com/amazon-fba-businesses-for-sale/page/${page}/`;
-          
+        
+        console.log(`🔍 [GRANULAR LOG - QuietLight] Fetching URL: ${feedUrl}`);
+        console.log(`🔍 [GRANULAR LOG - QuietLight] Calling fetchPage at:`, new Date().toISOString());
         const html = await this.fetchPage(feedUrl);
+        console.log(`🔍 [GRANULAR LOG - QuietLight] Received HTML length: ${html?.length || 0}`);
         const $ = cheerio.load(html);
 
         // Debug: Check what selectors are available
@@ -2045,16 +2049,26 @@ class EnhancedMultiScraper {
 
   // Main execution method with multiselect support
   async runTwoStageScraping(options = {}) {
+    console.log('\n🔍 [GRANULAR LOG] runTwoStageScraping called at:', new Date().toISOString());
+    console.log('🔍 [GRANULAR LOG] Raw options:', JSON.stringify(options));
+    
     const {
       selectedSites = ['quietlight', 'bizbuysell'], // Default sites
       maxPagesPerSite = null, // Use default from site config if null
       maxListingsPerSource = 15
     } = options;
 
+    console.log('🔍 [GRANULAR LOG] After destructuring:', {
+      selectedSites,
+      maxPagesPerSite,
+      maxListingsPerSource
+    });
+
     this.log('INFO', '🚀 Starting Enhanced Multi-Scraper with Site Selection');
     this.log('INFO', 'Configuration', {
       supabaseUrl,
       scraperApiConfigured: !!SCRAPER_API_KEY,
+      scraperApiKey: SCRAPER_API_KEY ? `${SCRAPER_API_KEY.substr(0, 8)}...` : 'NOT SET',
       selectedSites,
       totalSitesAvailable: Object.keys(this.availableSites).length
     });
@@ -2064,36 +2078,53 @@ class EnhancedMultiScraper {
     
     try {
       // Stage 1: Collect listing URLs from selected sites - PARALLEL with Individual Timeouts
+      console.log('\n🔍 [GRANULAR LOG] Starting Stage 1 at:', new Date().toISOString());
       this.log('INFO', '📋 STAGE 1: Collecting listing URLs from selected sources...');
+      
+      console.log('🔍 [GRANULAR LOG] Available sites:', Object.keys(this.availableSites));
+      console.log('🔍 [GRANULAR LOG] Selected sites:', selectedSites);
       
       // Create promises for each selected site
       const sourcePromises = [];
       const siteNames = [];
       
       for (const siteKey of selectedSites) {
+        console.log(`\n🔍 [GRANULAR LOG] Processing site: ${siteKey}`);
+        
         const siteConfig = this.availableSites[siteKey];
+        console.log(`🔍 [GRANULAR LOG] Site config:`, siteConfig);
+        
         if (!siteConfig) {
+          console.log(`🔍 [GRANULAR LOG] Site config not found for ${siteKey}`);
           this.log('WARN', `Unknown site: ${siteKey}, skipping`);
           continue;
         }
         
         const feedMethod = this[siteConfig.feedMethod];
+        console.log(`🔍 [GRANULAR LOG] Feed method: ${siteConfig.feedMethod}, exists: ${!!feedMethod}`);
+        
         if (!feedMethod) {
+          console.log(`🔍 [GRANULAR LOG] Feed method not found: ${siteConfig.feedMethod}`);
           this.log('WARN', `Feed method ${siteConfig.feedMethod} not found for ${siteKey}, skipping`);
           continue;
         }
         
         // Use custom pages per site or default from config
         const pagesForSite = maxPagesPerSite || siteConfig.maxPages;
+        console.log(`🔍 [GRANULAR LOG] Pages for ${siteKey}: ${pagesForSite}`);
         
         const createSourcePromise = async (func, siteName, timeoutMs) => {
+          console.log(`🔍 [GRANULAR LOG] Creating promise for ${siteName} with timeout ${timeoutMs}ms`);
+          
           const sourcePromise = func.call(this, pagesForSite);
           const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error(`${siteName} timed out after ${timeoutMs}ms`)), timeoutMs);
           });
           
           try {
+            console.log(`🔍 [GRANULAR LOG] Starting race for ${siteName} at:`, new Date().toISOString());
             const result = await Promise.race([sourcePromise, timeoutPromise]);
+            console.log(`🔍 [GRANULAR LOG] ${siteName} completed successfully with ${result?.length || 0} results`);
             // If we got a result, return it
             return result || [];
           } catch (error) {

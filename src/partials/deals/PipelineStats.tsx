@@ -105,6 +105,7 @@ function PipelineStats({ deals }: PipelineStatsProps) {
   const stageLabels = {
     'prospecting': 'Prospecting',
     'initial_contact': 'Initial Contact',
+    'analysis': 'Analysis',
     'loi_submitted': 'LOI Submitted',
     'due_diligence': 'Due Diligence',
     'negotiation': 'Negotiation',

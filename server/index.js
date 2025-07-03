@@ -51,6 +51,7 @@ console.log('Key present:', !!supabaseKey);
 
 // ScraperAPI configuration
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+console.log('SCRAPER_API_KEY:', SCRAPER_API_KEY ? 'Set' : 'Missing');
 
 // Initialize real scrapers - NO MOCK DATA
 // const realScrapers = new RealScrapers();
@@ -146,8 +147,8 @@ async function fetchPageWithScraperAPI(url) {
   const scraperApiUrl = new URL('https://api.scraperapi.com/');
   scraperApiUrl.searchParams.append('api_key', SCRAPER_API_KEY);
   scraperApiUrl.searchParams.append('url', url);
-  // Remove premium=true to save credits
-  scraperApiUrl.searchParams.append('render', 'false'); // Try without JS rendering first
+  // Enable JS rendering to bypass Cloudflare (uses more credits but necessary)
+  scraperApiUrl.searchParams.append('render', 'true');
   scraperApiUrl.searchParams.append('country_code', 'us');
   
   console.log(`📡 Fetching via ScraperAPI: ${url}`);
@@ -208,49 +209,17 @@ async function fetchPageWithScraperAPI(url) {
   } catch (error) {
     console.error(`❌ ScraperAPI error: ${error.message}`);
     
-    // Fallback to direct fetch for some sites
-    try {
-      console.log(`🔄 Trying direct fetch as fallback for: ${url}`);
-      
-      // Create AbortController for proper timeout handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
-      const directResponse = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
-        }
-      });
-      
-      clearTimeout(timeoutId); // Clear timeout if fetch succeeds
-
-      if (directResponse.ok) {
-        const html = await directResponse.text();
-        if (html.length > 1000) {
-          console.log(`✅ Direct fetch successful: ${html.length} characters`);
-          
-          // Store in database
-          await supabase
-            .from('scraped_pages')
-            .upsert({
-              url,
-              html_content: html,
-              scraped_at: new Date().toISOString(),
-              last_used: new Date().toISOString(),
-              status: 'active'
-            });
-          
-          return html;
-        }
-      }
-    } catch (directError) {
-      console.log(`❌ Direct fetch also failed: ${directError.message}`);
+    // NO FALLBACK - Only use ScraperAPI to avoid Cloudflare blocks
+    console.log(`⚠️  ScraperAPI request failed. Not attempting direct fetch to avoid Cloudflare blocks.`);
+    
+    if (!SCRAPER_API_KEY) {
+      console.log(`🔑 ERROR: SCRAPER_API_KEY environment variable is not set!`);
+      console.log(`💡 To fix: Add SCRAPER_API_KEY=your_api_key to your .env file`);
+    } else {
+      console.log(`💡 Possible issues:`);
+      console.log(`   - ScraperAPI credits may be exhausted`);
+      console.log(`   - API key may be invalid`);
+      console.log(`   - Target site may require premium features (try render=true)`);
     }
     
     throw error;
@@ -469,12 +438,15 @@ try {
 
 // Import Enhanced Multi-Scraper if available
 let EnhancedMultiScraper;
+console.log('🔍 [GRANULAR LOG] Attempting to import Enhanced Multi-Scraper...');
 try {
   const module = await import('../enhanced-multi-scraper.js');
   EnhancedMultiScraper = module.default;
-  console.log('✅ Enhanced Multi-Scraper loaded');
+  console.log('✅ Enhanced Multi-Scraper loaded successfully');
+  console.log('🔍 [GRANULAR LOG] EnhancedMultiScraper type after import:', typeof EnhancedMultiScraper);
 } catch (e) {
   console.log('⚠️  Enhanced Multi-Scraper not available');
+  console.log('🔍 [GRANULAR LOG] Import error:', e.message);
 }
 
 // Enhanced FBA business scraping across multiple platforms
@@ -2412,14 +2384,14 @@ app.get('/api/sites', async (req, res) => {
 
 app.post('/api/scrape', async (req, res) => {
   const requestStartTime = Date.now();
-  const MAX_EXECUTION_TIME = 60000; // 60 seconds max
+  const MAX_EXECUTION_TIME = 180000; // 180 seconds (3 minutes) to allow for ScraperAPI delays
   let timeoutId;
   let isCompleted = false;
 
   // Set up timeout protection
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new Error('Scraping request timed out after 60 seconds'));
+      reject(new Error('Scraping request timed out after 180 seconds'));
     }, MAX_EXECUTION_TIME);
   });
 
@@ -2663,6 +2635,8 @@ app.post('/api/scrape', async (req, res) => {
     // Traditional scraping method with timeout protection
     console.log('\n🔄 [SCRAPING FLOW] Method: Traditional scraping selected');
     console.log('📋 [SCRAPING FLOW] Checking Enhanced Multi-Scraper availability...');
+    console.log('🔍 [GRANULAR LOG] EnhancedMultiScraper:', typeof EnhancedMultiScraper);
+    console.log('🔍 [GRANULAR LOG] EnhancedMultiScraper truthy:', !!EnhancedMultiScraper);
     
     // Try Enhanced Multi-Scraper first for two-stage scraping with descriptions
     if (EnhancedMultiScraper) {
@@ -2686,20 +2660,39 @@ app.post('/api/scrape', async (req, res) => {
         console.log(`   📄 Max pages per site: ${maxPagesPerSite || 'site defaults'}`);
         console.log(`   📋 Max listings per source: ${maxListingsPerSource}`);
         
+        // Add progress tracking
+        const progressInterval = setInterval(() => {
+          console.log(`⏳ [SCRAPING PROGRESS] Still scraping... Elapsed: ${Math.round((Date.now() - startTime) / 1000)}s`);
+        }, 10000); // Log every 10 seconds
+        
         // Wrap enhanced scraping with timeout
+        console.log('🎬 [SCRAPING FLOW] Calling runTwoStageScraping...');
+        console.log('🔍 [GRANULAR LOG] runTwoStageScraping parameters:', {
+          selectedSites,
+          maxPagesPerSite,
+          maxListingsPerSource
+        });
+        
         const enhancedScrapingPromise = scraper.runTwoStageScraping({
           selectedSites,
           maxPagesPerSite,
           maxListingsPerSource
         });
         
+        console.log('🔍 [GRANULAR LOG] Promise created, type:', typeof enhancedScrapingPromise);
+        console.log('🔍 [GRANULAR LOG] Is Promise?', enhancedScrapingPromise instanceof Promise);
+        
         // Add timeout handling
         let enhancedResult;
         try {
+          console.log('⏱️ [SCRAPING FLOW] Waiting for scraper to complete (timeout: 180s)...');
+          console.log('🔍 [GRANULAR LOG] Starting Promise.race at:', new Date().toISOString());
           enhancedResult = await Promise.race([enhancedScrapingPromise, timeoutPromise]);
+          console.log('🔍 [GRANULAR LOG] Promise.race completed at:', new Date().toISOString());
         } catch (timeoutError) {
+          clearInterval(progressInterval); // Stop progress logging
           clearTimeout(timeoutId);
-          console.error('⏰ [SCRAPING FLOW] Operation timed out after 60 seconds');
+          console.error('⏰ [SCRAPING FLOW] Operation timed out after 180 seconds');
           
           // Return partial results if available
           return res.json({
@@ -2709,21 +2702,22 @@ app.post('/api/scrape', async (req, res) => {
             totalSaved: 0,
             duplicatesSkipped: 0,
             method: method,
-            executionTime: 60,
+            executionTime: 180,
             logs: [...logs, {
               timestamp: new Date().toISOString(),
               level: 'error',
-              message: 'Scraping operation timed out after 60 seconds'
+              message: 'Scraping operation timed out after 180 seconds'
             }],
             errors: [{
               source: 'Timeout',
-              message: 'Scraping operation timed out after 60 seconds. The database save may still be running in the background.'
+              message: 'Scraping operation timed out after 180 seconds. The database save may still be running in the background.'
             }],
             siteBreakdown: {},
             message: 'Operation timed out. Try reducing the number of sites or pages to scrape.'
           });
         }
         
+        clearInterval(progressInterval); // Stop progress logging
         clearTimeout(timeoutId);
         isCompleted = true;
         

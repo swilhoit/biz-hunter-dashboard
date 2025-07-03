@@ -92,7 +92,9 @@
       "Bash(python3:*)",
       "Bash(git pull:*)",
       "WebFetch(domain:railway.com)",
-      "WebFetch(domain:docs.railway.com)"
+      "WebFetch(domain:docs.railway.com)",
+      "Bash(grep -n -B5 -A20 \"saveToDB\\|saveListingsToDB\" server/index.js)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }
