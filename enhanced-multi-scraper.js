@@ -247,16 +247,21 @@ class EnhancedMultiScraper {
   extractPrice(priceText) {
     if (!priceText) return 0;
     
-    const cleaned = priceText.replace(/[^0-9.,MmKk]/g, '');
+    // First extract just the price portion (look for $ followed by numbers)
+    const priceMatch = priceText.match(/\$[\d,]+\.?\d*\s*[MmKk]?/);
+    if (!priceMatch) return 0;
+    
+    const priceStr = priceMatch[0];
+    const cleaned = priceStr.replace(/[$,]/g, '');
     
     if (cleaned.toLowerCase().includes('m')) {
-      const num = parseFloat(cleaned.replace(/[^0-9.]/g, ''));
+      const num = parseFloat(cleaned.replace(/[MmKk]/gi, ''));
       return Math.floor(num * 1000000);
     } else if (cleaned.toLowerCase().includes('k')) {
-      const num = parseFloat(cleaned.replace(/[^0-9.]/g, ''));
+      const num = parseFloat(cleaned.replace(/[MmKk]/gi, ''));
       return Math.floor(num * 1000);
     } else {
-      const price = parseFloat(cleaned.replace(/,/g, ''));
+      const price = parseFloat(cleaned);
       return isNaN(price) ? 0 : Math.floor(price);
     }
   }
@@ -342,17 +347,24 @@ class EnhancedMultiScraper {
         return 'duplicate';
       }
 
-      // Insert new listing - only use columns that exist in the database
+      // Insert new listing - include all available financial metrics
       const listingToInsert = {
         name: listing.name,
         asking_price: listing.asking_price || 0,
         annual_revenue: listing.annual_revenue || 0,
+        annual_profit: listing.annual_profit || 0,
+        monthly_revenue: listing.monthly_revenue || 0,
+        gross_revenue: listing.gross_revenue || 0,
+        net_revenue: listing.net_revenue || 0,
+        inventory_value: listing.inventory_value || 0,
+        profit_multiple: listing.profit_multiple || null,
         industry: listing.industry || 'Business',
         location: listing.location || 'Online',
         description: listing.description || '',
         highlights: Array.isArray(listing.highlights) ? listing.highlights : (listing.highlights ? listing.highlights.split(', ') : []),
         original_url: listing.original_url,
         source: listing.source || 'Unknown',
+        listing_status: listing.listing_status || 'live',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -508,13 +520,18 @@ class EnhancedMultiScraper {
         
         // Use the data we already have from the feed
         const askingPrice = this.extractPrice(listingData.priceText) || 2000000;
-        const annualRevenue = askingPrice * 0.4; // Estimate based on typical multiples
         
         return {
           name: listingData.title,
           description: `${listingData.title}. Premium Amazon FBA business listed on QuietLight marketplace.`,
           asking_price: askingPrice,
-          annual_revenue: annualRevenue,
+          annual_revenue: 0, // Don't estimate - only use real data
+          annual_profit: 0,
+          monthly_revenue: 0,
+          gross_revenue: 0,
+          net_revenue: 0,
+          inventory_value: 0,
+          profit_multiple: null,
           industry: 'E-commerce',
           location: 'Online',
           source: 'QuietLight',
@@ -576,16 +593,25 @@ class EnhancedMultiScraper {
         }
       }
 
-      // Extract price with multiple fallbacks
+      // Extract financial metrics with enhanced selectors
       let askingPrice = 0;
+      let annualRevenue = 0;
+      let annualProfit = 0;
+      let monthlyRevenue = 0;
+      let inventoryValue = 0;
+      let cashFlow = 0;
       
-      // Try structured selectors first
+      // Enhanced price extraction - look for asking price specifically
       const priceSelectors = [
         '.asking-price',
         '.price',
         '.listing-price',
-        'li:contains("INCOME")',
-        'div:contains("$"):contains("M")',
+        'li:contains("Asking Price")',
+        'li:contains("PRICE")',
+        'div:contains("$"):contains("Asking")',
+        '.financial-info:contains("Price")',
+        'dt:contains("Price") + dd',
+        '[class*="asking"]',
         '[class*="price"]'
       ];
       
@@ -594,18 +620,124 @@ class EnhancedMultiScraper {
         const extracted = this.extractPrice(priceText);
         if (extracted > 0) {
           askingPrice = extracted;
+          this.log('INFO', `Extracted asking price: $${askingPrice.toLocaleString()}`);
           break;
         }
       }
       
-      // Fallback to price from feed
+      // Extract revenue metrics
+      const revenueSelectors = [
+        '.annual-revenue',
+        '.revenue',
+        '.yearly-revenue',
+        'li:contains("REVENUE")',
+        'li:contains("Annual Revenue")',
+        'li:contains("Yearly Revenue")',
+        'li:contains("Gross Revenue")',
+        'dt:contains("Revenue") + dd',
+        '.financial-metric:contains("Revenue")',
+        '.revenue-data'
+      ];
+      
+      for (const selector of revenueSelectors) {
+        const revenueText = $(selector).text();
+        const extracted = this.extractPrice(revenueText);
+        if (extracted > 0) {
+          annualRevenue = extracted;
+          this.log('INFO', `Extracted annual revenue: $${annualRevenue.toLocaleString()}`);
+          break;
+        }
+      }
+      
+      // Extract profit/cash flow metrics (QuietLight uses INCOME for SDE)
+      const profitSelectors = [
+        '.annual-profit',
+        '.net-profit',
+        '.profit',
+        'li:contains("INCOME")',
+        'li:contains("SDE")',
+        'li:contains("Annual Profit")',
+        'li:contains("Net Profit")',
+        'li:contains("Cash Flow")',
+        'dt:contains("Profit") + dd',
+        'dt:contains("Cash Flow") + dd',
+        'dt:contains("Income") + dd',
+        'dt:contains("SDE") + dd',
+        '.financial-metric:contains("Profit")',
+        '.cash-flow-data'
+      ];
+      
+      for (const selector of profitSelectors) {
+        const profitText = $(selector).text();
+        const extracted = this.extractPrice(profitText);
+        if (extracted > 0) {
+          if (selector.toLowerCase().includes('cash')) {
+            cashFlow = extracted;
+            this.log('INFO', `Extracted cash flow: $${cashFlow.toLocaleString()}`);
+          } else {
+            annualProfit = extracted;
+            this.log('INFO', `Extracted annual profit: $${annualProfit.toLocaleString()}`);
+          }
+        }
+      }
+      
+      // Extract inventory value
+      const inventorySelectors = [
+        '.inventory-value',
+        'li:contains("Inventory")',
+        'dt:contains("Inventory") + dd',
+        '.financial-metric:contains("Inventory")',
+        'li:contains("Stock Value")',
+        '.inventory-data'
+      ];
+      
+      for (const selector of inventorySelectors) {
+        const inventoryText = $(selector).text();
+        const extracted = this.extractPrice(inventoryText);
+        if (extracted > 0) {
+          inventoryValue = extracted;
+          this.log('INFO', `Extracted inventory value: $${inventoryValue.toLocaleString()}`);
+          break;
+        }
+      }
+      
+      // Extract monthly metrics
+      const monthlySelectors = [
+        '.monthly-revenue',
+        'li:contains("Monthly Revenue")',
+        'dt:contains("Monthly Revenue") + dd',
+        '.financial-metric:contains("Monthly")',
+        '.monthly-data'
+      ];
+      
+      for (const selector of monthlySelectors) {
+        const monthlyText = $(selector).text();
+        const extracted = this.extractPrice(monthlyText);
+        if (extracted > 0) {
+          monthlyRevenue = extracted;
+          this.log('INFO', `Extracted monthly revenue: $${monthlyRevenue.toLocaleString()}`);
+          break;
+        }
+      }
+      
+      // Fallback calculations
       if (!askingPrice) {
         askingPrice = this.extractPrice(listingData.priceText) || 2000000;
       }
-
-      const revenue = this.extractPrice(
-        $('.annual-revenue, .revenue, .yearly-revenue').text()
-      ) || Math.floor(askingPrice * 0.4);
+      
+      if (!annualRevenue && monthlyRevenue) {
+        annualRevenue = monthlyRevenue * 12;
+      }
+      
+      if (!annualProfit && cashFlow) {
+        annualProfit = cashFlow; // Cash flow is often used as a proxy for profit
+      }
+      
+      // Calculate profit multiple if we have both price and profit
+      let profitMultiple = null;
+      if (askingPrice > 0 && annualProfit > 0) {
+        profitMultiple = parseFloat((askingPrice / annualProfit).toFixed(2));
+      }
 
       // Extract highlights from the page
       const highlights = [];
@@ -617,12 +749,18 @@ class EnhancedMultiScraper {
         highlights.push('Amazon FBA', 'QuietLight Verified', 'Premium Listing');
       }
 
-      // Build the listing object
+      // Build the listing object with all financial metrics
       const listing = {
         name: listingData.title || 'Amazon FBA Business',
         description: description || `Premium Amazon FBA business opportunity. ${listingData.title}`,
         asking_price: askingPrice,
-        annual_revenue: revenue,
+        annual_revenue: annualRevenue,
+        annual_profit: annualProfit,
+        monthly_revenue: monthlyRevenue,
+        gross_revenue: annualRevenue, // Can be refined if gross vs net is specified
+        net_revenue: annualRevenue,    // Can be refined if gross vs net is specified
+        inventory_value: inventoryValue,
+        profit_multiple: profitMultiple,
         industry: 'E-commerce',
         location: $('.location').text().trim() || 'United States',
         source: 'QuietLight',
@@ -634,7 +772,11 @@ class EnhancedMultiScraper {
       this.log('SUCCESS', 'Extracted QuietLight listing details', { 
         name: listing.name,
         descriptionLength: listing.description.length,
-        price: listing.asking_price
+        price: listing.asking_price,
+        revenue: annualRevenue,
+        profit: annualProfit,
+        inventory: inventoryValue,
+        multiple: profitMultiple
       });
 
       return listing;
@@ -649,7 +791,13 @@ class EnhancedMultiScraper {
         name: listingData.title,
         description: `Amazon FBA business for sale on QuietLight`,
         asking_price: this.extractPrice(listingData.priceText) || 500000,
-        annual_revenue: 200000,
+        annual_revenue: 0, // Don't estimate
+        annual_profit: 0,
+        monthly_revenue: 0,
+        gross_revenue: 0,
+        net_revenue: 0,
+        inventory_value: 0,
+        profit_multiple: null,
         industry: 'E-commerce',
         location: 'United States',
         source: 'QuietLight',
@@ -830,10 +978,11 @@ class EnhancedMultiScraper {
       const description = listingData.description || 
                          `${listingData.title}. Located in ${listingData.location || 'USA'}.`;
 
-      // Estimate revenue based on cash flow or asking price
-      let revenue = Math.floor(askingPrice * 0.35); // Default estimate
+      // Don't estimate revenue - only use real data
+      let revenue = 0;
       if (cashFlow > 0) {
-        revenue = Math.floor(cashFlow * 3); // Revenue typically 3x cash flow
+        // Cash flow is available, but we shouldn't estimate revenue from it
+        // Keep revenue as 0 unless we find actual revenue data
       }
 
       const highlights = [];
@@ -846,6 +995,12 @@ class EnhancedMultiScraper {
         description: description.substring(0, 1000),
         asking_price: askingPrice,
         annual_revenue: revenue,
+        annual_profit: cashFlow > 0 ? cashFlow : 0, // Use cash flow as proxy for profit if available
+        monthly_revenue: 0,
+        gross_revenue: 0,
+        net_revenue: 0,
+        inventory_value: 0,
+        profit_multiple: (askingPrice > 0 && cashFlow > 0) ? parseFloat((askingPrice / cashFlow).toFixed(2)) : null,
         industry: 'E-commerce',
         location: listingData.location || 'United States',
         source: 'BizBuySell',
@@ -871,7 +1026,13 @@ class EnhancedMultiScraper {
         name: listingData.title,
         description: `Amazon FBA business for sale in ${listingData.location || 'USA'}`,
         asking_price: this.extractPrice(listingData.priceText) || 750000,
-        annual_revenue: 300000,
+        annual_revenue: 0, // Don't estimate
+        annual_profit: 0,
+        monthly_revenue: 0,
+        gross_revenue: 0,
+        net_revenue: 0,
+        inventory_value: 0,
+        profit_multiple: null,
         industry: 'E-commerce',
         location: listingData.location || 'United States',
         source: 'BizBuySell',
@@ -968,9 +1129,8 @@ class EnhancedMultiScraper {
         $('.monthly-revenue, dt:contains("Monthly Revenue")').next().text()
       );
 
-      const annualRevenue = monthlyRevenue ? monthlyRevenue * 12 : 
-                           monthlyProfit ? monthlyProfit * 12 * 3 : 
-                           askingPrice * 0.4;
+      const annualRevenue = monthlyRevenue ? monthlyRevenue * 12 : 0;
+      const annualProfit = monthlyProfit ? monthlyProfit * 12 : 0;
 
       // Extract key metrics
       const multiple = $('.multiple, dt:contains("Multiple")').next().text().trim();
@@ -989,6 +1149,12 @@ class EnhancedMultiScraper {
         description: description.substring(0, 1000),
         asking_price: askingPrice,
         annual_revenue: annualRevenue,
+        annual_profit: annualProfit,
+        monthly_revenue: monthlyRevenue || 0,
+        gross_revenue: annualRevenue,
+        net_revenue: annualRevenue,
+        inventory_value: 0, // EmpireFlippers rarely shows inventory value
+        profit_multiple: parseFloat(multiple) || null,
         industry: 'E-commerce',
         location: 'Online',
         source: 'EmpireFlippers',
@@ -1014,7 +1180,13 @@ class EnhancedMultiScraper {
         name: listingData.title,
         description: 'Amazon FBA business with verified financials',
         asking_price: this.extractPrice(listingData.priceText) || 1000000,
-        annual_revenue: 400000,
+        annual_revenue: 0, // Don't estimate
+        annual_profit: 0,
+        monthly_revenue: 0,
+        gross_revenue: 0,
+        net_revenue: 0,
+        inventory_value: 0,
+        profit_multiple: null,
         industry: 'E-commerce',
         location: 'Online',
         source: 'EmpireFlippers',
@@ -1123,9 +1295,8 @@ class EnhancedMultiScraper {
         $('.monthly-profit, dt:contains("Profit")').next().text()
       );
 
-      const annualRevenue = monthlyRevenue ? monthlyRevenue * 12 : 
-                           monthlyProfit ? monthlyProfit * 12 * 3 : 
-                           askingPrice * 0.3;
+      const annualRevenue = monthlyRevenue ? monthlyRevenue * 12 : 0;
+      const annualProfit = monthlyProfit ? monthlyProfit * 12 : 0;
 
       // Extract metrics
       const trafficSources = $('.traffic-sources, dt:contains("Traffic")').next().text().trim();
@@ -1144,6 +1315,12 @@ class EnhancedMultiScraper {
         description: description.substring(0, 1000),
         asking_price: askingPrice,
         annual_revenue: annualRevenue,
+        annual_profit: annualProfit,
+        monthly_revenue: monthlyRevenue || 0,
+        gross_revenue: annualRevenue,
+        net_revenue: annualRevenue,
+        inventory_value: 0,
+        profit_multiple: (askingPrice > 0 && annualProfit > 0) ? parseFloat((askingPrice / annualProfit).toFixed(2)) : null,
         industry: 'E-commerce',
         location: 'Online',
         source: 'Flippa',
@@ -1168,7 +1345,13 @@ class EnhancedMultiScraper {
         name: listingData.title,
         description: 'Amazon FBA business listed on Flippa',
         asking_price: this.extractPrice(listingData.priceText) || 500000,
-        annual_revenue: 200000,
+        annual_revenue: 0, // Don't estimate
+        annual_profit: 0,
+        monthly_revenue: 0,
+        gross_revenue: 0,
+        net_revenue: 0,
+        inventory_value: 0,
+        profit_multiple: null,
         industry: 'E-commerce',
         location: 'Online',
         source: 'Flippa',
