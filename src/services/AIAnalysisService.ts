@@ -75,8 +75,12 @@ export class AIAnalysisService {
   private readonly model = 'gpt-4o-mini';
 
   constructor() {
+    const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
+                   import.meta.env.VITE_OPENAI_API_KEY || 
+                   import.meta.env.REACT_APP_OPENAI_API_KEY;
+    
     this.client = new OpenAI({
-      apiKey: import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.REACT_APP_OPENAI_API_KEY,
+      apiKey: apiKey,
       dangerouslyAllowBrowser: true,
     });
   }
@@ -407,20 +411,36 @@ export class DocumentAnalysisService {
     try {
       console.log('Starting document analysis for file:', file.name, 'Type:', file.type, 'Size:', file.size);
       
-      // Check if API key is available
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.REACT_APP_OPENAI_API_KEY;
+      // Check if API key is available - try runtime config first
+      const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
+                     import.meta.env.VITE_OPENAI_API_KEY || 
+                     import.meta.env.REACT_APP_OPENAI_API_KEY;
+      
       if (!apiKey) {
-        console.error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env file');
+        console.error('OpenAI API key not found');
         const isDev = import.meta.env.DEV;
-        const envFile = isDev ? '.env.local' : '.env.production';
-        throw new Error(
-          `OpenAI API key not configured.\n\n` +
-          `To enable AI document analysis:\n` +
-          `1. Add your OpenAI API key to ${envFile}\n` +
-          `2. Add this line: VITE_OPENAI_API_KEY=your_api_key_here\n` +
-          `3. Restart the application\n\n` +
-          `For now, you can still upload images or text files for analysis.`
-        );
+        
+        if (!isDev) {
+          // Production-specific message
+          throw new Error(
+            `OpenAI API key not configured.\n\n` +
+            `To enable AI document analysis:\n` +
+            `1. Set VITE_OPENAI_API_KEY in your deployment environment (Railway, Vercel, etc.)\n` +
+            `2. Make sure to rebuild and redeploy after setting the variable\n` +
+            `3. Check that the variable name is exactly: VITE_OPENAI_API_KEY\n\n` +
+            `For now, you can still upload images or text files.`
+          );
+        } else {
+          // Development-specific message
+          throw new Error(
+            `OpenAI API key not configured.\n\n` +
+            `To enable AI document analysis:\n` +
+            `1. Add your OpenAI API key to .env.local\n` +
+            `2. Add this line: VITE_OPENAI_API_KEY=your_api_key_here\n` +
+            `3. Restart the development server\n\n` +
+            `For now, you can still upload images or text files.`
+          );
+        }
       }
       
       // Create a temporary client instance for static methods

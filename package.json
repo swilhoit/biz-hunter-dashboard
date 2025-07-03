@@ -10,6 +10,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "start": "node server-production.js",
+    "start:production": "node server-production.js",
     "test:scraper": "tsx src/services/scraping/test-scraper.ts",
     "test:scrapers": "tsx src/services/scraping/test-scrapers.ts",
     "test:scraper:single": "tsx src/services/scraping/test-scrapers.ts",
