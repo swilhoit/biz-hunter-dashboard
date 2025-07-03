@@ -402,80 +402,38 @@ class EnhancedMultiScraper {
         const html = await this.fetchPage(feedUrl);
         const $ = cheerio.load(html);
 
-        // Multiple selectors for QuietLight listings
-        const selectors = [
-          '.listing-card',  // Primary QuietLight selector
-          'article.type-listings',
-          '.listing-item',
-          'div[class*="listing"]',
-          'article[id^="post-"]',
-          '.property-item'
-        ];
-
-        let listingElements = $();
-        for (const selector of selectors) {
-          listingElements = $(selector);
-          if (listingElements.length > 0) {
-            this.log('INFO', `Found listings with selector: ${selector}`, { count: listingElements.length });
-            break;
-          }
+        // Use the specific selector that works for QuietLight
+        const listingElements = $('.listing-card');
+        
+        if (listingElements.length > 0) {
+          this.log('INFO', `Found ${listingElements.length} listing cards on page ${page}`);
+        } else {
+          this.log('WARN', `No listings found on page ${page}`);
+          break;
         }
 
-        // Extract listing URLs - Updated to handle missing href attributes
+        // Extract listing URLs from QuietLight cards
         listingElements.each((i, elem) => {
           const $elem = $(elem);
           
-          // Try multiple ways to get the URL
-          let link = $elem.find('.listing-card__link').attr('href') || 
-                    $elem.find('a[href*="/listings/"]').first().attr('href') || 
-                    $elem.find('a').first().attr('href');
+          // QuietLight structure: .listing-card > .listing-card__link
+          const link = $elem.find('.listing-card__link').attr('href');
+          const title = $elem.find('.listing-card__title').text().trim();
+          const priceText = $elem.find('.listing-card__price').text().trim();
           
-          // If no link found, try to extract from onclick or data attributes
-          if (!link) {
-            const onclick = $elem.attr('onclick') || $elem.find('[onclick]').attr('onclick');
-            if (onclick) {
-              const match = onclick.match(/location\.href='([^']+)'/) || onclick.match(/window\.open\('([^']+)'/);
-              if (match) link = match[1];
-            }
-          }
-          
-          // Extract listing ID from class or data attributes as fallback
-          if (!link) {
-            const listingId = $elem.attr('data-listing-id') || 
-                             $elem.attr('id')?.replace('listing-', '') ||
-                             $elem.find('[data-listing-id]').attr('data-listing-id');
-            if (listingId) {
-              link = `/listings/${listingId}/`;
-            }
-          }
-          
-          const title = $elem.find('.listing-card__title, .entry-title, h2, h3').text().trim();
-          const priceText = $elem.find('.listing-card__price, .price, .listing-price').text().trim();
-
-          if (title && (link || title.includes('|'))) {
-            // If still no link but we have a title, generate one from the title
-            if (!link) {
-              // QuietLight URLs often follow pattern /listings/[id]/
-              // Try to extract potential ID from the card element
-              const cardClasses = $elem.attr('class') || '';
-              const idMatch = cardClasses.match(/listing-(\d+)/);
-              if (idMatch) {
-                link = `/listings/${idMatch[1]}/`;
-              }
-            }
+          if (link && title) {
+            const fullUrl = link.startsWith('http') ? link : `https://quietlight.com${link}`;
+            listings.push({
+              url: fullUrl,
+              title,
+              priceText,
+              source: 'QuietLight'
+            });
             
-            if (link) {
-              const fullUrl = link.startsWith('http') ? link : `https://quietlight.com${link}`;
-              listings.push({
-                url: fullUrl,
-                title,
-                priceText,
-                source: 'QuietLight'
-              });
-              
-              // Log found listing for frontend display
-              this.logFoundListing('QuietLight', title, fullUrl);
-            }
+            // Log found listing for frontend display
+            this.logFoundListing('QuietLight', title, fullUrl);
+          } else if (title) {
+            this.log('WARN', `Found listing without URL: ${title}`);
           }
         });
 
@@ -662,62 +620,80 @@ class EnhancedMultiScraper {
     this.log('INFO', '=== Stage 1: BizBuySell Feed Scraper ===');
     const listings = [];
     
-    // Use pagination for BizBuySell
-    for (let page = 1; page <= maxPages; page++) {
-      const searchUrls = [
-        page === 1 
+    for (let page = 0; page < maxPages; page++) {
+      try {
+        // Use the correct Amazon stores URL with pagination
+        const feedUrl = page === 0 
           ? 'https://www.bizbuysell.com/amazon-stores-for-sale/'
-          : `https://www.bizbuysell.com/amazon-stores-for-sale/page-${page}`,
-        page === 1
-          ? 'https://www.bizbuysell.com/businesses-for-sale/?q=Amazon+FBA'
-          : `https://www.bizbuysell.com/businesses-for-sale/?q=Amazon+FBA&page=${page}`
-      ];
+          : `https://www.bizbuysell.com/amazon-stores-for-sale/?s=${page * 24}`;
+          
+        this.log('INFO', `Fetching BizBuySell page ${page + 1}`, { url: feedUrl });
+        const html = await this.fetchPage(feedUrl);
+        const $ = cheerio.load(html);
 
-      for (const searchUrl of searchUrls) {
-        try {
-          const html = await this.fetchPage(searchUrl);
-          const $ = cheerio.load(html);
+        // Check if we're on the right page
+        const pageTitle = $('h1').text();
+        this.log('INFO', `BizBuySell page title: ${pageTitle}`);
 
-          $('.listing').each((i, elem) => {
-            const $elem = $(elem);
-            
-            // BizBuySell uses Angular SPA - extract data directly from listing cards
-            const title = $elem.find('.title, span.title').text().trim();
-            const priceText = $elem.find('.asking-price, .price').text().trim();
-            const location = $elem.find('.location').text().trim();
-            const cashFlow = $elem.find('.cash-flow, .cash-flow-on-mobile').text().trim();
-            const description = $elem.find('.description').text().trim();
+        // BizBuySell structure: .listing contains each listing
+        const listingElements = $('.listing');
+        this.log('INFO', `Found ${listingElements.length} listings on page ${page + 1}`);
 
-            if (title) {
-              // Since BizBuySell is Angular SPA with no direct links, 
-              // create a reference URL with listing index
-              const listingUrl = `${searchUrl}#listing-${i + 1}`;
-              
-              listings.push({
-                url: listingUrl,
-                title,
-                priceText,
-                location,
-                cashFlow,
-                description,
-                source: 'BizBuySell'
-              });
-              
-              // Log found listing for frontend display
-              this.logFoundListing('BizBuySell', title, listingUrl);
+        listingElements.each((i, elem) => {
+          const $elem = $(elem);
+          
+          // Try multiple selectors for the link and title
+          let link, title;
+          
+          // Method 1: h3 a (most common)
+          const $h3Link = $elem.find('h3 a').first();
+          if ($h3Link.length > 0) {
+            link = $h3Link.attr('href');
+            title = $h3Link.text().trim();
+          }
+          
+          // Method 2: Look for any prominent link
+          if (!link) {
+            const $titleLink = $elem.find('.title a, a.title').first();
+            if ($titleLink.length > 0) {
+              link = $titleLink.attr('href');
+              title = $titleLink.text().trim();
             }
-          });
+          }
+          
+          // Method 3: Any link that looks like a business listing
+          if (!link) {
+            const $bizLink = $elem.find('a[href*="/Business-Opportunity/"], a[href*="/business/"]').first();
+            if ($bizLink.length > 0) {
+              link = $bizLink.attr('href');
+              title = $bizLink.text().trim() || $elem.find('h3, .title').text().trim();
+            }
+          }
+          
+          const priceText = $elem.find('.price').text().trim();
+          
+          if (link && title) {
+            const fullUrl = link.startsWith('http') ? link : `https://www.bizbuysell.com${link}`;
+            listings.push({
+              url: fullUrl,
+              title,
+              priceText,
+              source: 'BizBuySell'
+            });
+            
+            // Log found listing for frontend display
+            this.logFoundListing('BizBuySell', title, fullUrl);
+          }
+        });
 
-        } catch (error) {
-          this.log('ERROR', 'BizBuySell feed scraper failed', { url: searchUrl, error: error.message });
-          this.logScrapingError('BizBuySell', error.message, searchUrl);
-        }
+        this.log('INFO', `BizBuySell page ${page + 1} scraped, found ${listings.length} total listings`);
+      } catch (error) {
+        this.log('ERROR', `BizBuySell page ${page + 1} failed`, { error: error.message });
+        this.logScrapingError('BizBuySell', error.message, `Page ${page + 1}`);
       }
-      
-      this.log('INFO', `BizBuySell page ${page} scraped`, { foundUrls: listings.length });
     }
 
-    this.log('SUCCESS', 'BizBuySell feed scraping complete', { foundUrls: listings.length });
+    this.log('SUCCESS', 'BizBuySell feed scraping complete', { totalListings: listings.length });
     return listings;
   }
 
