@@ -24,7 +24,7 @@ import ASINDetail from './pages/ASINDetail';
 import AmazonPortfolioAnalyzer from './pages/AmazonPortfolioAnalyzer';
 import DocumentManager from './pages/DocumentManager';
 import Portfolio from './pages/Portfolio';
-import Explorer from './pages/Explorer';
+import Explorer from './pages/ExplorerEnhanced';
 import Fintech from './pages/Fintech';
 import Customers from './pages/ecommerce/Customers';
 import Orders from './pages/ecommerce/Orders';
