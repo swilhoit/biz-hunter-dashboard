@@ -361,6 +361,7 @@ class EnhancedMultiScraper {
 
         // Multiple selectors for QuietLight listings
         const selectors = [
+          '.listing-card',  // Primary QuietLight selector
           'article.type-listings',
           '.listing-item',
           'div[class*="listing"]',
@@ -380,9 +381,12 @@ class EnhancedMultiScraper {
         // Extract listing URLs
         listingElements.each((i, elem) => {
           const $elem = $(elem);
-          const link = $elem.find('a').attr('href') || $elem.find('.entry-title a').attr('href');
-          const title = $elem.find('.entry-title, h2, h3').text().trim();
-          const priceText = $elem.find('.price, .listing-price').text().trim();
+          // QuietLight specific selectors
+          const link = $elem.find('.listing-card__link').attr('href') || 
+                      $elem.find('a').first().attr('href') || 
+                      $elem.find('.entry-title a').attr('href');
+          const title = $elem.find('.listing-card__title, .entry-title, h2, h3').text().trim();
+          const priceText = $elem.find('.listing-card__price, .price, .listing-price').text().trim();
 
           if (link && title) {
             const fullUrl = link.startsWith('http') ? link : `https://quietlight.com${link}`;
@@ -521,25 +525,33 @@ class EnhancedMultiScraper {
           const html = await this.fetchPage(searchUrl);
           const $ = cheerio.load(html);
 
-          $('.listing, .result, .bizResult').each((i, elem) => {
+          $('.listing').each((i, elem) => {
             const $elem = $(elem);
-            const link = $elem.find('a').first().attr('href');
-            const title = $elem.find('.title, h3').text().trim();
-            const priceText = $elem.find('.price, .asking').text().trim();
+            
+            // BizBuySell uses Angular SPA - extract data directly from listing cards
+            const title = $elem.find('.title, span.title').text().trim();
+            const priceText = $elem.find('.asking-price, .price').text().trim();
             const location = $elem.find('.location').text().trim();
+            const cashFlow = $elem.find('.cash-flow, .cash-flow-on-mobile').text().trim();
+            const description = $elem.find('.description').text().trim();
 
-            if (link && title) {
-              const fullUrl = link.startsWith('http') ? link : `https://www.bizbuysell.com${link}`;
+            if (title) {
+              // Since BizBuySell is Angular SPA with no direct links, 
+              // create a reference URL with listing index
+              const listingUrl = `${searchUrl}#listing-${i + 1}`;
+              
               listings.push({
-                url: fullUrl,
+                url: listingUrl,
                 title,
                 priceText,
                 location,
+                cashFlow,
+                description,
                 source: 'BizBuySell'
               });
               
               // Log found listing for frontend display
-              this.logFoundListing('BizBuySell', title, fullUrl);
+              this.logFoundListing('BizBuySell', title, listingUrl);
             }
           });
 
@@ -557,41 +569,33 @@ class EnhancedMultiScraper {
   }
 
   async scrapeBizBuySellListing(listingData) {
-    this.log('INFO', 'Stage 2: Scraping BizBuySell listing details', { url: listingData.url });
+    this.log('INFO', 'Stage 2: Processing BizBuySell listing details', { url: listingData.url });
 
+    // BizBuySell data is already extracted from the listing card
+    // No need to fetch individual pages since it's an Angular SPA
     try {
-      const html = await this.fetchPage(listingData.url);
-      const $ = cheerio.load(html);
-
-      // Extract detailed description
-      const description = $('.business-description, .description, .overview').text().trim() ||
+      const askingPrice = this.extractPrice(listingData.priceText) || 750000;
+      
+      // Extract cash flow if available
+      let cashFlow = 0;
+      if (listingData.cashFlow) {
+        cashFlow = this.extractPrice(listingData.cashFlow);
+      }
+      
+      // Use description from listing card or create one
+      const description = listingData.description || 
                          `${listingData.title}. Located in ${listingData.location || 'USA'}.`;
 
-      // Extract financial details
-      const askingPrice = this.extractPrice(
-        $('.asking-price, .price-tag, h2:contains("Asking Price")').parent().find('.value').text() ||
-        listingData.priceText
-      ) || 750000;
-
-      const revenue = this.extractPrice(
-        $('.gross-revenue, .annual-revenue, dt:contains("Gross Revenue")').next().text()
-      ) || Math.floor(askingPrice * 0.35);
-
-      const cashFlow = this.extractPrice(
-        $('.cash-flow, dt:contains("Cash Flow")').next().text()
-      );
-
-      // Extract business details
-      const established = $('.established, dt:contains("Established")').next().text().trim();
-      const employees = $('.employees, dt:contains("Employees")').next().text().trim();
+      // Estimate revenue based on cash flow or asking price
+      let revenue = Math.floor(askingPrice * 0.35); // Default estimate
+      if (cashFlow > 0) {
+        revenue = Math.floor(cashFlow * 3); // Revenue typically 3x cash flow
+      }
 
       const highlights = [];
       if (cashFlow) highlights.push(`Cash Flow: $${cashFlow.toLocaleString()}`);
-      if (established) highlights.push(`Est. ${established}`);
-      if (employees) highlights.push(`${employees} Employees`);
-      if (highlights.length === 0) {
-        highlights.push('Amazon FBA', 'Established Business', 'BizBuySell Listed');
-      }
+      highlights.push('Amazon FBA', 'BizBuySell Listed');
+      if (listingData.location) highlights.push(listingData.location);
 
       const listing = {
         name: listingData.title,
@@ -606,14 +610,15 @@ class EnhancedMultiScraper {
         listing_status: 'live'
       };
 
-      this.log('SUCCESS', 'Extracted BizBuySell listing details', { 
+      this.log('SUCCESS', 'Processed BizBuySell listing details', { 
         name: listing.name,
-        descriptionLength: listing.description.length
+        askingPrice: listing.asking_price,
+        cashFlow
       });
 
       return listing;
     } catch (error) {
-      this.log('ERROR', 'Failed to scrape BizBuySell listing', { 
+      this.log('ERROR', 'Failed to process BizBuySell listing', { 
         url: listingData.url,
         error: error.message 
       });

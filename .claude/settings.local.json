@@ -88,7 +88,8 @@
       "Bash(supabase:*)",
       "Bash(brew upgrade:*)",
       "Bash(npm uninstall:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }
