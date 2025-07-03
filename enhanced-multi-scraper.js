@@ -29,7 +29,7 @@ class EnhancedMultiScraper {
         url: 'https://quietlight.com/amazon-fba-businesses-for-sale/',
         feedMethod: 'scrapeQuietLightFeed',
         detailMethod: 'scrapeQuietLightListing',
-        timeout: 20000,  // Increased timeout for QuietLight
+        timeout: 30000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -154,7 +154,7 @@ class EnhancedMultiScraper {
     this.log('INFO', 'Fetching page', { url });
     
     // Increased timeout for ScraperAPI requests with rendering
-    const REQUEST_TIMEOUT = 30000; // 30 seconds per request for rendering
+    const REQUEST_TIMEOUT = 20000; // 20 seconds per request - optimized for ScraperAPI
     
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
@@ -1094,8 +1094,8 @@ class EnhancedMultiScraper {
     
     let created = 0, updated = 0, duplicates = 0, errors = 0;
     
-    // Process in smaller batches to avoid overwhelming the database
-    const batchSize = 5;
+    // Process in larger batches for better performance
+    const batchSize = 10;
     for (let i = 0; i < listings.length; i += batchSize) {
       const batch = listings.slice(i, i + batchSize);
       
@@ -1668,7 +1668,7 @@ class EnhancedMultiScraper {
   // ============== EXISTING SCRAPERS (UPDATED) ==============
 
   // Process individual listings in parallel batches
-  async processListingsBatch(listingDataArray, maxConcurrent = 4) {
+  async processListingsBatch(listingDataArray, maxConcurrent = 20) {
     const results = [];
     
     // Process in chunks to control concurrency
@@ -1718,9 +1718,9 @@ class EnhancedMultiScraper {
             }
           })();
           
-          // Individual listing timeout (6 seconds per listing)
+          // Individual listing timeout (10 seconds per listing)
           const listingTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Individual listing timeout')), 6000);
+            setTimeout(() => reject(new Error('Individual listing timeout')), 10000);
           });
           
           const listing = await Promise.race([scrapingPromise, listingTimeout]);
@@ -1762,7 +1762,7 @@ class EnhancedMultiScraper {
       
       // Small delay between batches to avoid overwhelming servers
       if (i + maxConcurrent < listingDataArray.length) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 second between batches
+        await new Promise(resolve => setTimeout(resolve, 100)); // 0.1 second between batches - optimized
       }
     }
     
@@ -1812,7 +1812,7 @@ class EnhancedMultiScraper {
         // Use custom pages per site or default from config
         const pagesForSite = maxPagesPerSite || siteConfig.maxPages;
         
-        const createSourcePromise = (func, siteName, timeoutMs) => {
+        const createSourcePromise = async (func, siteName, timeoutMs) => {
           const sourcePromise = func.call(this, pagesForSite);
           const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error(`${siteName} timed out`)), timeoutMs);
@@ -1839,10 +1839,11 @@ class EnhancedMultiScraper {
       
       this.log('INFO', 'Processing selected sources in parallel...', { 
         sites: siteNames,
-        count: sourcePromises.length 
+        count: sourcePromises.length,
+        maxConcurrency: 'unlimited (all sites at once)'
       });
       
-      // Process all selected sources with individual timeouts
+      // Process all selected sources truly in parallel with individual timeouts
       const stage1Results = await Promise.allSettled(sourcePromises);
       
       // Process results and combine listings
@@ -1889,11 +1890,11 @@ class EnhancedMultiScraper {
       // Stage 2: Process individual listings in PARALLEL BATCHES
       this.log('INFO', '🔍 STAGE 2: Extracting detailed information from individual listings...');
       
-      const maxListingsToProcess = Math.min(allListings.length, 18); // Increased since we're more efficient
+      const maxListingsToProcess = Math.min(allListings.length, 100); // Can handle more with 20 concurrent threads
       const listingsToProcess = allListings.slice(0, maxListingsToProcess);
       
-      // Process all listings in parallel batches (4 concurrent requests)
-      const scrapedListings = await this.processListingsBatch(listingsToProcess, 4);
+      // Process all listings in parallel batches (20 concurrent requests - ScraperAPI limit)
+      const scrapedListings = await this.processListingsBatch(listingsToProcess, 20);
       
       this.log('INFO', `✅ Stage 2 Complete - Successfully scraped ${scrapedListings.length} listings`);
 
@@ -1936,9 +1937,9 @@ class EnhancedMultiScraper {
         bySource: this.listingsBySource,
         totalFBAInDatabase: count || 0,
         parallelization: {
-          stage1Concurrent: 2,
-          stage2BatchSize: 4,
-          stage3BatchSize: 5
+          stage1Concurrent: selectedSites.length,
+          stage2BatchSize: 20,
+          stage3BatchSize: 10
         }
       });
 
