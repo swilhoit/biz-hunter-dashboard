@@ -419,14 +419,9 @@ export class DocumentAnalysisService {
         dangerouslyAllowBrowser: true,
       });
 
-      // Convert file to text based on type
-      console.log('Extracting text from file...');
-      const text = await this.extractTextFromFile(file, client);
-      console.log('Text extracted, length:', text.length);
-      
-      // Analyze text using AI
-      console.log('Analyzing text with AI...');
-      const analysis = await this.analyzeText(text, file.name, client);
+      // Use Vision API for all document types
+      console.log('Processing document with Vision API...');
+      const analysis = await this.analyzeDocumentWithVision(file, client);
       console.log('Analysis complete:', analysis);
       
       return analysis;
@@ -436,123 +431,176 @@ export class DocumentAnalysisService {
     }
   }
 
-  private static async extractTextFromFile(file: File, client: OpenAI): Promise<string> {
-    const fileName = file.name.toLowerCase();
+  private static async analyzeDocumentWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+    try {
+      const fileName = file.name.toLowerCase();
+      
+      // For PDFs, we need to convert to images first
+      if (fileName.endsWith('.pdf')) {
+        return await this.analyzePDFWithVision(file, client);
+      }
+      
+      // For images, send directly to Vision API
+      if (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        return await this.analyzeImageWithVision(file, client);
+      }
+      
+      // For text files, we can still read directly and analyze
+      if (fileName.endsWith('.txt')) {
+        const text = await file.text();
+        return await this.analyzeTextWithVision(text, file.name, client);
+      }
+      
+      // For Word/Excel, try to convert to images or provide guidance
+      if (fileName.match(/\.(docx?|xlsx?)$/i)) {
+        return await this.analyzeOfficeWithVision(file, client);
+      }
+      
+      throw new Error(`Unsupported file type: ${file.name}. Please upload PDF, images (PNG/JPG), or text files.`);
+      
+    } catch (error) {
+      console.error('Vision API analysis error:', error);
+      throw error;
+    }
+  }
+
+  private static async analyzePDFWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+    try {
+      console.log('Converting PDF to images for Vision API analysis...');
+      
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      console.log(`PDF has ${pdf.numPages} pages. Processing each page...`);
+      
+      // Convert each page to an image and analyze
+      const pageAnalyses: string[] = [];
+      const maxPages = Math.min(pdf.numPages, 10); // Limit to 10 pages to avoid API limits
+      
+      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        console.log(`Processing page ${pageNum}/${maxPages}...`);
+        
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
+        
+        // Create canvas to render PDF page
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        if (!context) throw new Error('Could not create canvas context');
+        
+        // Render PDF page to canvas
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        // Convert canvas to base64
+        const base64Image = canvas.toDataURL('image/png').split(',')[1];
+        
+        // Analyze this page with Vision API
+        const pageAnalysis = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
+        pageAnalyses.push(pageAnalysis);
+      }
+      
+      if (pdf.numPages > maxPages) {
+        console.log(`Note: Only analyzed first ${maxPages} pages of ${pdf.numPages} total pages`);
+      }
+      
+      // Combine all page analyses
+      const combinedText = pageAnalyses.join('\n\n--- Next Page ---\n\n');
+      
+      // Now analyze the combined text to extract structured data
+      return await this.analyzeTextWithVision(combinedText, file.name, client);
+      
+    } catch (error) {
+      console.error('PDF Vision analysis error:', error);
+      throw new Error(`Failed to analyze PDF with Vision API: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private static async analyzeImageWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+    const base64 = await this.fileToBase64(file);
+    const extractedText = await this.analyzeImageBase64WithVision(base64, file.name, client);
+    return await this.analyzeTextWithVision(extractedText, file.name, client);
+  }
+
+  private static async analyzeImageBase64WithVision(base64: string, fileName: string, client: OpenAI): Promise<string> {
+    console.log('Sending image to Vision API for text extraction...');
     
-    if (fileName.endsWith('.pdf')) {
-      return await this.extractTextFromPDF(file, client);
-    } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
-      return await this.extractTextFromWord(file, client);
-    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-      return await this.extractTextFromExcel(file, client);
-    } else if (fileName.endsWith('.txt')) {
-      return await file.text();
-    }
-    
-    throw new Error('Unsupported file type for analysis');
-  }
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Please extract ALL text content from this business document image. Include:
+- Business name and description
+- All financial figures (revenue, profit, asking price, multiples, etc.)
+- Contact information (names, emails, phones)
+- Business details (age, location, industry, etc.)
+- Amazon/ecommerce specific information if present
+- Any dates, URLs, or other relevant data
 
-  private static async extractTextFromPDF(file: File, client: OpenAI): Promise<string> {
-    try {
-      // For now, we'll use a simple approach - try to extract basic text content
-      // In production, you'd want to use a proper PDF parsing library like pdf-parse
-      const text = await this.basicTextExtraction(file);
-      
-      if (text.length > 50) {
-        return text;
-      }
-      
-      // Fallback: inform user that PDF parsing requires additional setup
-      return `PDF document detected: "${file.name}". 
-      
-For better PDF text extraction, this would need a PDF parsing library. For now, please either:
-1. Convert the PDF to text and upload as .txt file
-2. Copy/paste the content into the manual form fields
-3. Upload a Word document version if available
-
-Basic document metadata extracted where possible.`;
-    } catch (error) {
-      console.error('PDF extraction error:', error);
-      return `Error reading PDF file "${file.name}". Please try converting to text format or entering information manually.`;
-    }
-  }
-
-  private static async extractTextFromWord(file: File, client: OpenAI): Promise<string> {
-    try {
-      // Basic text extraction attempt
-      const text = await this.basicTextExtraction(file);
-      
-      if (text.length > 50) {
-        return text;
-      }
-      
-      return `Word document detected: "${file.name}".
-
-For better Word document parsing, this would need a specialized library like mammoth.js. For now, please either:
-1. Save the document as plain text (.txt) and upload
-2. Copy/paste the content into the manual form fields
-3. Export as PDF if the content is primarily text
-
-Basic document metadata extracted where possible.`;
-    } catch (error) {
-      console.error('Word extraction error:', error);
-      return `Error reading Word document "${file.name}". Please try saving as text format or entering information manually.`;
-    }
-  }
-
-  private static async extractTextFromExcel(file: File, client: OpenAI): Promise<string> {
-    try {
-      // Basic text extraction attempt
-      const text = await this.basicTextExtraction(file);
-      
-      if (text.length > 50) {
-        return text;
-      }
-      
-      return `Excel spreadsheet detected: "${file.name}".
-
-For better Excel data extraction, this would need a specialized library like xlsx. For now, please either:
-1. Export the spreadsheet as CSV and upload as .txt file
-2. Copy/paste the relevant data into the manual form fields
-3. Export key data as PDF if it's primarily tabular
-
-Basic document metadata extracted where possible.`;
-    } catch (error) {
-      console.error('Excel extraction error:', error);
-      return `Error reading Excel file "${file.name}". Please try exporting as CSV/text format or entering information manually.`;
-    }
-  }
-
-  private static async basicTextExtraction(file: File): Promise<string> {
-    try {
-      // Try to read as text directly (works for some simple formats)
-      const text = await file.text();
-      return text;
-    } catch (error) {
-      // If direct text reading fails, return filename info
-      return `Document: ${file.name} (${Math.round(file.size / 1024)}KB)`;
-    }
-  }
-
-  private static async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+Return the complete text content exactly as it appears in the document.`
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${base64}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 4000
     });
+    
+    const extractedText = response.choices[0]?.message?.content;
+    if (!extractedText) throw new Error('No text extracted from image');
+    
+    console.log('Successfully extracted text from image');
+    return extractedText;
   }
 
-  private static async analyzeText(text: string, fileName: string, client: OpenAI): Promise<DocumentAnalysis> {
+  private static async analyzeOfficeWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+    // For Office files, we can't easily convert to images in the browser
+    // Provide guidance to the user
+    const guidance = `Office document detected: "${file.name}"
+
+To analyze this document with AI Vision:
+1. Open the document in Word/Excel
+2. Take screenshots of the important pages
+3. Save as PDF and upload
+4. Or copy the text content and save as .txt file
+
+The Vision API works best with images and PDFs.`;
+    
+    return {
+      businessName: null,
+      confidence: 0,
+      keyFindings: [guidance],
+      missingCriticalInfo: ['Unable to process Office files directly']
+    };
+  }
+
+  private static async analyzeTextWithVision(text: string, fileName: string, client: OpenAI): Promise<DocumentAnalysis> {
     try {
-      const prompt = `You are analyzing a business listing document to extract information for a deal entry form. Extract ALL possible fields that could help fill out a comprehensive business acquisition deal form.
+      console.log('Analyzing extracted text with AI...');
+      
+      const prompt = `You are analyzing text extracted from a business listing document. Extract ALL possible fields that could help fill out a comprehensive business acquisition deal form.
 
 IMPORTANT: Look for and extract EVERY piece of information that could be relevant to evaluating and contacting about this business opportunity.
 
-Analyze this document and return ONLY valid JSON with this exact structure:
+Analyze this text and return ONLY valid JSON with this exact structure:
 
 {
   "businessName": "string or null",
@@ -603,7 +651,7 @@ Analyze this document and return ONLY valid JSON with this exact structure:
   "confidence": number between 0-100
 }
 
-Document content:
+Document text (from ${fileName}):
 ${text}
 
 Extraction Instructions:
@@ -613,7 +661,7 @@ Extraction Instructions:
 - For SDE/Seller's Discretionary Earnings/Cash Flow: treat as annual profit
 - Look for ALL URLs mentioned (listing sites, Amazon stores, company websites)
 - Extract complete business description including what they sell, how they operate, competitive advantages
-- Identify ALL contact information and classify as broker vs seller based on context clues
+- Identify ALL contact information and classify as broker vs seller based on context
 - For Amazon businesses: look for FBA%, seller account health, number of ASINs/SKUs, product categories
 - Extract any mention of inventory value, number of employees, reason for selling
 - Look for growth opportunities, expansion potential, or improvement areas mentioned
@@ -626,7 +674,7 @@ Extraction Instructions:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert business analyst specializing in extracting comprehensive information from business-for-sale listings. Your goal is to extract EVERY piece of information that could be useful for evaluating a business acquisition opportunity. Always return valid JSON in the exact format requested, and be thorough in looking for all data points.'
+            content: 'You are an expert business analyst specializing in extracting comprehensive information from business-for-sale listings. Always return valid JSON in the exact format requested.'
           },
           {
             role: 'user',
@@ -638,79 +686,92 @@ Extraction Instructions:
       });
 
       const aiResponse = response.choices[0]?.message?.content;
-      if (!aiResponse) {
-        throw new Error('No response from AI');
-      }
+      if (!aiResponse) throw new Error('No response from AI');
 
-      // Parse the JSON response
       const analysis = JSON.parse(aiResponse);
       
-      // Validate and ensure proper structure with ALL fields
-      const structuredAnalysis = {
-        businessName: analysis.businessName || null,
-        description: analysis.description || null,
-        askingPrice: this.parseNumber(analysis.askingPrice),
-        annualRevenue: this.parseNumber(analysis.annualRevenue),
-        annualProfit: this.parseNumber(analysis.annualProfit),
-        monthlyRevenue: this.parseNumber(analysis.monthlyRevenue),
-        monthlyProfit: this.parseNumber(analysis.monthlyProfit),
-        valuationMultiple: this.parseNumber(analysis.valuationMultiple),
-        businessAge: this.parseNumber(analysis.businessAge),
-        dateListed: analysis.dateListed || null,
-        industry: analysis.industry || null,
-        location: analysis.location || null,
-        listingUrl: analysis.listingUrl || null,
-        websiteUrl: analysis.websiteUrl || null,
-        brokerInfo: {
-          name: analysis.brokerInfo?.name || null,
-          company: analysis.brokerInfo?.company || null,
-          email: analysis.brokerInfo?.email || null,
-          phone: analysis.brokerInfo?.phone || null
-        },
-        sellerInfo: {
-          name: analysis.sellerInfo?.name || null,
-          email: analysis.sellerInfo?.email || null,
-          phone: analysis.sellerInfo?.phone || null
-        },
-        amazonInfo: {
-          storeName: analysis.amazonInfo?.storeName || null,
-          category: analysis.amazonInfo?.category || null,
-          subcategory: analysis.amazonInfo?.subcategory || null,
-          storeUrl: analysis.amazonInfo?.storeUrl || null,
-          fbaPercentage: this.parseNumber(analysis.amazonInfo?.fbaPercentage),
-          accountHealth: analysis.amazonInfo?.accountHealth || null,
-          asinCount: this.parseNumber(analysis.amazonInfo?.asinCount),
-          topProducts: Array.isArray(analysis.amazonInfo?.topProducts) ? analysis.amazonInfo.topProducts : []
-        },
-        additionalInfo: {
-          inventoryValue: this.parseNumber(analysis.additionalInfo?.inventoryValue),
-          employeeCount: this.parseNumber(analysis.additionalInfo?.employeeCount),
-          reasonForSelling: analysis.additionalInfo?.reasonForSelling || null,
-          growthOpportunities: analysis.additionalInfo?.growthOpportunities || null,
-          includesRealEstate: analysis.additionalInfo?.includesRealEstate || null,
-          trainingProvided: analysis.additionalInfo?.trainingProvided || null
-        },
-        keyFindings: Array.isArray(analysis.keyFindings) ? analysis.keyFindings : ['AI analysis completed'],
-        missingCriticalInfo: Array.isArray(analysis.missingCriticalInfo) ? analysis.missingCriticalInfo : [],
-        confidence: Math.min(100, Math.max(0, analysis.confidence || 0))
-      };
-
-      // Validate that we have enough useful information
-      const validationResult = this.validateAnalysisQuality(structuredAnalysis, fileName);
+      // Validate and structure the analysis
+      return this.structureAnalysisResponse(analysis, fileName);
       
-      return {
-        ...structuredAnalysis,
-        confidence: validationResult.adjustedConfidence,
-        keyFindings: validationResult.enhancedFindings
-      };
-
     } catch (error) {
-      console.error('AI analysis error:', error);
-      
-      // Fallback to basic regex analysis if AI fails
-      return this.fallbackAnalysis(text);
+      console.error('Text analysis error:', error);
+      throw error;
     }
   }
+
+  private static structureAnalysisResponse(analysis: any, fileName: string): DocumentAnalysis {
+    const structuredAnalysis = {
+      businessName: analysis.businessName || null,
+      description: analysis.description || null,
+      askingPrice: this.parseNumber(analysis.askingPrice),
+      annualRevenue: this.parseNumber(analysis.annualRevenue),
+      annualProfit: this.parseNumber(analysis.annualProfit),
+      monthlyRevenue: this.parseNumber(analysis.monthlyRevenue),
+      monthlyProfit: this.parseNumber(analysis.monthlyProfit),
+      valuationMultiple: this.parseNumber(analysis.valuationMultiple),
+      businessAge: this.parseNumber(analysis.businessAge),
+      dateListed: analysis.dateListed || null,
+      industry: analysis.industry || null,
+      location: analysis.location || null,
+      listingUrl: analysis.listingUrl || null,
+      websiteUrl: analysis.websiteUrl || null,
+      brokerInfo: {
+        name: analysis.brokerInfo?.name || null,
+        company: analysis.brokerInfo?.company || null,
+        email: analysis.brokerInfo?.email || null,
+        phone: analysis.brokerInfo?.phone || null
+      },
+      sellerInfo: {
+        name: analysis.sellerInfo?.name || null,
+        email: analysis.sellerInfo?.email || null,
+        phone: analysis.sellerInfo?.phone || null
+      },
+      amazonInfo: {
+        storeName: analysis.amazonInfo?.storeName || null,
+        category: analysis.amazonInfo?.category || null,
+        subcategory: analysis.amazonInfo?.subcategory || null,
+        storeUrl: analysis.amazonInfo?.storeUrl || null,
+        fbaPercentage: this.parseNumber(analysis.amazonInfo?.fbaPercentage),
+        accountHealth: analysis.amazonInfo?.accountHealth || null,
+        asinCount: this.parseNumber(analysis.amazonInfo?.asinCount),
+        topProducts: Array.isArray(analysis.amazonInfo?.topProducts) ? analysis.amazonInfo.topProducts : []
+      },
+      additionalInfo: {
+        inventoryValue: this.parseNumber(analysis.additionalInfo?.inventoryValue),
+        employeeCount: this.parseNumber(analysis.additionalInfo?.employeeCount),
+        reasonForSelling: analysis.additionalInfo?.reasonForSelling || null,
+        growthOpportunities: analysis.additionalInfo?.growthOpportunities || null,
+        includesRealEstate: analysis.additionalInfo?.includesRealEstate || null,
+        trainingProvided: analysis.additionalInfo?.trainingProvided || null
+      },
+      keyFindings: Array.isArray(analysis.keyFindings) ? analysis.keyFindings : ['AI analysis completed'],
+      missingCriticalInfo: Array.isArray(analysis.missingCriticalInfo) ? analysis.missingCriticalInfo : [],
+      confidence: Math.min(100, Math.max(0, analysis.confidence || 0))
+    };
+
+    // Validate quality
+    const validationResult = this.validateAnalysisQuality(structuredAnalysis, fileName);
+    
+    return {
+      ...structuredAnalysis,
+      confidence: validationResult.adjustedConfidence,
+      keyFindings: validationResult.enhancedFindings
+    };
+  }
+
+
+  private static async fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
 
   private static parseNumber(value: any): number | null {
     if (value === null || value === undefined) return null;
