@@ -402,7 +402,7 @@ Write a 2-3 paragraph executive summary highlighting the key investment thesis, 
 
 // Document Analysis for Add Deal Modal - Static utility methods
 export class DocumentAnalysisService {
-  static async analyzeDocument(file: File): Promise<DocumentAnalysis> {
+  static async analyzeDocument(file: File, progressCallback?: (stage: string) => void): Promise<DocumentAnalysis> {
     try {
       console.log('Starting document analysis for file:', file.name, 'Type:', file.type, 'Size:', file.size);
       
@@ -421,7 +421,8 @@ export class DocumentAnalysisService {
 
       // Use Vision API for all document types
       console.log('Processing document with Vision API...');
-      const analysis = await this.analyzeDocumentWithVision(file, client);
+      progressCallback?.('Processing document with AI Vision...');
+      const analysis = await this.analyzeDocumentWithVision(file, client, progressCallback);
       console.log('Analysis complete:', analysis);
       
       return analysis;
@@ -431,22 +432,25 @@ export class DocumentAnalysisService {
     }
   }
 
-  private static async analyzeDocumentWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+  private static async analyzeDocumentWithVision(file: File, client: OpenAI, progressCallback?: (stage: string) => void): Promise<DocumentAnalysis> {
     try {
       const fileName = file.name.toLowerCase();
       
       // For PDFs, we need to convert to images first
       if (fileName.endsWith('.pdf')) {
-        return await this.analyzePDFWithVision(file, client);
+        progressCallback?.('Preparing PDF analysis...');
+        return await this.analyzePDFWithVision(file, client, progressCallback);
       }
       
       // For images, send directly to Vision API
       if (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        progressCallback?.('Analyzing image with AI Vision...');
         return await this.analyzeImageWithVision(file, client);
       }
       
       // For text files, we can still read directly and analyze
       if (fileName.endsWith('.txt')) {
+        progressCallback?.('Analyzing text document...');
         const text = await file.text();
         return await this.analyzeTextWithVision(text, file.name, client);
       }
@@ -464,40 +468,102 @@ export class DocumentAnalysisService {
     }
   }
 
-  private static async analyzePDFWithVision(file: File, client: OpenAI): Promise<DocumentAnalysis> {
+  private static async analyzePDFWithVision(file: File, client: OpenAI, progressCallback?: (stage: string) => void): Promise<DocumentAnalysis> {
     try {
       console.log('Converting PDF to images for Vision API analysis...');
+      progressCallback?.('Loading PDF document...');
       
-      // Dynamic import of PDF.js
-      const pdfjsLib = await import('pdfjs-dist');
+      // Import PDF.js properly
+      let pdfjsLib;
+      try {
+        // Import the standard build
+        const pdfjs = await import('pdfjs-dist');
+        
+        // Log what we got
+        console.log('PDF.js import result:', pdfjs);
+        console.log('PDF.js keys:', Object.keys(pdfjs));
+        
+        // The ES module exports everything directly
+        pdfjsLib = pdfjs;
+        
+        // Double-check for the function we need
+        if (!pdfjsLib.getDocument && pdfjs.default) {
+          pdfjsLib = pdfjs.default;
+        }
+        
+        // Last resort - check window
+        if (!pdfjsLib.getDocument && typeof window !== 'undefined' && (window as any).pdfjsLib) {
+          console.log('Using window.pdfjsLib');
+          pdfjsLib = (window as any).pdfjsLib;
+        }
+        
+        console.log('PDF.js loaded, getDocument available:', typeof pdfjsLib.getDocument);
+      } catch (importError) {
+        console.error('Failed to load PDF.js:', importError);
+        throw new Error('PDF processing library failed to load. Please try uploading images or text files instead.');
+      }
       
-      // Configure PDF.js to work without external worker to avoid CORS issues
-      // This will use a fallback fake worker that runs in the main thread
-      pdfjsLib.GlobalWorkerOptions.workerSrc = undefined;
+      // Ensure we have the getDocument function
+      if (!pdfjsLib.getDocument) {
+        console.error('PDF.js loaded but getDocument not found');
+        throw new Error('PDF.js loaded incorrectly. Please try uploading images or text files instead.');
+      }
       
-      // Load the PDF with additional options to handle worker fallback
+      // Configure worker - try multiple approaches
+      if (pdfjsLib.GlobalWorkerOptions) {
+        try {
+          // First try: Use a data URL with minimal worker
+          const workerCode = `
+            self.addEventListener('message', function(e) {
+              // Minimal fake worker
+            });
+          `;
+          const blob = new Blob([workerCode], { type: 'application/javascript' });
+          const workerUrl = URL.createObjectURL(blob);
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+        } catch (e) {
+          console.warn('Could not create worker blob');
+        }
+      }
+      
+      // Load the PDF with fallback options
+      progressCallback?.('Opening PDF document...');
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ 
-        data: arrayBuffer,
-        // Disable the worker to avoid CORS issues
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true
-      });
-      const pdf = await loadingTask.promise;
+      
+      let pdf;
+      try {
+        const loadingOptions = {
+          data: arrayBuffer,
+          disableWorker: true, // Always disable worker to avoid CORS
+          disableRange: true,  // Disable range requests
+          disableStream: true, // Disable streaming
+          useSystemFonts: true,
+          standardFontDataUrl: '', // Don't load external fonts
+          verbosity: 0
+        };
+        
+        console.log('Attempting to load PDF with options:', loadingOptions);
+        const loadingTask = pdfjsLib.getDocument(loadingOptions);
+        pdf = await loadingTask.promise;
+      } catch (loadError) {
+        console.error('PDF loading error:', loadError);
+        throw new Error('Failed to open PDF. The file may be corrupted, password-protected, or in an unsupported format.');
+      }
       
       console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
       
-      // Limit pages to process
-      const maxPages = Math.min(pdf.numPages, 5);
+      // Limit pages to process but increase limit for better coverage
+      const maxPages = Math.min(pdf.numPages, 10); // Increased from 5 to 10
       const pageTexts: string[] = [];
       
       for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        progressCallback?.(`Processing PDF page ${pageNum}/${maxPages}...`);
         console.log(`Processing page ${pageNum}/${maxPages}...`);
         
         try {
           const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1.5 });
+          // Increase scale for better quality
+          const viewport = page.getViewport({ scale: 2.0 }); // Increased from 1.5 to 2.0
           
           // Create canvas
           const canvas = document.createElement('canvas');
@@ -508,19 +574,33 @@ export class DocumentAnalysisService {
           canvas.height = viewport.height;
           canvas.width = viewport.width;
           
-          // Render page
+          // Set better rendering quality
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = 'high';
+          
+          // Render page with better quality settings
           await page.render({
             canvasContext: context,
-            viewport: viewport
+            viewport: viewport,
+            intent: 'print' // Use print quality rendering
           }).promise;
           
-          // Convert to base64
-          const imageData = canvas.toDataURL('image/png');
+          // Convert to base64 with higher quality
+          const imageData = canvas.toDataURL('image/png', 1.0); // Max quality
           const base64Image = imageData.split(',')[1];
           
           // Send to Vision API
+          progressCallback?.(`Extracting text from page ${pageNum}...`);
           const pageText = await this.analyzeImageBase64WithVision(base64Image, `${file.name} - Page ${pageNum}`, client);
-          if (pageText) pageTexts.push(pageText);
+          if (pageText) {
+            console.log(`Page ${pageNum} extracted text length:`, pageText.length);
+            console.log(`Page ${pageNum} preview:`, pageText.substring(0, 200) + '...');
+            pageTexts.push(pageText);
+          }
+          
+          // Clean up canvas to free memory
+          canvas.width = 0;
+          canvas.height = 0;
           
         } catch (error) {
           console.error(`Error processing page ${pageNum}:`, error);
@@ -532,18 +612,40 @@ export class DocumentAnalysisService {
       }
       
       // Combine and analyze
+      progressCallback?.('Analyzing extracted content...');
       const combinedText = pageTexts.join('\n\n=== Page Break ===\n\n');
       return await this.analyzeTextWithVision(combinedText, file.name, client);
       
     } catch (error) {
       console.error('PDF processing error:', error);
       
+      // More detailed error messages
+      let errorMessage = 'PDF processing error: ';
+      if (error instanceof Error) {
+        if (error.message.includes('No content')) {
+          errorMessage += 'Unable to extract readable text from PDF. The document may be scanned or image-based.';
+        } else if (error.message.includes('getDocument')) {
+          errorMessage += 'Failed to load PDF. The file may be corrupted or password-protected.';
+        } else {
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += 'Unknown error occurred';
+      }
+      
       // Provide helpful guidance if PDF processing fails
       return {
         businessName: null,
         confidence: 0,
-        keyFindings: [`PDF processing error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try converting the PDF to images (PNG/JPG) for best results.`],
-        missingCriticalInfo: ['Unable to process PDF - please convert to images']
+        keyFindings: [
+          errorMessage,
+          '💡 Suggestions for better results:',
+          '• Try taking screenshots of the PDF pages and uploading as PNG/JPG files',
+          '• Copy the text content and save as a .txt file',
+          '• Ensure the PDF is not password-protected or corrupted',
+          '• For scanned documents, use OCR software first'
+        ],
+        missingCriticalInfo: ['Unable to process PDF - please try alternative formats']
       };
     }
   }
@@ -565,15 +667,59 @@ export class DocumentAnalysisService {
           content: [
             {
               type: 'text',
-              text: `Please extract ALL text content from this business document image. Include:
-- Business name and description
-- All financial figures (revenue, profit, asking price, multiples, etc.)
-- Contact information (names, emails, phones)
-- Business details (age, location, industry, etc.)
-- Amazon/ecommerce specific information if present
-- Any dates, URLs, or other relevant data
+              text: `You are analyzing page ${fileName.includes('Page') ? fileName.split('Page')[1] : ''} of a business-for-sale document. This is likely a broker listing, marketplace listing, or business summary.
 
-Return the complete text content exactly as it appears in the document.`
+CRITICAL INSTRUCTION: Extract EVERY piece of text visible in this image, maintaining the exact format and structure. Do not summarize or skip anything.
+
+Pay special attention to:
+
+1. Business Information:
+   - Business name/title
+   - Business description
+   - Industry/category
+   - Location (city, state, country)
+   - Years in business/established date
+   
+2. Financial Data (CRITICAL - extract ALL numbers):
+   - Asking/listing price
+   - Annual revenue/sales
+   - Annual profit/net income/SDE/EBITDA
+   - Monthly revenue/profit
+   - Gross margin
+   - Inventory value
+   - Any financial multiples mentioned
+   
+3. Contact Information:
+   - Broker/agent name and company
+   - Seller name
+   - Phone numbers
+   - Email addresses
+   - Website URLs
+   
+4. Amazon/E-commerce Specific (if applicable):
+   - Amazon store name/URL
+   - FBA percentage
+   - Number of SKUs/ASINs
+   - Product categories
+   - Account health metrics
+   
+5. Additional Details:
+   - Reason for selling
+   - Number of employees
+   - Growth opportunities
+   - Training/transition offered
+   - Real estate included
+   - Listing ID/reference number
+
+EXTRACTION RULES:
+- Extract text EXACTLY as shown in the image
+- Include ALL numbers, even if context is unclear
+- Preserve formatting of financial figures (e.g., "$1,234,567")
+- Don't skip sections - extract everything visible
+- If tables are present, extract all data maintaining structure
+- Include headers, footers, and any fine print
+
+Return the COMPLETE extracted text, maintaining the original structure as much as possible.`
             },
             {
               type: 'image_url',
@@ -584,13 +730,21 @@ Return the complete text content exactly as it appears in the document.`
           ]
         }
       ],
-      max_tokens: 4000
+      max_tokens: 4000,
+      temperature: 0.1 // Lower temperature for more accurate extraction
     });
     
     const extractedText = response.choices[0]?.message?.content;
     if (!extractedText) throw new Error('No text extracted from image');
     
-    console.log('Successfully extracted text from image');
+    console.log(`Successfully extracted text from image: ${extractedText.length} characters`);
+    console.log('Text preview:', extractedText.substring(0, 200) + '...');
+    
+    // Check if we got meaningful content
+    if (extractedText.length < 50) {
+      console.warn('Very little text extracted from image - the image may be unclear or contain no text');
+    }
+    
     return extractedText;
   }
 
@@ -619,9 +773,19 @@ The Vision API works best with images and PDFs.`;
     try {
       console.log('Analyzing extracted text with AI...');
       
-      const prompt = `You are analyzing text extracted from a business listing document. Extract ALL possible fields that could help fill out a comprehensive business acquisition deal form.
+      const prompt = `You are an expert business analyst specializing in business-for-sale listings. You are analyzing text extracted from a business listing document (likely from a broker, marketplace, or direct seller).
 
-IMPORTANT: Look for and extract EVERY piece of information that could be relevant to evaluating and contacting about this business opportunity.
+CRITICAL: This document contains information about a business for sale. Your job is to extract EVERY piece of data that would be useful for evaluating this acquisition opportunity.
+
+Common patterns to look for:
+- "Asking Price:", "List Price:", "Sale Price:" followed by dollar amounts
+- "Revenue:", "Sales:", "Gross Income:" for revenue figures  
+- "Profit:", "Net Income:", "SDE:", "EBITDA:", "Cash Flow:" for profit metrics
+- "Multiple:", "Valuation:", "x SDE", "x EBITDA" for valuation multiples
+- Business descriptions often start with industry/category mentions
+- Contact info often appears at bottom or in headers
+- Look for "Established", "Founded", "Years in Business" for age
+- Amazon businesses mention "FBA", "Amazon", "ASIN", "SKU"
 
 Analyze this text and return ONLY valid JSON with this exact structure:
 
@@ -711,7 +875,19 @@ Extraction Instructions:
       const aiResponse = response.choices[0]?.message?.content;
       if (!aiResponse) throw new Error('No response from AI');
 
+      console.log('AI analysis response length:', aiResponse.length);
+      console.log('AI analysis response preview:', aiResponse.substring(0, 500));
+
       const analysis = JSON.parse(aiResponse);
+      
+      // Log what was extracted
+      console.log('Extracted data summary:', {
+        businessName: analysis.businessName ? 'Found' : 'Not found',
+        askingPrice: analysis.askingPrice ? `$${analysis.askingPrice}` : 'Not found',
+        revenue: analysis.annualRevenue ? `$${analysis.annualRevenue}` : 'Not found',
+        profit: analysis.annualProfit ? `$${analysis.annualProfit}` : 'Not found',
+        confidence: analysis.confidence
+      });
       
       // Validate and structure the analysis
       return this.structureAnalysisResponse(analysis, fileName);

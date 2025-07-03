@@ -20,6 +20,7 @@ class EnhancedMultiScraper {
     this.totalErrors = 0;
     this.duplicates = 0;
     this.listingsBySource = {};
+    this.detailedLogs = [];
     
     // Define all available sites with their configurations
     this.availableSites = {
@@ -121,6 +122,32 @@ class EnhancedMultiScraper {
   log(level, message, data = {}) {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] [${level}] ${message}`, JSON.stringify(data, null, 2));
+    
+    // Add to detailed logs for frontend display
+    this.detailedLogs.push({
+      timestamp,
+      level,
+      message,
+      data
+    });
+  }
+
+  // Helper method to log found listings for frontend display
+  logFoundListing(source, listingTitle, listingUrl) {
+    this.log('LISTING_FOUND', `Found listing from ${source}`, {
+      source,
+      title: listingTitle,
+      url: listingUrl
+    });
+  }
+
+  // Helper method to log scraping errors for frontend display
+  logScrapingError(source, errorMessage, url = null) {
+    this.log('SCRAPING_ERROR', `${source} scraping error`, {
+      source,
+      error: errorMessage,
+      url
+    });
   }
 
   async fetchPage(url, retries = 2) { // Reduced retries for speed
@@ -236,6 +263,8 @@ class EnhancedMultiScraper {
         this.log('WARN', 'Skipping invalid listing', { listing });
         return false;
       }
+      
+      this.log('INFO', `[DB] Processing: "${listing.name}"`);
 
       // Check if already exists
       const { data: existing } = await supabase
@@ -260,10 +289,12 @@ class EnhancedMultiScraper {
               name: listing.name,
               descriptionLength: listing.description.length 
             });
+            console.log(`  -> [DB] Updated: "${listing.name}"`);
             return 'updated';
           }
         }
         this.duplicates++;
+        console.log(`  -> [DB] Duplicate (skipped): "${listing.name}"`);
         return 'duplicate';
       }
 
@@ -289,6 +320,7 @@ class EnhancedMultiScraper {
       if (error) {
         if (error.code === '23505') {
           this.duplicates++;
+          console.log(`  -> [DB] Duplicate (skipped): "${listing.name}"`);
           return 'duplicate';
         }
         throw error;
@@ -300,6 +332,7 @@ class EnhancedMultiScraper {
         price: `$${listing.asking_price.toLocaleString()}`,
         source: listing.source
       });
+      console.log(`  -> [DB] Saved new listing: "${listing.name}"`);
       return 'created';
 
     } catch (error) {
@@ -359,12 +392,16 @@ class EnhancedMultiScraper {
               priceText,
               source: 'QuietLight'
             });
+            
+            // Log found listing for frontend display
+            this.logFoundListing('QuietLight', title, fullUrl);
           }
         });
 
         this.log('INFO', `QuietLight page ${page} scraped`, { foundUrls: listings.length });
       } catch (error) {
         this.log('ERROR', `QuietLight page ${page} failed`, { error: error.message });
+        this.logScrapingError('QuietLight', error.message, feedUrl);
         break; // Stop pagination on error
       }
     }
@@ -500,11 +537,15 @@ class EnhancedMultiScraper {
                 location,
                 source: 'BizBuySell'
               });
+              
+              // Log found listing for frontend display
+              this.logFoundListing('BizBuySell', title, fullUrl);
             }
           });
 
         } catch (error) {
           this.log('ERROR', 'BizBuySell feed scraper failed', { url: searchUrl, error: error.message });
+          this.logScrapingError('BizBuySell', error.message, searchUrl);
         }
       }
       
@@ -1485,6 +1526,8 @@ class EnhancedMultiScraper {
       const batchPromises = batch.map(async (listingData, batchIndex) => {
         const globalIndex = i + batchIndex;
         
+        console.log(`  📋 [${globalIndex + 1}/${listingDataArray.length}] Processing: "${listingData.title}" from ${listingData.source}`);
+        
         try {
           // Use appropriate scraper based on source with timeout
           const scrapingPromise = (() => {
@@ -1529,7 +1572,10 @@ class EnhancedMultiScraper {
               name: listing.name,
               source: listingData.source 
             });
+            console.log(`    ✅ [${globalIndex + 1}] Scraped details for: "${listing.name}"`);
             return listing;
+          } else {
+            console.log(`    ❌ [${globalIndex + 1}] Failed to get details for: "${listingData.title}"`);
           }
           
           return null;
@@ -1540,6 +1586,7 @@ class EnhancedMultiScraper {
             source: listingData.source,
             error: error.message 
           });
+          console.log(`    ❌ [${globalIndex + 1}] Error scraping: "${listingData.title}" - ${error.message}`);
           this.totalErrors++;
           return null;
         }
@@ -1741,6 +1788,7 @@ class EnhancedMultiScraper {
         errors: this.totalErrors,
         bySource: this.listingsBySource,
         databaseTotal: count || 0,
+        logs: this.detailedLogs,
         performance: {
           duration,
           parallelOptimized: true
@@ -1767,6 +1815,7 @@ class EnhancedMultiScraper {
         duplicates: this.duplicates,
         errors: this.totalErrors + 1,
         bySource: this.listingsBySource,
+        logs: this.detailedLogs,
         errorMessage: error.message,
         performance: {
           duration,

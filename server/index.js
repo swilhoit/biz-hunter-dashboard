@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
+import net from 'net';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
@@ -16,7 +17,24 @@ console.log('VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'Set
 console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'Set' : 'Missing');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+
+// Function to find an available port
+async function findAvailablePort(startPort = 3001) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    
+    server.listen(startPort, () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+    
+    server.on('error', () => {
+      // Port is in use, try the next one
+      resolve(findAvailablePort(startPort + 1));
+    });
+  });
+}
 
 // Middleware
 app.use(cors());
@@ -2434,7 +2452,11 @@ app.post('/api/scrape', async (req, res) => {
             duplicatesSkipped: 0,
             method: method,
             executionTime: 60,
-            logs: logs,
+            logs: [...logs, {
+              timestamp: new Date().toISOString(),
+              level: 'error',
+              message: 'Scraping operation timed out after 60 seconds'
+            }],
             errors: [{
               source: 'Timeout',
               message: 'Scraping operation timed out after 60 seconds. The database save may still be running in the background.'
@@ -2480,8 +2502,8 @@ app.post('/api/scrape', async (req, res) => {
           duplicatesSkipped: enhancedResult.duplicates || 0,
           method: method,
           executionTime: executionTime,
-          logs: logs,
-          errors: errors,
+          logs: [...logs, ...(enhancedResult.logs || [])], // Merge enhanced scraper logs
+          errors: [...errors, ...(enhancedResult.errors || [])], // Merge enhanced scraper errors
           siteBreakdown: siteBreakdown,
           message: enhancedResult.success ? 
             `Successfully scraped ${enhancedResult.totalSaved} FBA business listings from multiple sources` :
@@ -2653,27 +2675,79 @@ app.delete('/api/clear', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🔥 SCRAPERAPI-POWERED SCRAPER running on http://localhost:${PORT}`);
-  console.log(`📡 Endpoints:`);
-  console.log(`   GET  /api/health           - Check API status`);
-  console.log(`   POST /api/scrape          - Manual scrape`);
-  console.log(`   DELETE /api/clear         - Clear all listings`);
-  console.log(`   POST /api/scraping/start  - Start background scraping`);
-  console.log(`   POST /api/scraping/stop   - Stop background scraping`);
-  console.log(`   GET  /api/scraping/status - Check background status`);
-  console.log(`🔑 ScraperAPI: ${SCRAPER_API_KEY ? 'Configured' : 'NOT CONFIGURED'}`);
-  
-  // Start auto-scraping and background intervals
-  autoScrapeOnStartup().then(() => {
-    startBackgroundScraping();
-    startBackgroundVerification();
-  });
+// Enhanced server startup with error handling and dynamic port selection
+async function startServer() {
+  try {
+    const availablePort = await findAvailablePort(PORT);
+    
+    const server = app.listen(availablePort, () => {
+      console.log(`🔥 SCRAPERAPI-POWERED SCRAPER running on http://localhost:${availablePort}`);
+      console.log(`📡 Endpoints:`);
+      console.log(`   GET  /api/health           - Check API status`);
+      console.log(`   POST /api/scrape          - Manual scrape`);
+      console.log(`   DELETE /api/clear         - Clear all listings`);
+      console.log(`   POST /api/scraping/start  - Start background scraping`);
+      console.log(`   POST /api/scraping/stop   - Stop background scraping`);
+      console.log(`   GET  /api/scraping/status - Check background status`);
+      console.log(`🔑 ScraperAPI: ${SCRAPER_API_KEY ? 'Configured' : 'NOT CONFIGURED'}`);
+      
+      if (availablePort !== PORT) {
+        console.log(`⚠️  Note: Started on port ${availablePort} (${PORT} was in use)`);
+      }
+      
+      // Start auto-scraping and background intervals
+      autoScrapeOnStartup().then(() => {
+        startBackgroundScraping();
+        startBackgroundVerification();
+      }).catch(error => {
+        console.warn('⚠️  Background services initialization warning:', error.message);
+      });
+    });
+    
+    // Handle server errors gracefully
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${availablePort} is in use. Trying next available port...`);
+        startServer(); // Retry with next available port
+      } else {
+        console.error('❌ Server error:', error.message);
+        process.exit(1);
+      }
+    });
+    
+    return server;
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
+
+// Enhanced error handling and process management
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error.message);
+  console.error('Stack:', error.stack);
+  console.log('🔄 Server will continue running...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  console.log('🔄 Server will continue running...');
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\\n🛑 Shutting down gracefully...');
+  stopBackgroundScraping();
+  stopBackgroundVerification();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\\n🛑 Received SIGTERM, shutting down gracefully...');
   stopBackgroundScraping();
   stopBackgroundVerification();
   process.exit(0);

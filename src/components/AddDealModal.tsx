@@ -3,6 +3,7 @@ import { X, Upload, FileText, Loader2, AlertCircle, Brain, Save, CheckCircle, Do
 import { Deal, DealStatus, DealSource } from '../types/deal';
 import { dealsAdapter, filesAdapter } from '../lib/database-adapter';
 import { DocumentAnalysisService, DocumentAnalysis } from '../services/AIAnalysisService';
+import PDFUploadGuide from './PDFUploadGuide';
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -72,6 +73,8 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   const [isSaving, setIsSaving] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<FileAnalysis | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0, stage: '' });
+  const [showPDFGuide, setShowPDFGuide] = useState(false);
 
   const dealStatuses: { value: DealStatus; label: string }[] = [
     { value: 'prospecting', label: 'Prospecting' },
@@ -130,6 +133,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     console.log('Starting file upload for', files.length, 'files');
     setUploadedFiles(prev => [...prev, ...files]);
     setIsAnalyzing(true);
+    setAnalysisProgress({ current: 0, total: files.length, stage: 'Preparing files...' });
 
     const newAnalyses: FileAnalysis[] = files.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -145,9 +149,20 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
       const file = files[i];
       const analysisId = newAnalyses[i].id;
       console.log(`Analyzing file ${i + 1}/${files.length}: ${file.name}`);
+      
+      setAnalysisProgress({ 
+        current: i + 1, 
+        total: files.length, 
+        stage: `Analyzing ${file.name}...` 
+      });
 
       try {
-        const analysis = await DocumentAnalysisService.analyzeDocument(file);
+        const analysis = await DocumentAnalysisService.analyzeDocument(
+          file,
+          (progress: string) => {
+            setAnalysisProgress(prev => ({ ...prev, stage: progress }));
+          }
+        );
         console.log('Analysis result for', file.name, ':', analysis);
         
         setFileAnalyses(prev => prev.map(fa => 
@@ -157,6 +172,15 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
         ));
       } catch (error: any) {
         console.error('Analysis error for', file.name, ':', error);
+        
+        // Check if it's a PDF processing error
+        const isPDFError = file.name.toLowerCase().endsWith('.pdf') && 
+          (error.message.includes('PDF') || error.message.includes('Failed to open'));
+        
+        if (isPDFError) {
+          setShowPDFGuide(true);
+        }
+        
         setFileAnalyses(prev => prev.map(fa => 
           fa.id === analysisId
             ? { ...fa, status: 'error', error: error.message }
@@ -166,6 +190,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     }
 
     setIsAnalyzing(false);
+    setAnalysisProgress({ current: 0, total: 0, stage: '' });
     console.log('File analysis complete');
   };
 
@@ -397,8 +422,9 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
               </p>
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-4">
                 <p className="text-xs text-blue-800 dark:text-blue-200">
-                  💡 <strong>Best Results:</strong> Plain text files (.txt) work best. For PDF/Word/Excel files, 
-                  consider copying the content and saving as .txt for optimal AI analysis.
+                  💡 <strong>Best Results:</strong> For PDFs, we'll extract up to 10 pages. Plain text files (.txt) and 
+                  high-quality images (PNG/JPG) of business listings work best. Broker teasers, P&L statements, and 
+                  listing screenshots are ideal documents to upload.
                 </p>
               </div>
               
@@ -429,6 +455,22 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                 <p className="text-sm text-gray-500">
                   Supports .txt, .pdf, .doc/.docx, .xls/.xlsx • Best results with plain text files
                 </p>
+                
+                {/* Progress bar */}
+                {isAnalyzing && analysisProgress.total > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                      <span>{analysisProgress.stage}</span>
+                      <span>{analysisProgress.current}/{analysisProgress.total} files</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* File Analysis Results */}
@@ -1169,6 +1211,11 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
             </div>
           </div>
         </div>
+      )}
+
+      {/* PDF Upload Guide Modal */}
+      {showPDFGuide && (
+        <PDFUploadGuide onClose={() => setShowPDFGuide(false)} />
       )}
     </>
   );

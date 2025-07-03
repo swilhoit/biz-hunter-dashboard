@@ -144,8 +144,8 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
 
   const fallbackToTraditionalAPI = async () => {
     try {
-      addLog('info', 'Starting scraping process...');
-      setCurrentStage('Preparing to scrape sites...');
+      addLog('info', 'Connecting to scraping server...');
+      setCurrentStage('Starting scraping process...');
       
       // Initialize site statuses based on selected sites
       const sitesToScrape = localSelectedSites.map(siteId => {
@@ -155,20 +155,14 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
       
       setTotalSites(sitesToScrape.length);
       
-      sitesToScrape.forEach(site => {
-        setSiteStatuses(prev => ({
-          ...prev,
-          [site]: { status: 'pending', found: 0, saved: 0, errors: 0 }
-        }));
-      });
-      
-      addLog('info', `Initialized ${sitesToScrape.length} sites for scraping`);
+      // Don't initialize fake statuses - let real data populate them
+      addLog('info', `Initiating scraping for ${sitesToScrape.length} sites: ${sitesToScrape.join(', ')}`);
       
       // Start the actual API call
       const SCRAPING_API_URL = import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001';
       
-      // Simulate progress while the real scraping happens
-      const progressSimulation = simulateRealisticProgress(sitesToScrape);
+      setCurrentStage('Scraping in progress...');
+      addLog('info', 'Scraping started - waiting for real results...');
       
       const response = await fetch(`${SCRAPING_API_URL}/api/scrape`, {
         method: 'POST',
@@ -185,9 +179,6 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
 
       const result = await response.json();
       
-      // Clear the simulation
-      clearTimeout(progressSimulation);
-      
       // Apply the real results
       applyFinalResults(result, sitesToScrape);
       
@@ -195,69 +186,8 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
       addLog('error', `Scraping failed: ${error.message}`);
       setCurrentStage('Scraping failed');
       setIsComplete(true);
+      setProgress(0);
     }
-  };
-
-  const simulateRealisticProgress = (sites) => {
-    let currentSiteIndex = 0;
-    let currentProgress = 0;
-    const progressPerSite = 80 / sites.length; // Leave 20% for final processing
-    
-    const processNextSite = () => {
-      if (currentSiteIndex < sites.length) {
-        const site = sites[currentSiteIndex];
-        
-        setCurrentStage(`Processing ${site}...`);
-        addLog('info', `Starting scrape for ${site}`, site);
-        updateSiteStatus(site, 'running');
-        
-        // Simulate site processing with random progress updates
-        let siteProgress = 0;
-        const siteInterval = setInterval(() => {
-          siteProgress += Math.random() * 20;
-          if (siteProgress < 100) {
-            addLog('info', `Scanning pages... ${Math.floor(siteProgress)}% complete`, site);
-            updateSiteStatus(site, 'running', {
-              found: Math.floor(siteProgress / 10),
-              processed: Math.floor(siteProgress / 15)
-            });
-          } else {
-            clearInterval(siteInterval);
-            
-            // Complete this site
-            const mockFound = Math.floor(Math.random() * 15) + 5;
-            const mockSaved = Math.floor(mockFound * 0.7);
-            
-            updateSiteStatus(site, 'completed', {
-              found: mockFound,
-              saved: mockSaved,
-              errors: 0
-            });
-            
-            addLog('success', `Completed ${site}: ${mockSaved} saved, ${mockFound} found`, site);
-            setCompletedSites(prev => prev + 1);
-            
-            currentProgress += progressPerSite;
-            setProgress(currentProgress);
-            
-            currentSiteIndex++;
-            
-            // Process next site after a short delay
-            setTimeout(processNextSite, 500);
-          }
-        }, 800 + Math.random() * 1200); // Random interval between 0.8-2s
-        
-      } else {
-        // All sites processed, wait for real results
-        setCurrentStage('Finalizing results...');
-        addLog('info', 'Processing and saving results to database...');
-        setProgress(90);
-      }
-    };
-    
-    // Start processing first site after short delay
-    const timeout = setTimeout(processNextSite, 1000);
-    return timeout;
   };
 
   const applyFinalResults = (result, sites) => {
@@ -265,6 +195,26 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     setCurrentStage('Scraping completed');
     setIsComplete(true);
     setFinalResults(result);
+    
+    // Display real logs from the server
+    if (result.logs && result.logs.length > 0) {
+      result.logs.forEach(log => {
+        if (log.level === 'LISTING_FOUND') {
+          addLog('success', `Found: "${log.data.title}" from ${log.data.source}`);
+        } else if (log.level === 'SCRAPING_ERROR') {
+          addLog('error', `${log.data.source}: ${log.data.error}`);
+        } else if (log.level === 'INFO') {
+          addLog('info', log.message);
+        } else if (log.level === 'ERROR') {
+          addLog('error', log.message);
+        } else if (log.level === 'SUCCESS') {
+          addLog('success', log.message);
+        } else {
+          // Default handling for any other log types
+          addLog(log.level.toLowerCase(), log.message);
+        }
+      });
+    }
     
     // Update site statuses with real results
     if (result.siteBreakdown) {
@@ -274,14 +224,21 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
           saved: data.saved || 0,
           errors: data.errors || 0
         });
+        setCompletedSites(prev => prev + 1);
       });
     }
     
-    addLog('success', `Scraping completed: ${result.totalSaved || 0} new listings saved`);
+    // Add final summary
+    const totalFound = result.totalFound || 0;
+    const totalSaved = result.totalSaved || 0;
+    const duplicatesSkipped = result.duplicatesSkipped || 0;
     
+    addLog('success', `Scraping completed: ${totalSaved} new listings saved, ${totalFound} total found, ${duplicatesSkipped} duplicates skipped`);
+    
+    // Display any errors from the server
     if (result.errors && result.errors.length > 0) {
       result.errors.forEach(error => {
-        addLog('error', `${error.source || 'Unknown'}: ${error.message}`);
+        addLog('error', `${error.source || 'Error'}: ${error.message}`);
         setErrors(prev => [...prev, error]);
       });
     }
@@ -442,13 +399,13 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
                       Overall Progress
                     </span>
                     <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {Math.round(progress)}%
+                      {isComplete ? '100%' : '0%'}
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 mb-2">
                     <div 
                       className="bg-violet-600 dark:bg-violet-400 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
+                      style={{ width: isComplete ? '100%' : '0%' }}
                     />
                   </div>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
