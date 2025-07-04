@@ -6,7 +6,7 @@ services:
     region: oregon # Optional: specify a region
     plan: free # Change to 'starter' or higher for production
     buildCommand: ./scripts/render-build.sh
-    startCommand: npm run start:full
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production

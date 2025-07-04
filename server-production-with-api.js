@@ -22,6 +22,7 @@ dotenv.config();
 
 // For Railway/Render: Copy VITE_ prefixed vars to non-prefixed versions if they don't exist
 // Also check for OPEN_AI_API_KEY (with underscore) as seen in .env
+// This needs to happen before any other code that might use these vars
 if (!process.env.OPENAI_API_KEY) {
   if (process.env.VITE_OPENAI_API_KEY) {
     process.env.OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
@@ -30,6 +31,11 @@ if (!process.env.OPENAI_API_KEY) {
     process.env.OPENAI_API_KEY = process.env.OPEN_AI_API_KEY;
     console.log('Copied OPEN_AI_API_KEY to OPENAI_API_KEY');
   }
+}
+
+// Also ensure OPEN_AI_API_KEY is set from OPENAI_API_KEY if needed
+if (!process.env.OPEN_AI_API_KEY && process.env.OPENAI_API_KEY) {
+  process.env.OPEN_AI_API_KEY = process.env.OPENAI_API_KEY;
 }
 
 if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
