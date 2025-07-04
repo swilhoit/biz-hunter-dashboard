@@ -137,17 +137,32 @@ app.get('/api/diagnostics', (req, res) => {
 // OpenAI endpoints
 app.post('/api/openai/chat', async (req, res) => {
   try {
+    console.log('[OpenAI Chat] Request received');
     const { messages, temperature = 0.7, max_tokens = 2000, model = 'gpt-4o-mini' } = req.body;
     
-    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    // Try multiple possible key names
+    const openAIKey = process.env.OPENAI_API_KEY || 
+                     process.env.VITE_OPENAI_API_KEY || 
+                     process.env.REACT_APP_OPENAI_API_KEY;
+    
+    console.log('[OpenAI Chat] Checking for API keys:');
+    console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
+    console.log('  VITE_OPENAI_API_KEY:', process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET');
+    console.log('  Resolved key:', openAIKey ? `Found (${openAIKey.length} chars)` : 'NOT FOUND');
     
     if (!openAIKey) {
+      console.error('[OpenAI Chat] No API key found in environment');
+      console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI') || k.includes('KEY')).join(', '));
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
     
+    console.log('[OpenAI Chat] Importing OpenAI module...');
     const { default: OpenAI } = await import('openai');
+    
+    console.log('[OpenAI Chat] Creating OpenAI client...');
     const openai = new OpenAI({ apiKey: openAIKey });
     
+    console.log('[OpenAI Chat] Calling OpenAI API...');
     const completion = await openai.chat.completions.create({
       model,
       messages,
@@ -155,20 +170,30 @@ app.post('/api/openai/chat', async (req, res) => {
       max_tokens,
     });
     
+    console.log('[OpenAI Chat] Success, returning response');
     res.json({ response: completion.choices[0]?.message?.content || '' });
   } catch (error) {
-    console.error('OpenAI API error:', error);
+    console.error('[OpenAI Chat] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/openai/vision', async (req, res) => {
   try {
+    console.log('[OpenAI Vision] Request received');
     const { image, prompt, max_tokens = 1500 } = req.body;
     
-    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    const openAIKey = process.env.OPENAI_API_KEY || 
+                     process.env.VITE_OPENAI_API_KEY || 
+                     process.env.REACT_APP_OPENAI_API_KEY;
     
     if (!openAIKey) {
+      console.error('[OpenAI Vision] No API key found in environment');
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
     
@@ -198,11 +223,15 @@ app.post('/api/openai/vision', async (req, res) => {
 
 app.post('/api/openai/analyze-document', async (req, res) => {
   try {
+    console.log('[OpenAI Analyze] Request received');
     const { content, fileName, fileType, analysisType } = req.body;
     
-    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    const openAIKey = process.env.OPENAI_API_KEY || 
+                     process.env.VITE_OPENAI_API_KEY || 
+                     process.env.REACT_APP_OPENAI_API_KEY;
     
     if (!openAIKey) {
+      console.error('[OpenAI Analyze] No API key found in environment');
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
     
