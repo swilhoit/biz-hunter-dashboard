@@ -75,20 +75,22 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
 
   // Reset state when modal opens
   useEffect(() => {
-    if (isOpen && !startTime) {
-      setStartTime(null);
-      setProgress(0);
-      setCurrentStage('Select sites to scrape...');
-      setLogs([]);
-      setSiteStatuses({});
-      setCompletedSites(0);
-      setIsComplete(false);
-      setFinalResults(null);
-      setErrors([]);
-      setShowSiteSelection(true);
-      setLocalSelectedSites(selectedSites || ['quietlight', 'bizbuysell']);
+    if (isOpen) {
+      if (!scraping) {
+        setStartTime(null);
+        setProgress(0);
+        setCurrentStage('Select sites to scrape...');
+        setLogs([]);
+        setSiteStatuses({});
+        setCompletedSites(0);
+        setIsComplete(false);
+        setFinalResults(null);
+        setErrors([]);
+        setShowSiteSelection(true);
+        setLocalSelectedSites(selectedSites || ['quietlight', 'bizbuysell']);
+      }
     }
-  }, [isOpen, selectedSites]);
+  }, [isOpen, scraping, selectedSites]);
 
   // Cleanup on close
   useEffect(() => {
@@ -107,15 +109,30 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     }
     
     setShowSiteSelection(false);
+    setScraping(true);
+    setIsComplete(false);
+    setLogs([]);
+    setErrors([]);
+    setCompletedSites(0);
     setStartTime(Date.now());
+    setCurrentTime(Date.now());
+    setCurrentStage('Initializing scraper...');
+    
     if (onSitesChange) {
       onSitesChange(localSelectedSites);
     }
     
+    setTotalSites(localSelectedSites.length);
+    const initialSiteStatuses = localSelectedSites.reduce((acc, site) => {
+      acc[site] = { status: 'running', found: 0, saved: 0, errors: 0 };
+      return acc;
+    }, {});
+    setSiteStatuses(initialSiteStatuses);
+    
     addLog('info', `Starting ${method === 'scrapegraph' ? 'AI-powered' : 'traditional'} scraping...`);
     addLog('info', `Selected sites: ${localSelectedSites.join(', ')}`);
     
-    startScraping();
+    startScraping(localSelectedSites);
   };
   
   const toggleSite = (siteId) => {
@@ -128,63 +145,68 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     });
   };
   
-  const startScraping = () => {
-    setScraping(true);
-    setIsComplete(false);
-    setLogs([]);
-    setSiteStatuses({});
-    setStartTime(Date.now());
-    setCurrentTime(Date.now());
-
+  const startScraping = (sites) => {
     addLog('info', '🚀 Connecting to real-time log stream...');
 
-    const siteParams = localSelectedSites.join(',');
+    const siteParams = sites.join(',');
     
-    // Check if we're in production (Railway)
-    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    // Use an absolute URL for EventSource to avoid cross-origin issues
+    const eventSourceUrl = `http://localhost:3001/api/scrape/stream?selectedSites=${siteParams}`;
     
-    if (isProduction && !import.meta.env.VITE_SCRAPING_API_URL) {
-      addLog('error', '⚠️ Scraping service is not configured for production');
-      addLog('info', '💡 The scraping server needs to be deployed separately');
-      setIsComplete(true);
-      setScraping(false);
-      setCurrentStage('Configuration needed');
-      return;
-    }
+    console.log('🔌 [SSE] Connecting to:', eventSourceUrl);
     
-    const eventSource = new EventSource(
-      `${import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001'}/api/scrape/stream?selectedSites=${siteParams}`
-    );
+    const eventSource = new EventSource(eventSourceUrl);
 
     eventSource.onopen = () => {
-      addLog('success', '✅ Connection established. Scraping has started.');
+      addLog('success', '✅ Log stream connected. Scraping has started...');
+      setCurrentStage('Scraping sites...');
       addLog('warning', '⏳ Scraping can take up to 2 minutes per site...');
     };
 
     eventSource.onmessage = (event) => {
       const log = JSON.parse(event.data);
-      
-      if (log.level === 'COMPLETE') {
-        addLog('success', '🎉 Scraping process complete on server.');
-        applyFinalResults(log.data);
-        eventSource.close();
-      } else {
-        addLog(log.level.toLowerCase(), log.message, log.data.source || null);
+      const source = log.data?.source;
 
-        // Update site status from logs
-        if (log.data && log.data.source && log.message.includes('completed successfully')) {
-            updateSiteStatus(log.data.source, 'completed', {
-                found: log.data.listingsFound,
-                saved: 0, 
-                errors: 0
+      addLog(log.level.toLowerCase(), log.message, source || null);
+
+      switch (log.level) {
+        case 'COMPLETE':
+          addLog('success', '🎉 Scraping process complete on server.');
+          applyFinalResults(log.data);
+          eventSource.close();
+          break;
+
+        case 'SITE_COMPLETED':
+          if (source) {
+            updateSiteStatus(source, 'completed', {
+              found: log.data.listingsFound,
+              saved: log.data.listingsSaved,
+              errors: siteStatuses[source]?.errors || 0,
             });
             setCompletedSites(prev => prev + 1);
-        } else if (log.data && log.data.source && log.message.includes('failed')) {
-            updateSiteStatus(log.data.source, 'error', {
-                found: 0, saved: 0, errors: 1
+          }
+          break;
+
+        case 'SCRAPING_ERROR':
+          if (source) {
+            const newError = { source, message: log.message, timestamp: new Date().toISOString() };
+            setErrors(prev => [...prev, newError]);
+            updateSiteStatus(source, 'error', {
+              errors: (siteStatuses[source]?.errors || 0) + 1,
             });
-            setCompletedSites(prev => prev + 1);
-        }
+          }
+          break;
+
+        case 'LISTING_FOUND':
+          if (source) {
+            updateSiteStatus(source, 'running', {
+              found: (siteStatuses[source]?.found || 0) + 1,
+            });
+          }
+          break;
+        
+        default:
+          break;
       }
     };
 
@@ -193,19 +215,20 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
       console.error("EventSource failed:", err);
       eventSource.close();
       setIsComplete(true);
+      setScraping(false);
       setCurrentStage('Scraping failed');
     };
     
     eventSourceRef.current = eventSource;
   };
 
-  const applyFinalResults = (result, sites) => {
+  const applyFinalResults = (result) => {
     setProgress(100);
     setCurrentStage('Scraping completed');
     setIsComplete(true);
+    setScraping(false);
     setFinalResults(result);
     
-    // Display real logs from the server
     if (result.logs && result.logs.length > 0) {
       result.logs.forEach(log => {
         if (log.level === 'LISTING_FOUND') {
@@ -219,13 +242,11 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
         } else if (log.level === 'SUCCESS') {
           addLog('success', log.message);
         } else {
-          // Default handling for any other log types
           addLog(log.level.toLowerCase(), log.message);
         }
       });
     }
     
-    // Update site statuses with real results
     if (result.siteBreakdown) {
       Object.entries(result.siteBreakdown).forEach(([site, data]) => {
         updateSiteStatus(site, 'completed', {
@@ -233,18 +254,15 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
           saved: data.saved || 0,
           errors: data.errors || 0
         });
-        setCompletedSites(prev => prev + 1);
       });
     }
     
-    // Add final summary
     const totalFound = result.totalFound || 0;
     const totalSaved = result.totalSaved || 0;
     const duplicatesSkipped = result.duplicatesSkipped || 0;
     
     addLog('success', `Scraping completed: ${totalSaved} new listings saved, ${totalFound} total found, ${duplicatesSkipped} duplicates skipped`);
     
-    // Display any errors from the server
     if (result.errors && result.errors.length > 0) {
       result.errors.forEach(error => {
         addLog('error', `${error.source || 'Error'}: ${error.message}`);
@@ -263,6 +281,7 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
       onComplete(finalResults);
     }
     
+    setScraping(false);
     onClose();
   };
 
@@ -352,7 +371,7 @@ ${logText}
               </div>
               <button
                 onClick={handleClose}
-                disabled={!isComplete}
+                disabled={scraping && !isComplete}
                 className="text-white hover:text-gray-200 transition-colors disabled:opacity-50"
               >
                 <X className="w-6 h-6" />
@@ -440,17 +459,17 @@ ${logText}
                       Overall Progress
                     </span>
                     <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {isComplete ? '100%' : '0%'}
+                      {totalSites > 0 ? Math.round((completedSites / totalSites) * 100) : 0}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2 mb-2">
                     <div 
                       className="bg-violet-600 dark:bg-violet-400 h-2 rounded-full transition-all duration-300"
-                      style={{ width: isComplete ? '100%' : '0%' }}
+                      style={{ width: `${totalSites > 0 ? (completedSites / totalSites) * 100 : 0}%` }}
                     />
                   </div>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {currentStage}
+                    {isComplete ? 'Completed' : (scraping ? currentStage : 'Ready to start')}
                   </p>
                 </div>
 
@@ -474,6 +493,9 @@ ${logText}
                           )}
                           {status.status === 'running' && status.found > 0 && (
                             <span>{status.found} found</span>
+                          )}
+                          {status.status === 'error' && (
+                            <span className="text-red-500">{status.errors || 0} errors</span>
                           )}
                         </div>
                       </div>
@@ -506,6 +528,30 @@ ${logText}
                           {finalResults.duplicatesSkipped || 0}
                         </span>
                       </div>
+                      {errors.length > 0 && (
+                         <div className="flex justify-between">
+                           <span className="text-red-700 dark:text-red-300">Errors:</span>
+                           <span className="font-medium text-red-800 dark:text-red-200">
+                             {errors.length}
+                           </span>
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                )}
+                 {/* Errors */}
+                 {errors.length > 0 && !isComplete && (
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-3 flex items-center">
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      Encountered Errors
+                    </h4>
+                    <div className="space-y-2 text-xs h-24 overflow-y-auto">
+                      {errors.map((error, index) => (
+                        <div key={index} className="text-red-700 dark:text-red-300">
+                          <strong>[{error.source}]</strong>: {error.message}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -547,9 +593,9 @@ ${logText}
                     </div>
                   </div>
                   
-                  <div className="mt-4 h-96 overflow-y-auto bg-gray-900 rounded-lg p-4 font-mono text-xs">
-                    {logs.map((log, index) => (
-                      <div key={`${log.timestamp}-${index}`} className={`flex items-start ${getLogLevelColor(log.level)}`}>
+                  <div className="mt-4 h-96 overflow-y-auto bg-gray-900 rounded-lg p-4 font-mono text-xs" ref={logContainerRef}>
+                    {logs.map((log) => (
+                      <div key={log.id} className={`flex items-start ${getLogLevelColor(log.level)}`}>
                         <span className="w-20 shrink-0 text-gray-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
                         <p className="flex-1 whitespace-pre-wrap break-all">
                           {log.site && (
@@ -561,6 +607,11 @@ ${logText}
                         </p>
                       </div>
                     ))}
+                     {logs.length === 0 && !scraping && (
+                       <div className="text-center text-gray-500 pt-16">
+                         <p>Logs will appear here once scraping starts.</p>
+                       </div>
+                     )}
                   </div>
                 </div>
               </div>
@@ -573,9 +624,10 @@ ${logText}
               {!isComplete ? (
                 <button
                   onClick={handleClose}
-                  className="btn bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
+                  disabled={scraping}
+                  className="btn bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 disabled:opacity-50"
                 >
-                  Cancel
+                  {scraping ? 'Running...' : 'Cancel'}
                 </button>
               ) : (
                 <>

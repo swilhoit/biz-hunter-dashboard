@@ -43,22 +43,21 @@ export const dealsAdapter = {
       status: mapDealStatus(deal.stage || 'prospecting'),
       // Add any other field mappings needed
       valuation_multiple: deal.multiple,
-      monthly_revenue: deal.monthly_revenue || (deal.annual_revenue ? deal.annual_revenue / 12 : null),
-      monthly_profit: deal.monthly_profit || (deal.annual_profit ? deal.annual_profit / 12 : null),
-      // Map broker fields from actual database columns
-      broker_company: deal.source, // Use source as broker company fallback
-      amazon_store_url: deal.amazon_store_link,
+      monthly_revenue: deal.custom_fields?.monthly_revenue || (deal.annual_revenue ? deal.annual_revenue / 12 : null),
+      monthly_profit: deal.custom_fields?.monthly_profit || (deal.annual_profit ? deal.annual_profit / 12 : null),
+      // Extract custom fields
+      ...deal.custom_fields,
+      // Ensure specific fields are available
       seller_name: deal.seller_name || 'Unknown',
       seller_email: deal.seller_email || '',
       seller_phone: deal.seller_phone || '',
       fba_percentage: deal.fba_percentage || 0,
-      amazon_subcategory: deal.sub_industry,
       first_contact_date: deal.created_at,
       due_diligence_start_date: deal.stage === 'due_diligence' ? deal.stage_updated_at : null,
       expected_close_date: deal.next_action_date,
       notes: deal.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: deal.image_url || getBusinessImage(deal.business_name)
+      image_url: deal.custom_fields?.image_url || getBusinessImage(deal.business_name)
     }));
   },
 
@@ -80,22 +79,21 @@ export const dealsAdapter = {
       status: mapDealStatus(data.stage || 'prospecting'),
       // Add any other field mappings needed
       valuation_multiple: data.multiple,
-      monthly_revenue: data.monthly_revenue || (data.annual_revenue ? data.annual_revenue / 12 : null),
-      monthly_profit: data.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
-      // Map broker fields from actual database columns
-      broker_company: data.source, // Use source as broker company fallback
-      amazon_store_url: data.amazon_store_link,
+      monthly_revenue: data.custom_fields?.monthly_revenue || (data.annual_revenue ? data.annual_revenue / 12 : null),
+      monthly_profit: data.custom_fields?.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
+      // Extract custom fields
+      ...data.custom_fields,
+      // Ensure specific fields are available
       seller_name: data.seller_name || 'Unknown',
       seller_email: data.seller_email || '',
       seller_phone: data.seller_phone || '',
       fba_percentage: data.fba_percentage || 0,
-      amazon_subcategory: data.sub_industry,
       first_contact_date: data.created_at,
       due_diligence_start_date: data.stage === 'due_diligence' ? data.stage_updated_at : null,
       expected_close_date: data.next_action_date,
       notes: data.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: data.image_url || getBusinessImage(data.business_name)
+      image_url: data.custom_fields?.image_url || getBusinessImage(data.business_name)
     };
 
     return mappedDeal;
@@ -105,64 +103,109 @@ export const dealsAdapter = {
   async createDeal(dealData: Record<string, any>) {
     const mappedData: Record<string, any> = {};
     
+    // Fields that exist as actual columns in the deals table
+    const directMappedFields = [
+      'business_name',
+      'asking_price',
+      'annual_revenue',
+      'annual_profit',
+      'amazon_category',
+      'amazon_subcategory',
+      'amazon_store_name',
+      'amazon_store_url',
+      'business_age',
+      'date_listed',
+      'dba_names',
+      'ebitda',
+      'employee_count',
+      'entity_type',
+      'fba_percentage',
+      'inventory_value',
+      'list_price',
+      'listing_id',
+      'multiple',
+      'sde',
+      'seller_account_health',
+      'seller_email',
+      'seller_location',
+      'seller_name',
+      'seller_phone'
+    ];
+
+    // Fields that need to go into custom_fields
+    const customFields = [
+      'monthly_revenue',
+      'monthly_profit',
+      'image_url',
+      'notes',
+      'description',
+      'listing_url',
+      'website_url',
+      'city',
+      'state',
+      'country',
+      'industry',
+      'sub_industry',
+      'niche_keywords',
+      'broker_name',
+      'broker_email',
+      'broker_phone',
+      'broker_company',
+      'brand_names',
+      'tags',
+      'monthly_sessions',
+      'conversion_rate'
+    ];
+    
     // Map frontend fields to database fields
     Object.keys(dealData).forEach(key => {
-      switch (key) {
-        case 'status':
-          mappedData.stage = mapDealStatus(dealData.status);
-          break;
-        case 'valuation_multiple':
-          mappedData.multiple = dealData.valuation_multiple;
-          break;
-        case 'broker_company':
-          mappedData.source = dealData.broker_company;
-          break;
-        case 'amazon_store_url':
-          mappedData.amazon_store_link = dealData.amazon_store_url;
-          break;
-        case 'notes':
-          if (!mappedData.custom_fields) mappedData.custom_fields = {};
-          mappedData.custom_fields.notes = dealData.notes;
-          break;
-        case 'amazon_subcategory':
-          mappedData.sub_industry = dealData.amazon_subcategory;
-          break;
-        case 'business_name':
-        case 'asking_price':
-        case 'annual_revenue':
-        case 'annual_profit':
-        case 'industry':
-        case 'city':
-        case 'state':
-        case 'listing_url':
-        case 'broker_name':
-        case 'broker_email':
-        case 'broker_phone':
-        case 'amazon_category':
-        case 'business_age':
-        case 'tags':
-        case 'original_listing_id':
-        case 'date_listed':
-        case 'description':
-          mappedData[key] = dealData[key];
-          break;
-        case 'monthly_revenue':
-        case 'monthly_profit':
-        case 'fba_percentage':
-        case 'seller_account_health':
-        case 'image_url':
-          // Store these fields in custom_fields since they don't exist as columns
-          if (!mappedData.custom_fields) mappedData.custom_fields = {};
-          mappedData.custom_fields[key] = dealData[key];
-          break;
-        default:
-          // Skip unknown fields to prevent database errors
-          console.warn(`Skipping unknown field: ${key}`);
-          break;
+      const value = dealData[key];
+      
+      // Skip null, undefined, or empty string values for non-required fields
+      if (value === null || value === undefined || value === '') {
+        return;
+      }
+      
+      // Handle special field mappings
+      if (key === 'status') {
+        mappedData.stage = mapDealStatus(dealData.status);
+      } else if (key === 'valuation_multiple') {
+        mappedData.multiple = value;
+      } else if (key === 'description') {
+        mappedData.business_description = value;
+      } else if (directMappedFields.includes(key)) {
+        // Direct mapping for fields that exist as columns
+        mappedData[key] = value;
+      } else if (customFields.includes(key)) {
+        // Store in custom_fields
+        if (!mappedData.custom_fields) mappedData.custom_fields = {};
+        mappedData.custom_fields[key] = value;
+      } else if (key === 'source' || key === 'user_id') {
+        // These are valid fields, map them directly
+        mappedData[key] = value;
+      } else {
+        // Skip unknown fields to prevent database errors
+        console.log(`Skipping field '${key}' - not in database schema`);
       }
     });
 
-    mappedData.created_by = (await supabase.auth.getUser()).data.user?.id;
+    // Set the user_id if not already set
+    if (!mappedData.user_id) {
+      const { data: userData } = await supabase.auth.getUser();
+      mappedData.user_id = userData.user?.id || mappedData.created_by;
+    }
+
+    // Ensure required fields have default values
+    if (!mappedData.business_name) {
+      throw new Error('Business name is required');
+    }
+
+    // Set default stage if not provided
+    if (!mappedData.stage) {
+      mappedData.stage = 'prospecting';
+    }
+
+    console.log('Creating deal with data:', mappedData);
 
     const { data, error } = await supabase
       .from('deals')
@@ -170,7 +213,11 @@ export const dealsAdapter = {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error creating deal:', error);
+      throw error;
+    }
+    
     return data;
   },
 
@@ -180,45 +227,80 @@ export const dealsAdapter = {
     let needsCustomFieldsUpdate = false;
     const customFieldsUpdates: Record<string, any> = {};
     
+    // Fields that exist as actual columns in the deals table
+    const directMappedFields = [
+      'business_name',
+      'asking_price',
+      'annual_revenue',
+      'annual_profit',
+      'amazon_category',
+      'amazon_subcategory',
+      'amazon_store_name',
+      'amazon_store_url',
+      'business_age',
+      'date_listed',
+      'dba_names',
+      'ebitda',
+      'employee_count',
+      'entity_type',
+      'fba_percentage',
+      'inventory_value',
+      'list_price',
+      'listing_id',
+      'multiple',
+      'sde',
+      'seller_account_health',
+      'seller_email',
+      'seller_location',
+      'seller_name',
+      'seller_phone',
+      'priority'
+    ];
+
+    // Fields that need to go into custom_fields
+    const customFields = [
+      'monthly_revenue',
+      'monthly_profit',
+      'image_url',
+      'notes',
+      'listing_url',
+      'website_url',
+      'city',
+      'state',
+      'country',
+      'industry',
+      'sub_industry',
+      'niche_keywords',
+      'broker_name',
+      'broker_email',
+      'broker_phone',
+      'broker_company',
+      'brand_names',
+      'tags',
+      'monthly_sessions',
+      'conversion_rate'
+    ];
+    
     // Map frontend fields to database fields
     Object.keys(updates).forEach(key => {
-      switch (key) {
-        case 'status':
-          mappedUpdates.stage = mapDealStatus(updates.status);
-          break;
-        case 'valuation_multiple':
-          mappedUpdates.multiple = updates.valuation_multiple;
-          break;
-        case 'broker_company':
-          mappedUpdates.source = updates.broker_company;
-          break;
-        case 'amazon_store_url':
-          mappedUpdates.amazon_store_link = updates.amazon_store_url;
-          break;
-        case 'seller_name':
-        case 'seller_email':
-        case 'seller_phone':
-        case 'business_name':
-        case 'asking_price':
-        case 'annual_revenue':
-        case 'annual_profit':
-        case 'amazon_category':
-        case 'broker_name':
-        case 'broker_email':
-        case 'broker_phone':
-        case 'priority':
-          mappedUpdates[key] = updates[key];
-          break;
-        case 'notes':
-          customFieldsUpdates.notes = updates.notes;
-          needsCustomFieldsUpdate = true;
-          break;
-        case 'amazon_subcategory':
-          mappedUpdates.sub_industry = updates.amazon_subcategory;
-          break;
-        default:
-          console.warn(`Skipping unknown field in update: ${key}`);
-          break;
+      const value = updates[key];
+      
+      // Handle special field mappings
+      if (key === 'status') {
+        mappedUpdates.stage = mapDealStatus(value);
+      } else if (key === 'valuation_multiple') {
+        mappedUpdates.multiple = value;
+      } else if (key === 'description') {
+        mappedUpdates.business_description = value;
+      } else if (directMappedFields.includes(key)) {
+        // Direct mapping for fields that exist as columns
+        mappedUpdates[key] = value;
+      } else if (customFields.includes(key)) {
+        // Store in custom_fields
+        customFieldsUpdates[key] = value;
+        needsCustomFieldsUpdate = true;
+      } else {
+        console.log(`Skipping field '${key}' in update - not in database schema`);
       }
     });
 
@@ -237,6 +319,8 @@ export const dealsAdapter = {
     // Always update the updated_at timestamp
     mappedUpdates.updated_at = new Date().toISOString();
 
+    console.log('Updating deal with data:', mappedUpdates);
+
     const { data, error } = await supabase
       .from('deals')
       .update(mappedUpdates)
@@ -244,7 +328,11 @@ export const dealsAdapter = {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error updating deal:', error);
+      throw error;
+    }
+    
     return data;
   },
 

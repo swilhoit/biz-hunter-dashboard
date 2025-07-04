@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node manage-server.js start",
-    "stop": "node manage-server.js stop", 
+    "stop": "node manage-server.js stop",
     "restart": "node manage-server.js restart",
     "status": "node manage-server.js status",
     "logs": "node manage-server.js logs",
@@ -19,6 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.1",
+    "morgan": "^1.10.0",
     "node-fetch": "^3.3.2",
     "playwright": "^1.53.1",
     "tsx": "^4.20.3"

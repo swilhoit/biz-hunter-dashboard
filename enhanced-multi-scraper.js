@@ -2049,7 +2049,7 @@ class EnhancedMultiScraper {
 
       // Add a respectful delay between batches
       if (i + maxConcurrent < listingDataArray.length) {
-        const delay = 1000; // 1 second delay
+        const delay = 2000; // 2 second delay
         this.log('INFO', `Waiting ${delay}ms before next batch...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }

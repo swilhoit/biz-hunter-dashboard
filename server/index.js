@@ -5,6 +5,9 @@ import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
 import net from 'net';
+import morgan from 'morgan';
+import path from 'path';
+import { fileURLToPath } from 'url';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
@@ -18,6 +21,17 @@ console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'Set' : 'Missing')
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// CORS configuration
+const corsOptions = {
+  origin: ['http://localhost:5173', 'http://localhost:4173'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static('public'));
+app.use(morgan('dev'));
 
 // Function to find an available port
 async function findAvailablePort(startPort = 3001) {
@@ -1117,7 +1131,7 @@ async function scrapeWithDuplicatePrevention() {
     
     const { data, error } = await supabase
       .from('business_listings')
-      .upsert(preparedListings, { onConflict: 'original_url', ignoreDuplicates: true })
+      .upsert(preparedListings, { onConflict: 'name,original_url', ignoreDuplicates: true })
       .select();
     
     const insertTime = Math.round((Date.now() - insertStartTime) / 1000);
@@ -2389,14 +2403,14 @@ app.post('/api/scrape', async (req, res) => {
   console.log('🚨 [DEBUG] Request URL:', req.url);
   
   const requestStartTime = Date.now();
-  const MAX_EXECUTION_TIME = 180000; // 180 seconds (3 minutes) to allow for ScraperAPI delays
+  const MAX_EXECUTION_TIME = 300000; // 300 seconds (5 minutes) to allow for ScraperAPI delays
   let timeoutId;
   let isCompleted = false;
 
   // Set up timeout protection
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new Error('Scraping request timed out after 180 seconds'));
+      reject(new Error('Scraping request timed out after 300 seconds'));
     }, MAX_EXECUTION_TIME);
   });
 
@@ -2732,7 +2746,7 @@ app.post('/api/scrape', async (req, res) => {
           console.log('⏱️ [SCRAPING FLOW] Waiting for scraper to complete (timeout: 180s)...');
           console.log('🔍 [GRANULAR LOG] Starting Promise.race at:', new Date().toISOString());
           
-          addLog('info', 'Waiting for scraper to complete (timeout: 180s)...');
+          addLog('info', 'Waiting for scraper to complete (timeout: 300s)...');
           addLog('info', 'Starting scraping execution', {
             timestamp: new Date().toISOString()
           });
@@ -2746,7 +2760,7 @@ app.post('/api/scrape', async (req, res) => {
         } catch (timeoutError) {
           clearInterval(progressInterval); // Stop progress logging
           clearTimeout(timeoutId);
-          console.error('⏰ [SCRAPING FLOW] Operation timed out after 180 seconds');
+          console.error('⏰ [SCRAPING FLOW] Operation timed out after 300 seconds');
           
           // Return partial results if available
           return res.json({
@@ -2756,15 +2770,15 @@ app.post('/api/scrape', async (req, res) => {
             totalSaved: 0,
             duplicatesSkipped: 0,
             method: method,
-            executionTime: 180,
+            executionTime: 300,
             logs: [...logs, {
               timestamp: new Date().toISOString(),
               level: 'error',
-              message: 'Scraping operation timed out after 180 seconds'
+              message: 'Scraping operation timed out after 300 seconds'
             }],
             errors: [{
               source: 'Timeout',
-              message: 'Scraping operation timed out after 180 seconds. The database save may still be running in the background.'
+              message: 'Scraping operation timed out after 300 seconds. The database save may still be running in the background.'
             }],
             siteBreakdown: {},
             message: 'Operation timed out. Try reducing the number of sites or pages to scrape.'

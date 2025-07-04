@@ -45,16 +45,28 @@ export interface BusinessListing {
 const transformToMarketListing = (listing: any): BusinessListing => {
   // Validate and sanitize price data
   const sanitizePrice = (price: any): number | null => {
-    if (!price || isNaN(Number(price))) return null;
-    const numPrice = Number(price);
+    if (price === null || price === undefined) return null;
+    
+    // Convert to string and remove non-numeric characters (except decimal point)
+    const priceString = String(price).replace(/[^0-9.]/g, '');
+    if (priceString === '') return null;
+
+    const numPrice = Number(priceString);
+    if (isNaN(numPrice)) return null;
+
     // Cap at reasonable values for Amazon FBA businesses
     if (numPrice > 100000000) return null; // Cap at $100M
-    if (numPrice < 1000) return null; // Minimum $1,000
+    if (numPrice < 0) return null; // No negative prices
     return Math.round(numPrice);
   };
 
   const sanitizedAskingPrice = sanitizePrice(listing.asking_price);
   const sanitizedRevenue = sanitizePrice(listing.annual_revenue);
+  
+  // Debug log for first few listings
+  if (listing.name && listing.name.includes('Amazon')) {
+    console.log(`🔍 Transform Debug: ${listing.name} - Raw price: ${listing.asking_price}, Sanitized: ${sanitizedAskingPrice}`);
+  }
 
   return {
     ...listing,
@@ -103,7 +115,6 @@ export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
       let query = supabase
         .from('business_listings')
         .select('*')
-        .eq('status', 'active')
         .not('name', 'eq', 'Unknown Business') // Exclude invalid demo listings
         .order('created_at', { ascending: false });
       
@@ -160,7 +171,6 @@ export const useBusinessListing = (id: string) => {
         .from('business_listings')
         .select('*')
         .eq('id', id)
-        .eq('status', 'active')
         .single();
       
       if (error) throw error;
@@ -208,7 +218,6 @@ export const useFavorites = (userId?: string) => {
           .from('business_listings')
           .select('*')
           .in('id', listingIds)
-          .eq('status', 'active')
           .or('industry.ilike.%amazon%,description.ilike.%amazon%,description.ilike.%fba%,industry.ilike.%fba%');
         
         if (listingsError) {

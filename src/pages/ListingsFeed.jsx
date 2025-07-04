@@ -26,6 +26,20 @@ function ListingsFeed() {
   const [sitesForScraper, setSitesForScraper] = useState(['quietlight', 'bizbuysell']);
   const [activeFilters, setActiveFilters] = useState({});
 
+  // Debug: Track when activeFilters changes
+  React.useEffect(() => {
+    console.log('🚨 [ACTIVE FILTERS STATE CHANGED]:', activeFilters);
+    console.log('  Filter keys:', Object.keys(activeFilters));
+    if (activeFilters.priceRange) {
+      console.log('  Price Range:', {
+        min: activeFilters.priceRange.min,
+        max: activeFilters.priceRange.max,
+        minType: typeof activeFilters.priceRange.min,
+        maxType: typeof activeFilters.priceRange.max
+      });
+    }
+  }, [activeFilters]);
+
   // Fetch real business listings data
   const { 
     data: listings = [], 
@@ -50,29 +64,6 @@ function ListingsFeed() {
     console.log('========================================');
   }, [listings, isLoading, error]);
   
-  // Debug active filters
-  React.useEffect(() => {
-    if (Object.keys(activeFilters).length > 0) {
-      console.log('🔍 Active Filters:', activeFilters);
-      console.log('📊 Filtered listings count:', filteredListings.length);
-      
-      // Debug price filtering specifically
-      if (activeFilters.priceRange?.min || activeFilters.priceRange?.max) {
-        console.log('💰 Price Filter Debug:');
-        console.log('  Min:', activeFilters.priceRange.min, 'Type:', typeof activeFilters.priceRange.min);
-        console.log('  Max:', activeFilters.priceRange.max, 'Type:', typeof activeFilters.priceRange.max);
-        
-        // Show some example listings with their prices
-        const examples = listings.slice(0, 5).map(l => ({
-          name: l.name.substring(0, 50) + '...',
-          price: l.asking_price,
-          wouldPassMin: !activeFilters.priceRange.min || l.asking_price >= parseFloat(activeFilters.priceRange.min),
-          wouldPassMax: !activeFilters.priceRange.max || l.asking_price <= parseFloat(activeFilters.priceRange.max)
-        }));
-        console.table(examples);
-      }
-    }
-  }, [activeFilters, filteredListings.length, listings]);
   
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
@@ -105,6 +96,15 @@ function ListingsFeed() {
   }, [showAdminDropdown]);
 
   const filteredListings = listings.filter(listing => {
+    // Debug: Log at the very beginning of filter function
+    console.log('🔍 [FILTER DEBUG] Processing listing:', {
+      id: listing.id,
+      name: listing.name?.substring(0, 30) + '...',
+      asking_price: listing.asking_price,
+      asking_price_type: typeof listing.asking_price,
+      activeFilters: Object.keys(activeFilters).length > 0 ? activeFilters : 'No active filters'
+    });
+    
     // Search term filter
     const matchesSearch = searchTerm === '' || 
       listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -121,11 +121,25 @@ function ListingsFeed() {
     if (activeFilters.priceRange?.min && activeFilters.priceRange.min !== '') {
       const minPrice = parseFloat(activeFilters.priceRange.min);
       const listingPrice = listing.asking_price || 0;
+      console.log('💰 [PRICE MIN CHECK]', {
+        listing: listing.name?.substring(0, 30),
+        minPriceFilter: minPrice,
+        listingPrice: listingPrice,
+        passesFilter: listingPrice >= minPrice,
+        calculation: `${listingPrice} >= ${minPrice} = ${listingPrice >= minPrice}`
+      });
       if (!isNaN(minPrice) && minPrice > 0 && listingPrice < minPrice) return false;
     }
     if (activeFilters.priceRange?.max && activeFilters.priceRange.max !== '') {
       const maxPrice = parseFloat(activeFilters.priceRange.max);
       const listingPrice = listing.asking_price || 0;
+      console.log('💰 [PRICE MAX CHECK]', {
+        listing: listing.name?.substring(0, 30),
+        maxPriceFilter: maxPrice,
+        listingPrice: listingPrice,
+        passesFilter: listingPrice <= maxPrice,
+        calculation: `${listingPrice} <= ${maxPrice} = ${listingPrice <= maxPrice}`
+      });
       if (!isNaN(maxPrice) && maxPrice > 0 && listingPrice > maxPrice) return false;
     }
     
@@ -190,6 +204,61 @@ function ListingsFeed() {
     
     return true;
   });
+
+  // Log the final filtered result
+  console.log('✅ [FILTERED LISTINGS COMPUTED]', {
+    totalListings: listings.length,
+    filteredCount: filteredListings.length,
+    activeFilterKeys: Object.keys(activeFilters),
+    hasFilters: Object.keys(activeFilters).length > 0
+  });
+
+  // Debug active filters - now that filteredListings is defined
+  React.useEffect(() => {
+    if (Object.keys(activeFilters).length > 0) {
+      console.log('🔍 Active Filters:', activeFilters);
+      console.log('📊 Filtered listings count:', filteredListings.length);
+      console.log('📊 Total listings count:', listings.length);
+      
+      // Debug price filtering specifically
+      if (activeFilters.priceRange?.min || activeFilters.priceRange?.max) {
+        console.log('💰 Price Filter Debug:');
+        console.log('  Min:', activeFilters.priceRange.min, 'Type:', typeof activeFilters.priceRange.min);
+        console.log('  Max:', activeFilters.priceRange.max, 'Type:', typeof activeFilters.priceRange.max);
+        
+        // Show some example listings with their prices
+        const examples = listings.slice(0, 5).map(l => ({
+          name: l.name.substring(0, 50) + '...',
+          price: l.asking_price,
+          priceType: typeof l.asking_price,
+          wouldPassMin: !activeFilters.priceRange.min || l.asking_price >= parseFloat(activeFilters.priceRange.min),
+          wouldPassMax: !activeFilters.priceRange.max || l.asking_price <= parseFloat(activeFilters.priceRange.max)
+        }));
+        console.table(examples);
+        
+        // Check specifically why listings might be filtered out
+        const failedListings = listings.filter(l => {
+          if (activeFilters.priceRange.min) {
+            const minPrice = parseFloat(activeFilters.priceRange.min);
+            if (l.asking_price < minPrice) return true;
+          }
+          if (activeFilters.priceRange.max) {
+            const maxPrice = parseFloat(activeFilters.priceRange.max);
+            if (l.asking_price > maxPrice) return true;
+          }
+          return false;
+        });
+        
+        console.log(`📊 ${failedListings.length} listings filtered out by price`);
+        if (failedListings.length > 0) {
+          console.log('Examples of filtered out listings:', failedListings.slice(0, 3).map(l => ({
+            name: l.name,
+            price: l.asking_price
+          })));
+        }
+      }
+    }
+  }, [activeFilters, listings]);
 
   const handleAddToPipeline = async (listingId) => {
     const listing = listings.find(l => l.id === listingId);
@@ -549,7 +618,10 @@ function ListingsFeed() {
               {/* Filters Panel */}
               {showFilters && (
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <ListingsFilters onFiltersChange={(filters) => setActiveFilters(filters)} />
+                  <ListingsFilters onFiltersChange={(filters) => {
+                    console.log('🎯 [FILTER CHANGE] New filters from ListingsFilters:', filters);
+                    setActiveFilters(filters);
+                  }} />
                 </div>
               )}
             </div>

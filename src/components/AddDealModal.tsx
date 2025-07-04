@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Loader2, Save, Upload, X, FileText, Bot, BrainCircuit, CheckCircle, AlertTriangle, Info, Building, DollarSign, Globe, Calendar, Phone, Mail, User, Tag, AlertCircle, Brain } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import { dealsAdapter, filesAdapter } from '../lib/database-adapter';
+import { dealsAdapter, filesAdapter, mapDealStatus } from '../lib/database-adapter';
 import { Deal, DealStatus, DealSource } from '../types/deal';
 import { DocumentAnalysisService, DocumentAnalysis } from '../services/AIAnalysisService';
 import PDFUploadGuide from './PDFUploadGuide';
@@ -352,43 +352,87 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated, initialDa
   };
 
   const handleSave = async () => {
-    if (!dealData.business_name) {
+    if (!dealData.business_name?.trim()) {
       alert('Please enter a business name');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Create the deal
-      const dataToCreate: Deal = {
-        ...(dealData as Deal),
-        status: (dealData.status as DealStatus) || 'prospecting',
-        user_id: user ? user.id : null,
-      } as Deal;
+      // Prepare data for creation - only include non-empty values
+      const dataToCreate: Record<string, any> = {
+        business_name: dealData.business_name.trim(),
+        status: dealData.status || 'prospecting',
+        source: dealData.source || 'other',
+        user_id: user?.id || null,
+      };
 
+      // Add other fields only if they have values
+      Object.entries(dealData).forEach(([key, value]) => {
+        if (key !== 'business_name' && key !== 'status' && key !== 'source' && key !== 'user_id') {
+          // Skip empty/zero values for optional fields
+          if (value !== null && value !== undefined && value !== '' && value !== 0) {
+            dataToCreate[key] = value;
+          }
+        }
+      });
+
+      console.log('Creating deal with data:', dataToCreate);
       const createdDeal = await dealsAdapter.createDeal(dataToCreate);
       
       // Upload files if any
       if (uploadedFiles.length > 0) {
-        for (const file of uploadedFiles) {
-          await filesAdapter.uploadFile(createdDeal.id, file, {
-            category: 'other',
-            description: 'Added with manual deal creation',
-            is_confidential: false,
-          });
+        try {
+          for (const file of uploadedFiles) {
+            await filesAdapter.uploadFile(createdDeal.id, file, {
+              category: 'other',
+              description: 'Added with manual deal creation',
+              is_confidential: false,
+            });
+          }
+        } catch (uploadError: any) {
+          console.error('Error uploading files:', uploadError);
+          // Don't fail the whole operation if file upload fails
+          alert('Deal created successfully, but some files failed to upload.');
         }
       }
 
       // Fetch the complete deal data to return
-      const completeDeal = await dealsAdapter.fetchDealById(createdDeal.id);
-      if (completeDeal) {
-        onDealCreated(completeDeal);
+      try {
+        const completeDeal = await dealsAdapter.fetchDealById(createdDeal.id);
+        if (completeDeal) {
+          onDealCreated(completeDeal as Deal);
+        }
+      } catch (fetchError: any) {
+        console.error('Error fetching created deal:', fetchError);
+        // Map the created deal to ensure it has the required fields
+        const mappedDeal: Deal = {
+          ...createdDeal,
+          status: mapDealStatus(createdDeal.stage || 'prospecting') as DealStatus,
+          source: createdDeal.source || 'other',
+          ...createdDeal.custom_fields,
+        } as Deal;
+        onDealCreated(mappedDeal);
       }
       
       onClose();
     } catch (error: any) {
       console.error('Error creating deal:', error);
-      alert(`Failed to create deal: ${error.message}`);
+      
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to create deal: ';
+      
+      if (error.message?.includes('not found in the schema')) {
+        errorMessage += 'Database schema error. Please contact support.';
+      } else if (error.message?.includes('violates foreign key constraint')) {
+        errorMessage += 'Invalid user. Please log in again.';
+      } else if (error.message?.includes('Business name is required')) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += error.message || 'Unknown error occurred';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsSaving(false);
     }
