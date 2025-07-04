@@ -4,6 +4,10 @@ import fs from 'fs';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +25,7 @@ console.log('Port:', PORT);
 console.log('Node Environment:', process.env.NODE_ENV);
 console.log('Server Time:', new Date().toISOString());
 console.log('Railway Environment:', process.env.RAILWAY_ENVIRONMENT || 'NOT SET');
+console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'SET' : 'NOT SET');
 
 // Detect Railway environment
 const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
