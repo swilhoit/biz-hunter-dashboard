@@ -11,7 +11,7 @@ interface ServerStatus {
     VITE_SUPABASE_URL: string;
     VITE_SUPABASE_ANON_KEY: string;
     SCRAPER_API_KEY: string;
-    VITE_OPENAI_API_KEY: string;
+    OPENAI_API_KEY: string;
     NODE_ENV: string;
     PORT: string;
   };

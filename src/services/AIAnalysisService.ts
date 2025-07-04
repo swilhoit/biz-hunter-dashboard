@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { getConfigValue } from '../config/runtime-config';
 import { filesAdapter } from '../lib/database-adapter';
 import { supabase } from '../lib/supabase';
+import { DocumentExtractors } from './DocumentExtractors';
 
 interface DealData {
   id: string;
@@ -202,7 +203,7 @@ export class AIAnalysisService {
   }
 
   private isAnalyzableDocument(fileType: string): boolean {
-    const analyzableTypes = ['pdf', 'txt', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
+    const analyzableTypes = ['pdf', 'txt', 'doc', 'docx', 'xlsx', 'xls', 'csv', 'png', 'jpg', 'jpeg'];
     const extension = fileType.toLowerCase().split('.').pop() || '';
     return analyzableTypes.includes(extension) || 
            analyzableTypes.some(type => fileType.toLowerCase().includes(type));
@@ -700,12 +701,43 @@ export class DocumentAnalysisService {
         return await this.analyzeTextWithVision(text, file.name, client);
       }
       
-      // For Word/Excel, try to convert to images or provide guidance
-      if (fileName.match(/\.(docx?|xlsx?)$/i)) {
+      // For Word documents (.docx), extract text using mammoth
+      if (fileName.endsWith('.docx')) {
+        progressCallback?.('Extracting text from Word document...');
+        try {
+          const text = await DocumentExtractors.extractFromDocx(file);
+          progressCallback?.('Analyzing extracted text...');
+          return await this.analyzeTextWithVision(text, file.name, client);
+        } catch (error) {
+          console.error('Error processing .docx file:', error);
+          throw new Error(`Failed to process Word document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // For Excel/CSV files, extract data using xlsx
+      if (fileName.match(/\.(xlsx?|csv)$/i)) {
+        progressCallback?.('Extracting data from spreadsheet...');
+        try {
+          let text: string;
+          if (fileName.endsWith('.csv')) {
+            text = await DocumentExtractors.extractFromCSV(file);
+          } else {
+            text = await DocumentExtractors.extractFromExcel(file);
+          }
+          progressCallback?.('Analyzing spreadsheet data...');
+          return await this.analyzeTextWithVision(text, file.name, client);
+        } catch (error) {
+          console.error('Error processing spreadsheet:', error);
+          throw new Error(`Failed to process spreadsheet: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // For other Office files not yet supported
+      if (fileName.match(/\.(doc|ppt|pptx)$/i)) {
         return await this.analyzeOfficeWithVision(file, client);
       }
       
-      throw new Error(`Unsupported file type: ${file.name}. Please upload PDF, images (PNG/JPG), or text files.`);
+      throw new Error(`Unsupported file type: ${file.name}. Supported formats: PDF, Word (.docx), Excel (.xlsx/.xls), CSV, images (PNG/JPG), or text files.`);
       
     } catch (error) {
       console.error('Vision API analysis error:', error);
@@ -1204,23 +1236,27 @@ Just transcribe what you see.`
   }
 
   private static async analyzeOfficeWithVision(file: File, _client: OpenAI): Promise<DocumentAnalysis> {
-    // For Office files, we can't easily convert to images in the browser
-    // Provide guidance to the user
-    const guidance = `Office document detected: "${file.name}"
+    // For unsupported Office files (.doc, .ppt, .pptx)
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    const guidance = `Unsupported format detected: "${file.name}"
 
-To analyze this document with AI Vision:
-1. Open the document in Word/Excel
-2. Take screenshots of the important pages
-3. Save as PDF and upload
-4. Or copy the text content and save as .txt file
+This file format (.${fileExt}) is not directly supported.
 
-The Vision API works best with images and PDFs.`;
+For best results, please convert to a supported format:
+• Word: Save as .docx (File → Save As → Word Document)
+• PowerPoint: Export slides as PDF or take screenshots
+• Legacy formats: Convert to modern equivalents
+
+Supported formats:
+• Documents: PDF, Word (.docx), Text (.txt)
+• Spreadsheets: Excel (.xlsx/.xls), CSV (.csv)
+• Images: PNG, JPG, JPEG`;
     
     return {
       businessName: null,
       confidence: 0,
       keyFindings: [guidance],
-      missingCriticalInfo: ['Unable to process Office files directly']
+      missingCriticalInfo: [`Unable to process .${fileExt} files directly`]
     };
   }
 

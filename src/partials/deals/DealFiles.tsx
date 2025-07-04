@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2 } from 'lucide-react';
+import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2, Brain, Loader2 } from 'lucide-react';
 import { filesAdapter } from '../../lib/database-adapter';
 import FileViewerModal from '../../components/FileViewerModal';
 import StorageTest from '../../components/StorageTest';
+import { AIAnalysisService } from '../../services/AIAnalysisService';
+import { useToast } from '../../contexts/ToastContext';
 
 interface DealFilesProps {
   dealId: string;
@@ -19,6 +21,9 @@ function DealFiles({ dealId }: DealFilesProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<string>('');
+  const { showToast } = useToast();
 
   // Load files on component mount
   useEffect(() => {
@@ -237,6 +242,46 @@ function DealFiles({ dealId }: DealFilesProps) {
     }
   };
 
+  const handleAnalyzeAllDocuments = async () => {
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress('Starting AI analysis of all documents...');
+      
+      // Get deal data from database
+      const { dealsAdapter } = await import('../../lib/database-adapter');
+      const dealData = await dealsAdapter.fetchDealById(dealId);
+      
+      if (!dealData) {
+        throw new Error('Deal not found');
+      }
+
+      // Create AIAnalysisService instance
+      const aiService = new AIAnalysisService();
+      
+      // Run the analysis with progress callback
+      const analysis = await aiService.generateDealAnalysis(
+        dealData,
+        (stage: string) => setAnalysisProgress(stage)
+      );
+
+      // Navigate to the Analysis tab with the results
+      showToast('Analysis complete! Check the Analysis tab for results.', 'success');
+      
+      // Trigger a navigation to the Analysis tab
+      // Since we're in a partial component, we'll dispatch a custom event
+      window.dispatchEvent(new CustomEvent('navigate-to-analysis', { 
+        detail: { dealId, analysis } 
+      }));
+      
+    } catch (error: any) {
+      console.error('Analysis error:', error);
+      showToast(`Analysis failed: ${error.message}`, 'error');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalysisProgress('');
+    }
+  };
+
   const displayFiles = files.length > 0 ? files : mockFiles;
 
   return (
@@ -248,14 +293,26 @@ function DealFiles({ dealId }: DealFilesProps) {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Document Repository</h3>
-          <button 
-            onClick={() => document.querySelector('input[type="file"]')?.click()}
-            disabled={isUploading}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {isUploading ? 'Uploading...' : 'Upload Files'}
-          </button>
+          <div className="flex space-x-2">
+            {files.length > 0 && (
+              <button 
+                onClick={handleAnalyzeAllDocuments}
+                disabled={isAnalyzing || isUploading}
+                className="btn bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <Brain className="w-4 h-4 mr-2" />
+                {isAnalyzing ? 'Analyzing...' : 'AI Analysis'}
+              </button>
+            )}
+            <button 
+              onClick={() => document.querySelector('input[type="file"]')?.click()}
+              disabled={isUploading}
+              className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {isUploading ? 'Uploading...' : 'Upload Files'}
+            </button>
+          </div>
         </div>
         
         <div 
@@ -275,7 +332,7 @@ function DealFiles({ dealId }: DealFilesProps) {
             onChange={(e) => e.target.files && handleFiles(e.target.files)}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             disabled={isUploading}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg"
           />
           
           <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -283,7 +340,7 @@ function DealFiles({ dealId }: DealFilesProps) {
             {isUploading ? 'Uploading files...' : 'Drag and drop files here, or click to browse'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-500">
-            Supports PDF, Excel, Word, and image files (Max 50MB)
+            Supports PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG) • Max 50MB
           </p>
           
           {uploadProgress !== null && (
@@ -307,6 +364,19 @@ function DealFiles({ dealId }: DealFilesProps) {
             </div>
           )}
         </div>
+
+        {/* AI Analysis Progress */}
+        {isAnalyzing && (
+          <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <div className="flex items-center">
+              <Loader2 className="w-5 h-5 mr-3 text-purple-600 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-purple-900 dark:text-purple-200">AI Document Analysis in Progress</p>
+                <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">{analysisProgress}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* All Files */}

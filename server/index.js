@@ -2365,6 +2365,308 @@ app.get('/api/portfolio/asins/:asinId/metrics', async (req, res) => {
   }
 });
 
+// OpenAI API endpoint
+app.post('/api/openai/segment-portfolio', async (req, res) => {
+  try {
+    const { products, batchSize = 20 } = req.body;
+    
+    if (!products || !Array.isArray(products)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Products array is required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    console.log(`Starting portfolio segmentation with ${products.length} products`);
+    
+    if (products.length === 0) {
+      return res.json({ success: true, segments: [] });
+    }
+    
+    const createSegmentationPrompt = (products) => {
+      return `Analyze and segment the following ${products.length} Amazon products into meaningful market segments based on their characteristics, price points, and categories.
+
+Create segments that would be useful for a business acquisition analysis. Focus on:
+1. Product categories and niches
+2. Price tiers and market positioning  
+3. Brand positioning and competition
+4. Revenue potential and performance
+
+Format your response as:
+**Segment 1: [Specific Segment Name]**
+1, 3, 5, 8, 12
+
+**Segment 2: [Another Segment Name]**  
+2, 4, 6, 7, 9
+
+Requirements:
+- Maximum 8 segments
+- Minimum 2 products per segment
+- Use actual product index numbers (1-based)
+- Ensure ALL products are assigned to a segment
+
+Products:
+${products.map((p, index) => 
+  `${index + 1}. ${p.title} - ASIN: ${p.asin} - Price: $${p.price || 'N/A'} - Category: ${p.category || 'N/A'} - Revenue: $${p.revenue || 'N/A'}`
+).join('\n')}`;
+    };
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert Amazon marketplace analyst. Analyze product portfolios and create meaningful market segments based on product characteristics, price points, and market positioning."
+        },
+        { role: "user", content: createSegmentationPrompt(products) }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+    });
+    
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error("No response from OpenAI");
+    }
+    
+    // Process the result
+    const segments = result.split('**Segment').filter(Boolean);
+    const totalRevenue = products.reduce((sum, p) => sum + (p.revenue || 0), 0);
+    
+    const segmentedProducts = segments.map(segment => {
+      const [nameAndIndices, ...rest] = segment.split('\n').filter(Boolean);
+      const name = nameAndIndices.split(':')[1]?.trim() || "Unnamed Segment";
+      
+      const indicesStr = rest.join(' ');
+      const indices = indicesStr.split(',')
+        .flatMap(range => range.split(' '))
+        .map(i => i.trim())
+        .filter(i => !isNaN(parseInt(i)))
+        .map(i => parseInt(i) - 1);
+      
+      const segmentProducts = indices
+        .map(index => products[index])
+        .filter(Boolean);
+      
+      const segmentRevenue = segmentProducts.reduce((sum, p) => sum + (p.revenue || 0), 0);
+      const averagePrice = segmentProducts.reduce((sum, p) => sum + (p.price || 0), 0) / segmentProducts.length;
+      const marketShare = totalRevenue > 0 ? (segmentRevenue / totalRevenue) * 100 : 0;
+      
+      return {
+        name,
+        products: segmentProducts,
+        totalRevenue: segmentRevenue,
+        averagePrice: isNaN(averagePrice) ? 0 : averagePrice,
+        marketShare
+      };
+    }).filter(segment => segment.products.length > 0);
+    
+    res.json({ 
+      success: true, 
+      segments: segmentedProducts 
+    });
+    
+  } catch (error) {
+    console.error('Error in OpenAI segmentation:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/openai/analyze-portfolio', async (req, res) => {
+  try {
+    const { products } = req.body;
+    
+    if (!products || !Array.isArray(products)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Products array is required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    // First get segments
+    const segmentResponse = await fetch(`http://localhost:${PORT}/api/openai/segment-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products })
+    });
+    
+    const segmentData = await segmentResponse.json();
+    if (!segmentData.success) {
+      throw new Error('Failed to segment portfolio');
+    }
+    
+    const prompt = `Analyze this Amazon seller's product portfolio and provide strategic insights:
+
+Products: ${products.length}
+Total Revenue: $${products.reduce((sum, p) => sum + (p.revenue || 0), 0).toLocaleString()}
+Average Price: $${(products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length).toFixed(2)}
+
+Segments: ${segmentData.segments.map(s => `${s.name}: ${s.products.length} products, $${s.totalRevenue.toLocaleString()} revenue`).join('; ')}
+
+Provide a comprehensive analysis including:
+1. Top 3 performing products (by revenue)
+2. 3-5 key risk factors for this portfolio
+3. 3-5 growth opportunities
+4. Overall portfolio score (0-100) with brief justification
+
+Format as JSON with these keys: topPerformers, riskFactors, opportunities, overallScore, analysis`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert Amazon business acquisition analyst. Provide detailed portfolio analysis in the requested JSON format."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+    
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      throw new Error("No analysis result from OpenAI");
+    }
+    
+    try {
+      const analysis = JSON.parse(result);
+      res.json({
+        success: true,
+        segments: segmentData.segments,
+        topPerformers: products.sort((a, b) => (b.revenue || 0) - (a.revenue || 0)).slice(0, 3),
+        riskFactors: analysis.riskFactors || [],
+        opportunities: analysis.opportunities || [],
+        overallScore: analysis.overallScore || 50
+      });
+    } catch (parseError) {
+      // Fallback to basic analysis
+      res.json({
+        success: true,
+        segments: segmentData.segments,
+        topPerformers: products.sort((a, b) => (b.revenue || 0) - (a.revenue || 0)).slice(0, 3),
+        riskFactors: ["Portfolio analysis unavailable", "Manual review recommended"],
+        opportunities: ["Detailed analysis needed", "Consider market research"],
+        overallScore: 50
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in portfolio analysis:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/openai/extract-asins', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Text is required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    const prompt = `Extract all Amazon ASINs from the following text. ASINs are 10-character alphanumeric codes (letters and numbers) that identify Amazon products.
+
+Look for patterns like:
+- ASIN: B08N5WRWNW
+- https://www.amazon.com/dp/B08N5WRWNW
+- Product codes that match ASIN format
+
+Text to analyze:
+${text}
+
+Return only the ASIN codes, one per line, without any additional text or formatting.`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert at identifying Amazon ASINs in text. Return only the ASIN codes, nothing else."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 500,
+    });
+    
+    const result = response.choices[0]?.message?.content;
+    if (!result) {
+      return res.json({ success: true, asins: [] });
+    }
+    
+    // Extract ASINs from the response
+    const asinPattern = /\b[A-Z0-9]{10}\b/g;
+    const matches = result.match(asinPattern) || [];
+    
+    // Filter to valid ASIN format (must contain at least one letter)
+    const asins = matches.filter(asin => /[A-Z]/.test(asin));
+    
+    res.json({ 
+      success: true, 
+      asins 
+    });
+    
+  } catch (error) {
+    console.error('Error extracting ASINs:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -3010,7 +3312,7 @@ app.get('/api/server-status', async (req, res) => {
       VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? '✅ Set' : '❌ Missing',
       VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing',
       SCRAPER_API_KEY: process.env.SCRAPER_API_KEY ? '✅ Set' : '❌ Missing',
-      VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY ? '✅ Set' : '❌ Missing',
+      OPENAI_API_KEY: (process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY) ? '✅ Set' : '❌ Missing',
       NODE_ENV: process.env.NODE_ENV || 'development',
       PORT: process.env.PORT || '3001'
     };
@@ -3048,7 +3350,7 @@ app.get('/api/server-status', async (req, res) => {
       services: {
         supabase: supabaseStatus,
         scraperApi: scraperApiStatus,
-        openAi: process.env.VITE_OPENAI_API_KEY ? '✅ Configured' : '❌ Not configured'
+        openAi: (process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY) ? '✅ Configured' : '❌ Not configured'
       }
     });
   } catch (error) {

@@ -488,9 +488,8 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated, initialDa
               </p>
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-4">
                 <p className="text-xs text-blue-800 dark:text-blue-200">
-                  💡 <strong>Best Results:</strong> For PDFs, we'll extract up to 10 pages. Plain text files (.txt) and 
-                  high-quality images (PNG/JPG) of business listings work best. Broker teasers, P&L statements, and 
-                  listing screenshots are ideal documents to upload.
+                  💡 <strong>Supported Formats:</strong> PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG). 
+                  For PDFs, we'll extract up to 10 pages. Broker teasers, P&L statements (Excel/PDF), and listing screenshots work great!
                 </p>
               </div>
               
@@ -519,7 +518,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated, initialDa
                   {isAnalyzing ? 'AI analyzing documents...' : 'Drop documents here or click to browse'}
                 </p>
                 <p className="text-sm text-gray-500">
-                  Supports .txt, .pdf, .doc/.docx, .xls/.xlsx • Best results with plain text files
+                  Supports PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG)
                 </p>
                 
                 {/* Progress bar */}

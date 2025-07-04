@@ -33,6 +33,21 @@ function DealDetails() {
     }
   }, [id]);
 
+  useEffect(() => {
+    // Listen for the custom event from DealFiles to navigate to Analysis tab
+    const handleNavigateToAnalysis = (event) => {
+      if (event.detail && event.detail.dealId === id) {
+        setActiveTab('analysis');
+      }
+    };
+
+    window.addEventListener('navigate-to-analysis', handleNavigateToAnalysis);
+    
+    return () => {
+      window.removeEventListener('navigate-to-analysis', handleNavigateToAnalysis);
+    };
+  }, [id]);
+
   const loadDeal = async (dealId) => {
     try {
       setLoading(true);

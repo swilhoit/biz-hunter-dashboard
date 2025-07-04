@@ -96,15 +96,6 @@ function ListingsFeed() {
   }, [showAdminDropdown]);
 
   const filteredListings = listings.filter(listing => {
-    // Debug: Log at the very beginning of filter function
-    console.log('🔍 [FILTER DEBUG] Processing listing:', {
-      id: listing.id,
-      name: listing.name?.substring(0, 30) + '...',
-      asking_price: listing.asking_price,
-      asking_price_type: typeof listing.asking_price,
-      activeFilters: Object.keys(activeFilters).length > 0 ? activeFilters : 'No active filters'
-    });
-    
     // Search term filter
     const matchesSearch = searchTerm === '' || 
       listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -121,25 +112,11 @@ function ListingsFeed() {
     if (activeFilters.priceRange?.min && activeFilters.priceRange.min !== '') {
       const minPrice = parseFloat(activeFilters.priceRange.min);
       const listingPrice = listing.asking_price || 0;
-      console.log('💰 [PRICE MIN CHECK]', {
-        listing: listing.name?.substring(0, 30),
-        minPriceFilter: minPrice,
-        listingPrice: listingPrice,
-        passesFilter: listingPrice >= minPrice,
-        calculation: `${listingPrice} >= ${minPrice} = ${listingPrice >= minPrice}`
-      });
       if (!isNaN(minPrice) && minPrice > 0 && listingPrice < minPrice) return false;
     }
     if (activeFilters.priceRange?.max && activeFilters.priceRange.max !== '') {
       const maxPrice = parseFloat(activeFilters.priceRange.max);
       const listingPrice = listing.asking_price || 0;
-      console.log('💰 [PRICE MAX CHECK]', {
-        listing: listing.name?.substring(0, 30),
-        maxPriceFilter: maxPrice,
-        listingPrice: listingPrice,
-        passesFilter: listingPrice <= maxPrice,
-        calculation: `${listingPrice} <= ${maxPrice} = ${listingPrice <= maxPrice}`
-      });
       if (!isNaN(maxPrice) && maxPrice > 0 && listingPrice > maxPrice) return false;
     }
     
@@ -197,7 +174,7 @@ function ListingsFeed() {
     
     // New listing filter - use new_listing field or check created_at
     if (activeFilters.isNew) {
-      const isNew = listing.is_new || listing.new_listing || 
+      const isNew = listing.isNew || listing.new_listing || 
         (listing.created_at && new Date(listing.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
       if (!isNew) return false;
     }
@@ -258,7 +235,7 @@ function ListingsFeed() {
         }
       }
     }
-  }, [activeFilters, listings]);
+  }, [activeFilters, listings, filteredListings]);
 
   const handleAddToPipeline = async (listingId) => {
     const listing = listings.find(l => l.id === listingId);
