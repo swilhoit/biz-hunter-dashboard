@@ -5,7 +5,7 @@ services:
     runtime: node
     region: oregon # Optional: specify a region
     plan: free # Change to 'starter' or higher for production
-    buildCommand: rm -f bun.lockb && npm install && npm run build
+    buildCommand: ./scripts/render-build.sh
     startCommand: npm run start:full
     envVars:
       - key: NODE_ENV

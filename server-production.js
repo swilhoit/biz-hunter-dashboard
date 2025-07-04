@@ -107,6 +107,15 @@ app.get('/api/test-env', (req, res) => {
   });
 });
 
+// Health check endpoint (doesn't require dist)
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    distExists: fs.existsSync(distPath)
+  });
+});
+
 // API diagnostics endpoint
 app.get('/api/diagnostics', async (req, res) => {
   const diagnostics = {
