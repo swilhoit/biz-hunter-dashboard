@@ -4,8 +4,10 @@
 
 interface RuntimeConfig {
   VITE_OPENAI_API_KEY?: string;
+  OPENAI_API_KEY?: string;
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_ANON_KEY?: string;
+  [key: string]: string | undefined;
 }
 
 // Function to get runtime config from window object or environment
@@ -25,9 +27,21 @@ export function getRuntimeConfig(): RuntimeConfig {
 
 // Helper function to get a specific config value with multiple fallbacks
 export function getConfigValue(key: keyof RuntimeConfig): string | undefined {
-  // First try runtime config
-  if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__ && (window as any).__RUNTIME_CONFIG__[key]) {
-    return (window as any).__RUNTIME_CONFIG__[key];
+  // Debug logging
+  if (key.includes('OPENAI')) {
+    console.log(`[getConfigValue] Looking for ${key}`);
+    if (typeof window !== 'undefined') {
+      console.log(`[getConfigValue] window.__RUNTIME_CONFIG__:`, (window as any).__RUNTIME_CONFIG__);
+      console.log(`[getConfigValue] window.__RUNTIME_CONFIG__[${key}]:`, (window as any).__RUNTIME_CONFIG__?.[key]);
+    }
+  }
+  
+  // First try runtime config - check for non-empty string
+  if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__) {
+    const value = (window as any).__RUNTIME_CONFIG__[key];
+    if (value && value.trim() !== '') {
+      return value;
+    }
   }
   
   // Then try import.meta.env
@@ -39,6 +53,20 @@ export function getConfigValue(key: keyof RuntimeConfig): string | undefined {
   const keyWithoutPrefix = key.replace('VITE_', '');
   if (import.meta.env[keyWithoutPrefix]) {
     return import.meta.env[keyWithoutPrefix];
+  }
+  
+  // Also try with VITE_ prefix if not already present
+  if (!key.startsWith('VITE_')) {
+    const keyWithPrefix = `VITE_${key}`;
+    if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.[keyWithPrefix]) {
+      const value = (window as any).__RUNTIME_CONFIG__[keyWithPrefix];
+      if (value && value.trim() !== '') {
+        return value;
+      }
+    }
+    if (import.meta.env[keyWithPrefix]) {
+      return import.meta.env[keyWithPrefix];
+    }
   }
   
   // Last resort - check if we're in development and log warning

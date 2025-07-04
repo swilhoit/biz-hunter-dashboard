@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { getConfigValue } from '../config/runtime-config';
 import { filesAdapter } from '../lib/database-adapter';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../lib/supabase';
 
 interface DealData {
   id: string;
@@ -616,11 +616,20 @@ export class DocumentAnalysisService {
       console.log('Window runtime config:', typeof window !== 'undefined' ? (window as any).__RUNTIME_CONFIG__ : 'Not available');
       console.log('Import meta env:', import.meta.env);
       
-      const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
-                     import.meta.env.VITE_OPENAI_API_KEY || 
-                     import.meta.env.REACT_APP_OPENAI_API_KEY;
+      // Try multiple sources for the API key
+      const runtimeKey = getConfigValue('VITE_OPENAI_API_KEY');
+      const runtimeKeyAlt = getConfigValue('OPENAI_API_KEY');
+      const metaEnvKey = import.meta.env.VITE_OPENAI_API_KEY;
+      const metaEnvKeyAlt = import.meta.env.OPENAI_API_KEY;
       
-      console.log('API key found:', apiKey ? 'Yes (hidden)' : 'No');
+      console.log('Runtime config VITE_OPENAI_API_KEY:', runtimeKey ? `Found (${runtimeKey.length} chars)` : 'Not found');
+      console.log('Runtime config OPENAI_API_KEY:', runtimeKeyAlt ? `Found (${runtimeKeyAlt.length} chars)` : 'Not found');
+      console.log('Meta env VITE_OPENAI_API_KEY:', metaEnvKey ? `Found (${metaEnvKey.length} chars)` : 'Not found');
+      console.log('Meta env OPENAI_API_KEY:', metaEnvKeyAlt ? `Found (${metaEnvKeyAlt.length} chars)` : 'Not found');
+      
+      const apiKey = runtimeKey || runtimeKeyAlt || metaEnvKey || metaEnvKeyAlt || import.meta.env.REACT_APP_OPENAI_API_KEY;
+      
+      console.log('Final API key found:', apiKey ? `Yes (${apiKey.length} chars)` : 'No');
       
       if (!apiKey) {
         console.error('OpenAI API key not found');

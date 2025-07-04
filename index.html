@@ -18,7 +18,10 @@
     <script>
       // Runtime configuration - allows environment variables to be injected at runtime
       // This is useful for deployments where env vars are set at runtime (Railway, etc)
-      window.__RUNTIME_CONFIG__ = window.__RUNTIME_CONFIG__ || {};
+      // Only initialize if not already set by server
+      if (typeof window.__RUNTIME_CONFIG__ === 'undefined') {
+        window.__RUNTIME_CONFIG__ = {};
+      }
     </script>      
   </head>
   <body class="font-inter antialiased bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400">
