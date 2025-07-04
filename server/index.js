@@ -8,6 +8,7 @@ import net from 'net';
 import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import OpenAI from 'openai';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
@@ -1860,6 +1861,97 @@ app.put('/api/settings/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error updating settings:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// AI Service API Routes
+app.post('/api/ai/generate-keywords', async (req, res) => {
+  const { productTitles, seedKeyword } = req.body;
+  const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+
+  if (!openAIKey) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server.' });
+  }
+
+  if (!productTitles || !seedKeyword) {
+    return res.status(400).json({ error: 'Missing productTitles or seedKeyword in request body.' });
+  }
+
+  const prompt = `Based on these Amazon product titles and the seed keyword "${seedKeyword}", generate 20 relevant keywords for Amazon product search. Focus on buyer intent keywords.
+
+Product titles:
+${productTitles.slice(0, 5).join('\n')}
+
+Return only the keywords, one per line.`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openAIKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are an Amazon keyword research expert.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 200
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('OpenAI API error:', response.status, errorData);
+      return res.status(response.status).json({ error: 'Failed to generate keywords from OpenAI.', details: errorData });
+    }
+
+    const data = await response.json();
+    const keywords = data.choices[0].message.content
+      .split('\n')
+      .filter(k => k.trim())
+      .map(k => k.trim());
+
+    res.json({ keywords });
+  } catch (error) {
+    console.error('Error calling OpenAI API:', error);
+    res.status(500).json({ error: 'Internal server error when communicating with OpenAI.' });
+  }
+});
+
+app.post('/api/ai/openai-proxy', async (req, res) => {
+  const { task, payload } = req.body;
+  const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+
+  if (!openAIKey) {
+    return res.status(500).json({ error: 'OpenAI API key not configured on server.' });
+  }
+
+  if (!task || !payload) {
+    return res.status(400).json({ error: 'Missing task or payload in request body.' });
+  }
+  
+  const openai = new OpenAI({ apiKey: openAIKey });
+
+  try {
+    let result;
+    
+    if (task === 'chat.completions.create') {
+        result = await openai.chat.completions.create(payload);
+    } else if (task === 'embeddings.create') {
+        result = await openai.embeddings.create(payload);
+    } else {
+        return res.status(400).json({ error: `Unsupported task: ${task}` });
+    }
+
+    res.json(result);
+
+  } catch (error) {
+    console.error(`Error in OpenAI proxy for task ${task}:`, error);
+    const status = error.status || 500;
+    res.status(status).json({ error: error.message, details: error });
   }
 });
 

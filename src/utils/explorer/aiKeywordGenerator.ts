@@ -1,46 +1,24 @@
 export async function generateKeywords(productTitles: string[], seedKeyword: string): Promise<string[]> {
   try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      console.warn('OpenAI API key not found, returning mock data');
-      return getMockKeywords(seedKeyword);
-    }
-
-    const prompt = `Based on these Amazon product titles and the seed keyword "${seedKeyword}", generate 20 relevant keywords for Amazon product search. Focus on buyer intent keywords.
-
-Product titles:
-${productTitles.slice(0, 5).join('\n')}
-
-Return only the keywords, one per line.`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('/api/ai/generate-keywords', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: 'You are an Amazon keyword research expert.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 200
-      })
+      body: JSON.stringify({ productTitles, seedKeyword }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to generate keywords');
+      // Try to get more details from the server response
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed to generate keywords. Server responded with:', response.status, errorData);
+      // Fallback to mock data on failure
+      return getMockKeywords(seedKeyword);
     }
 
     const data = await response.json();
-    const keywords = data.choices[0].message.content
-      .split('\n')
-      .filter(k => k.trim())
-      .map(k => k.trim());
+    return data.keywords || [];
 
-    return keywords;
   } catch (error) {
     console.error('Error generating keywords:', error);
     return getMockKeywords(seedKeyword);

@@ -5,16 +5,9 @@ interface AIProvider {
 }
 
 export async function extractFeatures(
-  products: any[], 
+  products: any[],
   provider: 'openai' | 'anthropic' | 'groq'
 ): Promise<Map<string, string[]>> {
-  const apiKey = getApiKey(provider);
-  
-  if (!apiKey) {
-    console.warn(`${provider} API key not found, using mock data`);
-    return getMockFeatures(products);
-  }
-
   try {
     const productSample = products.slice(0, 20).map(p => ({
       title: p.title,
@@ -29,7 +22,7 @@ ${JSON.stringify(productSample, null, 2)}
 
 Return a JSON object with feature names as keys and arrays of product titles as values.`;
 
-    const features = await callAIProvider(provider, apiKey, prompt);
+    const features = await callAIProvider(provider, prompt);
     return new Map(Object.entries(features));
   } catch (error) {
     console.error('Error extracting features:', error);
@@ -60,93 +53,69 @@ export async function segmentByFeatures(
   return segments.sort((a, b) => b.products.length - a.products.length);
 }
 
-function getApiKey(provider: 'openai' | 'anthropic' | 'groq'): string | null {
-  switch (provider) {
-    case 'openai':
-      return import.meta.env.VITE_OPENAI_API_KEY || null;
-    case 'anthropic':
-      return import.meta.env.VITE_ANTHROPIC_API_KEY || null;
-    case 'groq':
-      return import.meta.env.VITE_GROQ_API_KEY || null;
-    default:
-      return null;
-  }
-}
-
 async function callAIProvider(
   provider: 'openai' | 'anthropic' | 'groq',
-  apiKey: string,
   prompt: string
 ): Promise<any> {
   switch (provider) {
     case 'openai':
-      return callOpenAI(apiKey, prompt);
+      const payload = {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are a product analysis expert. Always return valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      };
+
+      const response = await fetch('/api/ai/openai-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task: 'chat.completions.create', payload }),
+      });
+
+      if (!response.ok) {
+          throw new Error('OpenAI API call failed via proxy');
+      }
+
+      const data = await response.json();
+      return JSON.parse(data.choices[0].message.content);
+
     case 'anthropic':
-      return callAnthropic(apiKey, prompt);
+      // This would need actual implementation based on Claude API docs
+      throw new Error('Anthropic provider not implemented');
     case 'groq':
-      return callGroq(apiKey, prompt);
+       // Groq API implementation
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ` // Removed key
+        },
+        body: JSON.stringify({
+          model: 'mixtral-8x7b-32768',
+          messages: [
+            { role: 'system', content: 'You are a product analysis expert. Always return valid JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 1000
+        })
+      });
+
+      if (!groqResponse.ok) {
+        throw new Error('Groq API call failed');
+      }
+
+      const groqData = await groqResponse.json();
+      return JSON.parse(groqData.choices[0].message.content);
+
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
-}
-
-async function callOpenAI(apiKey: string, prompt: string): Promise<any> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: 'You are a product analysis expert. Always return valid JSON.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('OpenAI API call failed');
-  }
-
-  const data = await response.json();
-  return JSON.parse(data.choices[0].message.content);
-}
-
-async function callAnthropic(apiKey: string, prompt: string): Promise<any> {
-  // Anthropic Claude API implementation
-  // This would need actual implementation based on Claude API docs
-  throw new Error('Anthropic provider not implemented');
-}
-
-async function callGroq(apiKey: string, prompt: string): Promise<any> {
-  // Groq API implementation
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'mixtral-8x7b-32768',
-      messages: [
-        { role: 'system', content: 'You are a product analysis expert. Always return valid JSON.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('Groq API call failed');
-  }
-
-  const data = await response.json();
-  return JSON.parse(data.choices[0].message.content);
 }
 
 function getMockFeatures(products: any[]): Map<string, string[]> {

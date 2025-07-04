@@ -1,9 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { DocumentExtractors } from './DocumentExtractors';
-import { AIAnalysisService, DocumentAnalysis } from './AIAnalysisService';
-import OpenAI from 'openai';
-import { getConfigValue } from '../config/runtime-config';
-// Browser-compatible crypto for hashing
+import { AIAnalysisService, DocumentAnalysis, DocumentAnalysisService } from './AIAnalysisService';
 
 /**
  * Document Intelligence Service
@@ -121,18 +118,31 @@ export type InsightCategory =
   | 'supplier'
   | 'general';
 
+const supabaseAny: any = supabase;
+
 export class DocumentIntelligenceService {
-  private client: OpenAI;
   private readonly EXTRACTION_VERSION = '1.0';
 
   constructor() {
-    const apiKey = getConfigValue('VITE_OPENAI_API_KEY') || 
-                   import.meta.env.VITE_OPENAI_API_KEY;
-    
-    this.client = new OpenAI({
-      apiKey: apiKey,
-      dangerouslyAllowBrowser: true,
+    // No-op
+  }
+
+  private async _callOpenAIProxy(task: string, payload: any) {
+    const response = await fetch('/api/ai/openai-proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ task, payload }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error(`OpenAI proxy call for task ${task} failed:`, response.status, errorData);
+      throw new Error(`Failed to execute AI task: ${task}`);
+    }
+
+    return response.json();
   }
 
   /**
@@ -154,7 +164,7 @@ export class DocumentIntelligenceService {
       progressCallback?.('Fetching document...');
       
       // Get document metadata
-      const { data: document, error } = await supabase
+      const { data: document, error } = await supabaseAny
         .from('deal_documents')
         .select('*')
         .eq('id', documentId)
@@ -166,7 +176,7 @@ export class DocumentIntelligenceService {
 
       // Download document content
       progressCallback?.('Downloading document...');
-      const { data: fileData, error: downloadError } = await supabase.storage
+      const { data: fileData, error: downloadError } = await supabaseAny.storage
         .from('deal-documents')
         .download(document.file_path);
 
@@ -181,8 +191,8 @@ export class DocumentIntelligenceService {
       const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
       // Convert to File object for extraction
-      const file = new File([fileData], document.document_name || 'document', {
-        type: document.file_type || 'application/octet-stream'
+      const file = new File([fileData], document.file_name || 'document', {
+        type: document.mime_type || 'application/octet-stream'
       });
 
       // Extract text content
@@ -193,8 +203,7 @@ export class DocumentIntelligenceService {
         rawText = await DocumentExtractors.extractTextFromFile(file);
       } else if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.pdf')) {
         // Use vision API for images and PDFs
-        const analysis = await new AIAnalysisService.constructor()
-          .analyzeDocument(file, progressCallback);
+        const analysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
         rawText = this.analysisToText(analysis);
       } else {
         throw new Error('Unsupported file type for extraction');
@@ -228,7 +237,7 @@ export class DocumentIntelligenceService {
         embedding: embedding
       };
 
-      const { data: savedExtraction, error: saveError } = await supabase
+      const { data: savedExtraction, error: saveError } = await supabaseAny
         .from('document_extractions')
         .insert(extraction)
         .select()
@@ -256,7 +265,7 @@ export class DocumentIntelligenceService {
    * Get existing extraction if available
    */
   private async getExistingExtraction(documentId: string): Promise<DocumentExtraction | null> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAny
       .from('document_extractions')
       .select('*')
       .eq('document_id', documentId)
@@ -319,7 +328,7 @@ Extract and return as JSON:
 
 Return ONLY valid JSON.`;
 
-    const response = await this.client.chat.completions.create({
+    const payload = {
       model: 'gpt-4o-mini',
       messages: [
         {
@@ -330,9 +339,10 @@ Return ONLY valid JSON.`;
       ],
       temperature: 0.1,
       max_tokens: 2000
-    });
+    };
 
     try {
+      const response = await this._callOpenAIProxy('chat.completions.create', payload);
       return JSON.parse(response.choices[0]?.message?.content || '{}');
     } catch {
       return {};
@@ -357,7 +367,7 @@ Return as JSON:
   "products": ["product or service names"]
 }`;
 
-    const response = await this.client.chat.completions.create({
+    const payload = {
       model: 'gpt-4o-mini',
       messages: [
         {
@@ -368,9 +378,10 @@ Return as JSON:
       ],
       temperature: 0.1,
       max_tokens: 1000
-    });
+    };
 
     try {
+      const response = await this._callOpenAIProxy('chat.completions.create', payload);
       return JSON.parse(response.choices[0]?.message?.content || '{}');
     } catch {
       return {
@@ -401,7 +412,7 @@ Write a 2-3 paragraph summary highlighting:
 2. Key financial metrics or business information
 3. Important findings or notable items`;
 
-    const response = await this.client.chat.completions.create({
+    const payload = {
       model: 'gpt-4o-mini',
       messages: [
         {
@@ -412,8 +423,9 @@ Write a 2-3 paragraph summary highlighting:
       ],
       temperature: 0.3,
       max_tokens: 500
-    });
+    };
 
+    const response = await this._callOpenAIProxy('chat.completions.create', payload);
     return response.choices[0]?.message?.content || 'Summary not available';
   }
 
@@ -438,15 +450,16 @@ Content preview: ${text.substring(0, 2000)}
 
 Return only the category name.`;
 
-    const response = await this.client.chat.completions.create({
+    const payload = {
       model: 'gpt-4o-mini',
       messages: [
         { role: 'user', content: prompt }
       ],
       temperature: 0.1,
       max_tokens: 50
-    });
+    };
 
+    const response = await this._callOpenAIProxy('chat.completions.create', payload);
     const category = response.choices[0]?.message?.content?.trim().toLowerCase();
     return (category as DocumentType) || 'other';
   }
@@ -455,12 +468,13 @@ Return only the category name.`;
    * Generate embedding for semantic search
    */
   private async generateEmbedding(text: string): Promise<number[]> {
-    try {
-      const response = await this.client.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: text.substring(0, 8000), // Limit to token constraints
-      });
+    const payload = {
+      model: 'text-embedding-3-small',
+      input: text.substring(0, 8000), // Limit to token constraints
+    };
 
+    try {
+      const response = await this._callOpenAIProxy('embeddings.create', payload);
       return response.data[0].embedding;
     } catch (error) {
       console.error('Embedding generation error:', error);
@@ -560,7 +574,7 @@ Return only the category name.`;
   private async saveInsights(insights: DocumentInsight[]): Promise<void> {
     if (insights.length === 0) return;
 
-    const { error } = await supabase
+    const { error } = await supabaseAny
       .from('document_insights')
       .insert(insights);
 
@@ -614,7 +628,7 @@ Return only the category name.`;
       searchText?: string;
     }
   ): Promise<DocumentInsight[]> {
-    let queryBuilder = supabase
+    let queryBuilder = supabaseAny
       .from('document_insights')
       .select(`
         *,
@@ -659,7 +673,7 @@ Return only the category name.`;
     opportunities: string[];
   }> {
     // Get all extractions for the deal
-    const { data: extractions, error } = await supabase
+    const { data: extractions, error } = await supabaseAny
       .from('document_extractions')
       .select('*')
       .eq('deal_id', dealId);
