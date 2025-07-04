@@ -6,6 +6,17 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 
+// Add uncaught exception handler
+process.on('uncaughtException', (err) => {
+  console.error('FATAL: Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('FATAL: Unhandled rejection:', err);
+  process.exit(1);
+});
+
 // Load environment variables
 dotenv.config();
 
@@ -49,10 +60,14 @@ console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'SET' : 'NOT SET')
 console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
 console.log('VITE_OPENAI_API_KEY:', process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET');
 
-// Detect Railway environment
+// Detect deployment environment
 const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const isRender = !!(process.env.RENDER || process.env.RENDER_SERVICE_NAME);
+
 if (isRailway) {
   console.log('\n🚂 Railway deployment detected - using Railway-optimized configuration');
+} else if (isRender) {
+  console.log('\n🚀 Render deployment detected');
 }
 
 // Store for ongoing operations
@@ -82,6 +97,14 @@ app.get('/api/scrape/stream', async (req, res) => {
   };
 
   try {
+    // Check if scraper module exists before importing
+    const scraperPath = path.join(__dirname, 'enhanced-multi-scraper.js');
+    if (!fs.existsSync(scraperPath)) {
+      console.error('Enhanced scraper module not found at:', scraperPath);
+      sendEvent({ level: 'ERROR', message: 'Scraping module not available in production' });
+      return;
+    }
+
     // Dynamically import the enhanced scraper to avoid circular deps / startup cost
     const { default: EnhancedMultiScraper } = await import('./enhanced-multi-scraper.js');
 
@@ -388,8 +411,14 @@ if (fs.existsSync(distPath)) {
   });
 }
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error', message: err.message });
+});
+
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n✨ Server is running on port ${PORT}`);
   console.log(`🌐 Access the app at: http://localhost:${PORT}`);
   console.log(`📡 API endpoints:`);
@@ -403,5 +432,16 @@ app.listen(PORT, () => {
   
   if (isRailway) {
     console.log(`\n🚂 Railway URL: https://${process.env.RAILWAY_STATIC_URL || 'your-app.up.railway.app'}`);
+  } else if (isRender) {
+    console.log(`\n🚀 Render URL: https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'your-app.onrender.com'}`);
   }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
