@@ -39,6 +39,11 @@ if (isRailway) {
   console.log('\n🚂 Railway deployment detected - using Railway-optimized configuration');
 }
 
+// Set dist path based on environment
+const distPath = process.env.RENDER ? path.join(__dirname, '..', 'dist') : path.join(__dirname, 'dist');
+console.log('Looking for dist directory at:', distPath);
+console.log('Directory exists:', fs.existsSync(distPath));
+
 // Log all requests
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -75,8 +80,8 @@ app.get('/api/test-env', (req, res) => {
       PORT: process.env.PORT || 'not set'
     },
     debug: envVars,
-    distExists: fs.existsSync(path.join(__dirname, 'dist')),
-    distIndexExists: fs.existsSync(path.join(__dirname, 'dist', 'index.html'))
+    distExists: fs.existsSync(distPath),
+    distIndexExists: fs.existsSync(path.join(distPath, 'index.html'))
   });
 });
 
@@ -128,14 +133,14 @@ app.get('/api/diagnostics', async (req, res) => {
 });
 
 // Serve static files from dist directory
-app.use(express.static(path.join(__dirname, 'dist'), {
+app.use(express.static(distPath, {
   // Don't serve index.html as static, we'll handle it separately
   index: false
 }));
 
 // Handle the root route and inject runtime config
 app.get('/', (req, res) => {
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  const indexPath = path.join(distPath, 'index.html');
   let indexHtml = fs.readFileSync(indexPath, 'utf-8');
   
   // Inject runtime configuration
@@ -164,7 +169,7 @@ app.get('/', (req, res) => {
 
 // Handle all other routes by serving index.html (for client-side routing)
 app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  const indexPath = path.join(distPath, 'index.html');
   let indexHtml = fs.readFileSync(indexPath, 'utf-8');
   
   // Inject runtime configuration
