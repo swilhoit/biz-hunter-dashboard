@@ -40,8 +40,30 @@ if (isRailway) {
 }
 
 // Set dist path based on environment
-const distPath = process.env.RENDER ? path.join(__dirname, '..', 'dist') : path.join(__dirname, 'dist');
-console.log('Looking for dist directory at:', distPath);
+// Try multiple possible locations for the dist directory
+const possiblePaths = [
+  path.join(__dirname, 'dist'),
+  path.join(__dirname, '..', 'dist'),
+  path.join(process.cwd(), 'dist'),
+  '/opt/render/project/dist',
+  '/opt/render/project/src/dist'
+];
+
+let distPath = null;
+for (const tryPath of possiblePaths) {
+  console.log(`Checking for dist at: ${tryPath} - exists: ${fs.existsSync(tryPath)}`);
+  if (fs.existsSync(tryPath)) {
+    distPath = tryPath;
+    break;
+  }
+}
+
+if (!distPath) {
+  console.error('ERROR: Could not find dist directory in any of the expected locations!');
+  distPath = path.join(__dirname, 'dist'); // fallback
+}
+
+console.log('Using dist directory at:', distPath);
 console.log('Directory exists:', fs.existsSync(distPath));
 
 // Log all requests

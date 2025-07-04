@@ -102,7 +102,8 @@
       "Bash(brew install:*)",
       "Bash(render login)",
       "Bash(render services list)",
-      "Bash(render services:*)"
+      "Bash(render services:*)",
+      "Bash(npm ls:*)"
     ],
     "deny": []
   }
