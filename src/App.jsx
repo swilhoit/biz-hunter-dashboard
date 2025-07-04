@@ -90,6 +90,8 @@ import AccordionPage from './pages/component/AccordionPage';
 import IconsPage from './pages/component/IconsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
+import { AuthProvider } from './contexts/AuthContext';
+
 function App() {
 
   const location = useLocation();

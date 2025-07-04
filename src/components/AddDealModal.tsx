@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
-import { X, Upload, FileText, Loader2, AlertCircle, Brain, Save, CheckCircle, DollarSign, Building, Globe, Calendar, Phone, Mail, User, Tag } from 'lucide-react';
-import { Deal, DealStatus, DealSource } from '../types/deal';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Loader2, Save, Upload, X, FileText, Bot, BrainCircuit, CheckCircle, AlertTriangle, Info, Building, DollarSign, Globe, Calendar, Phone, Mail, User, Tag, AlertCircle, Brain } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 import { dealsAdapter, filesAdapter } from '../lib/database-adapter';
+import { Deal, DealStatus, DealSource } from '../types/deal';
 import { DocumentAnalysisService, DocumentAnalysis } from '../services/AIAnalysisService';
 import PDFUploadGuide from './PDFUploadGuide';
+import { useAuth } from '../hooks/useAuth';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface AddDealModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDealCreated: (deal: Deal) => void;
+  initialData?: Partial<Deal>;
 }
 
 interface FileAnalysis {
@@ -64,8 +71,8 @@ const initialDealData: Partial<Deal> = {
   tags: []
 };
 
-export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDealModalProps) {
-  const [dealData, setDealData] = useState<Partial<Deal>>(initialDealData);
+export default function AddDealModal({ isOpen, onClose, onDealCreated, initialData }: AddDealModalProps) {
+  const [dealData, setDealData] = useState<Partial<Deal>>(initialData || initialDealData);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [fileAnalyses, setFileAnalyses] = useState<FileAnalysis[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -73,8 +80,10 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   const [isSaving, setIsSaving] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<FileAnalysis | null>(null);
-  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0, stage: '' });
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisMessage, setAnalysisMessage] = useState('');
   const [showPDFGuide, setShowPDFGuide] = useState(false);
+  const { user } = useAuth();
 
   const dealStatuses: { value: DealStatus; label: string }[] = [
     { value: 'prospecting', label: 'Prospecting' },
@@ -134,7 +143,8 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     console.log('Starting file upload for', files.length, 'files');
     setUploadedFiles(prev => [...prev, ...files]);
     setIsAnalyzing(true);
-    setAnalysisProgress({ current: 0, total: files.length, stage: 'Preparing files...' });
+    setAnalysisProgress(5);
+    setAnalysisMessage('Starting analysis...');
 
     const newAnalyses: FileAnalysis[] = files.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -151,17 +161,20 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
       const analysisId = newAnalyses[i].id;
       console.log(`Analyzing file ${i + 1}/${files.length}: ${file.name}`);
       
-      setAnalysisProgress({ 
-        current: i + 1, 
-        total: files.length, 
-        stage: `Analyzing ${file.name}...` 
-      });
+      setAnalysisProgress(prev => Math.min(95, prev + 15));
+      setAnalysisMessage(`Analyzing ${file.name}...`);
 
       try {
         const analysis = await DocumentAnalysisService.analyzeDocument(
           file,
           (progress: string) => {
-            setAnalysisProgress(prev => ({ ...prev, stage: progress }));
+            setAnalysisMessage(progress);
+            if (progress.includes('Scanning')) setAnalysisProgress(15);
+            if (progress.includes('important pages')) setAnalysisProgress(25);
+            if (progress.includes('direct text')) setAnalysisProgress(40);
+            if (progress.includes('image analysis')) setAnalysisProgress(50);
+            if (progress.includes('Processing prioritized page')) setAnalysisProgress(p => Math.min(90, p + 5));
+            if (progress.includes('Finalizing analysis')) setAnalysisProgress(95);
           }
         );
         console.log('Analysis result for', file.name, ':', analysis);
@@ -191,7 +204,9 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     }
 
     setIsAnalyzing(false);
-    setAnalysisProgress({ current: 0, total: 0, stage: '' });
+    setAnalysisProgress(100);
+    setAnalysisMessage('Analysis complete! Form autofilled.');
+    setTimeout(() => setIsAnalyzing(false), 2000);
     console.log('File analysis complete');
   };
 
@@ -345,7 +360,13 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     setIsSaving(true);
     try {
       // Create the deal
-      const createdDeal = await dealsAdapter.createDeal(dealData);
+      const dataToCreate: Deal = {
+        ...(dealData as Deal),
+        status: (dealData.status as DealStatus) || 'prospecting',
+        user_id: user ? user.id : null,
+      } as Deal;
+
+      const createdDeal = await dealsAdapter.createDeal(dataToCreate);
       
       // Upload files if any
       if (uploadedFiles.length > 0) {
@@ -353,7 +374,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
           await filesAdapter.uploadFile(createdDeal.id, file, {
             category: 'other',
             description: 'Added with manual deal creation',
-            is_confidential: false
+            is_confidential: false,
           });
         }
       }
@@ -374,7 +395,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   };
 
   const resetForm = () => {
-    setDealData(initialDealData);
+    setDealData(initialData || initialDealData);
     setUploadedFiles([]);
     setFileAnalyses([]);
     setIsAnalyzing(false);
@@ -458,16 +479,20 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                 </p>
                 
                 {/* Progress bar */}
-                {isAnalyzing && analysisProgress.total > 0 && (
+                {isAnalyzing && analysisProgress < 100 && (
                   <div className="mt-4">
                     <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                      <span>{analysisProgress.stage}</span>
-                      <span>{analysisProgress.current}/{analysisProgress.total} files</span>
+                      <span>{analysisMessage}</span>
+                      <span>{analysisProgress}%</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div 
-                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+                        className={`bg-indigo-600 h-2 rounded-full transition-all duration-300 ${
+                          analysisProgress >= 70 ? 'bg-green-500' :
+                          analysisProgress >= 40 ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        }`}
+                        style={{ width: `${analysisProgress}%` }}
                       ></div>
                     </div>
                   </div>

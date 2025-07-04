@@ -512,48 +512,57 @@ export class DocumentAnalysisService {
       // Import PDF.js with better error handling
       let pdfjsLib;
       try {
+        console.log('Attempting to dynamically import pdfjs-dist...');
         // Import the ES module version
         const pdfjs = await import('pdfjs-dist');
-        console.log('PDF.js import result:', pdfjs);
-        console.log('PDF.js keys:', Object.keys(pdfjs));
+        console.log('Successfully imported pdfjs-dist. Module keys:', Object.keys(pdfjs));
         
         // Handle different export patterns
         if (pdfjs.getDocument) {
+          console.log('Found getDocument directly on module.');
           pdfjsLib = pdfjs;
         } else if (pdfjs.default && pdfjs.default.getDocument) {
+          console.log('Found getDocument on module.default.');
           pdfjsLib = pdfjs.default;
         } else if (typeof window !== 'undefined' && (window as any).pdfjsLib) {
-          console.log('Using window.pdfjsLib fallback');
+          console.log('Using window.pdfjsLib fallback.');
           pdfjsLib = (window as any).pdfjsLib;
         } else {
+          console.log('getDocument not found directly, searching in module values...');
           // Try to find getDocument in the module
           const foundLib = Object.values(pdfjs).find((val: any) => val && typeof val.getDocument === 'function');
           if (foundLib) {
+            console.log('Found getDocument in one of the module exports.');
             pdfjsLib = foundLib;
+          } else {
+            console.error('Could not find a valid pdfjs-dist export with getDocument.');
           }
         }
         
-        console.log('PDF.js loaded, getDocument available:', typeof pdfjsLib?.getDocument);
+        console.log('PDF.js library selected. getDocument available:', typeof pdfjsLib?.getDocument === 'function');
       } catch (importError) {
-        console.error('Failed to load PDF.js:', importError);
-        throw new Error('PDF processing library failed to load. Please try uploading images or text files instead.');
+        console.error('Failed to dynamically import pdfjs-dist:', importError);
+        throw new Error('PDF processing library (pdfjs-dist) failed to load. Please try uploading images or text files instead.');
       }
       
       // Ensure we have the getDocument function
       if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') {
-        console.error('PDF.js loaded but getDocument not available');
+        console.error('PDF.js is loaded but the getDocument function is not available or not a function.');
         throw new Error('PDF.js is not properly configured. Please try uploading images or text files instead.');
       }
       
       // Configure worker - PDF.js requires a worker source to be specified
       if (pdfjsLib.GlobalWorkerOptions) {
-        const version = pdfjsLib.version || '3.11.174';
-        console.log('Setting PDF.js worker for version:', version);
+        const version = pdfjsLib.version || '3.11.174'; // Use detected version or fallback
+        const workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.js`;
+        console.log(`Setting PDF.js worker version: ${version}, path: ${workerSrc}`);
         
         // Use CDN worker source - this avoids local file CORS issues
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
         
-        console.log('PDF.js worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc);
+        console.log('PDF.js worker configured successfully.');
+      } else {
+        console.warn('pdfjsLib.GlobalWorkerOptions is not available. PDF processing might be slow or fail for large files.');
       }
       
       // Load the PDF with fallback options and timeout
@@ -603,14 +612,136 @@ export class DocumentAnalysisService {
       
       console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
       
+      // --- START: Smart Page Selection Logic ---
+      progressCallback?.('Scanning document for relevant pages...');
+      
+      const keywordWeights = {
+        'revenue': 5, 'profit': 5, 'financial': 5, 'sales': 5, 'ebitda': 5, 'sde': 5, 'cash flow': 5,
+        'income': 4, 'balance sheet': 4,
+        'summary': 3, 'overview': 3, 'highlights': 3,
+        'growth': 2, 'opportunity': 2, 'market': 2, 'competition': 2,
+        'valuation': 2, 'asking price': 2,
+      };
+
+      const pageScores: { pageNum: number, score: number }[] = [];
+      const maxPagesToScanForPrio = Math.min(pdf.numPages, 50); // Scan up to 50 pages for keywords
+
+      for (let i = 1; i <= maxPagesToScanForPrio; i++) {
+        try {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          if (textContent.items.length > 0) {
+            const pageText = textContent.items.map((item: any) => item.str).join(' ').toLowerCase();
+            let score = 0;
+            for (const keyword in keywordWeights) {
+              if (pageText.includes(keyword)) {
+                score += (keywordWeights as any)[keyword];
+              }
+            }
+            if (score > 0) {
+              pageScores.push({ pageNum: i, score });
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not pre-scan page ${i} for keywords.`);
+        }
+      }
+
+      const maxPagesToAnalyze = 10;
+      let pagesForAnalysis: number[];
+
+      if (pageScores.length > 0) {
+        pageScores.sort((a, b) => b.score - a.score);
+        let prioritizedPages = pageScores.map(p => p.pageNum);
+
+        if (!prioritizedPages.includes(1) && pdf.numPages > 0) {
+          prioritizedPages.unshift(1);
+        }
+
+        pagesForAnalysis = [...new Set(prioritizedPages)].slice(0, maxPagesToAnalyze);
+        console.log('Smart Selection: Prioritizing pages based on keywords:', pagesForAnalysis);
+        progressCallback?.(`Found ${pagesForAnalysis.length} important pages to analyze...`);
+      } else {
+        pagesForAnalysis = Array.from({ length: Math.min(pdf.numPages, maxPagesToAnalyze) }, (_, i) => i + 1);
+        console.log('Default Selection: No keywords found, analyzing first 10 pages.');
+      }
+      pagesForAnalysis.sort((a, b) => a - b); // Process pages in order
+      // --- END: Smart Page Selection Logic ---
+
+      
+      // First, try to extract text directly from PDF (for text-based PDFs)
+      let directTextExtraction = false;
+      const directTexts: string[] = [];
+      
+      try {
+        console.log('Attempting direct text extraction from PDF...');
+        progressCallback?.('Attempting direct text extraction...');
+        
+        for (const pageNum of pagesForAnalysis) {
+          try {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            
+            // Better text extraction that preserves layout
+            const textItems = textContent.items as any[];
+            let pageText = '';
+            let lastY = null;
+            
+            // Sort items by position to maintain reading order
+            textItems.sort((a, b) => {
+              const yDiff = b.transform[5] - a.transform[5]; // Y coordinate (top to bottom)
+              if (Math.abs(yDiff) > 2) return yDiff;
+              return a.transform[4] - b.transform[4]; // X coordinate (left to right)
+            });
+            
+            for (const item of textItems) {
+              // Add line breaks when Y position changes significantly
+              if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+                pageText += '\n';
+              }
+              pageText += item.str;
+              lastY = item.transform[5];
+            }
+            
+            pageText = pageText.trim();
+            
+            if (pageText.length > 50) {
+              directTexts.push(pageText);
+              console.log(`Page ${pageNum} direct text extraction: ${pageText.length} characters`);
+              console.log(`Page ${pageNum} preview:`, pageText.substring(0, 200) + '...');
+            }
+          } catch (pageError) {
+            console.log(`Failed to extract text from page ${pageNum}:`, pageError);
+          }
+        }
+        
+        if (directTexts.length > 0) {
+          directTextExtraction = true;
+          console.log(`Direct text extraction successful: ${directTexts.length} pages with text`);
+        }
+      } catch (error) {
+        console.log('Direct text extraction failed, will use image-based approach:', error);
+      }
+      
+      // If direct text extraction worked, use that instead of Vision API
+      if (directTextExtraction && directTexts.length > 0) {
+        progressCallback?.('Analyzing extracted text...');
+        const combinedText = directTexts.join('\n\n=== Page Break ===\n\n');
+        console.log(`Direct extraction complete: ${combinedText.length} total characters`);
+        return await this.analyzeTextWithVision(combinedText, file.name, client);
+      }
+      
+      // Otherwise, fall back to image-based extraction
+      progressCallback?.('No text found, switching to image analysis...');
+      console.log('No text found via direct extraction. Using image-based extraction via Vision API...');
+      
       // Limit pages to process but increase limit for better coverage
-      const maxPages = Math.min(pdf.numPages, 10); // Increased from 5 to 10
       const pageTexts: string[] = [];
       let pagesProcessed = 0;
       let pagesWithText = 0;
       
-      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-        const progressText = `Processing PDF page ${pageNum}/${maxPages}...`;
+      for (const pageNum of pagesForAnalysis) {
+        const progressText = `Processing prioritized page ${pageNum} of ${pdf.numPages}...`;
         progressCallback?.(progressText);
         console.log(progressText);
         
@@ -686,7 +817,7 @@ export class DocumentAnalysisService {
             setTimeout(() => reject(new Error(`Vision API timeout for page ${pageNum}`)), 20000);
           });
           
-          const pageText = await Promise.race([visionPromise, visionTimeoutPromise]);
+          const pageText = await Promise.race([visionPromise, visionTimeoutPromise]) as string;
           
           if (pageText && pageText.trim().length > 50) {
             console.log(`Page ${pageNum} extracted text length:`, pageText.length);
@@ -726,7 +857,7 @@ export class DocumentAnalysisService {
       console.log(`PDF extraction complete: ${pageTexts.length} pages with text out of ${pagesProcessed} processed`);
       
       // Combine and analyze
-      progressCallback?.('Analyzing extracted content...');
+      progressCallback?.('Finalizing analysis of extracted content...');
       const combinedText = pageTexts.join('\n\n=== Page Break ===\n\n');
       console.log(`Combined text length: ${combinedText.length} characters`);
       
@@ -813,7 +944,7 @@ export class DocumentAnalysisService {
     return await this.analyzeTextWithVision(extractedText, file.name, client);
   }
 
-  private static async analyzeImageBase64WithVision(base64: string, fileName: string, client: OpenAI): Promise<string> {
+  private static async analyzeImageBase64WithVision(base64: string, _fileName: string, client: OpenAI): Promise<string> {
     console.log('Sending image to Vision API for text extraction...');
     
     const response = await client.chat.completions.create({
@@ -828,55 +959,13 @@ export class DocumentAnalysisService {
 
 Focus on extracting:
 
-1. Business Information:
-   - Business name/title
-   - Business description
-   - Industry/category
-   - Location (city, state, country)
-   - Years in business/established date
-   
-2. Financial Data (CRITICAL - extract ALL numbers):
-   - Asking/listing price
-   - Annual revenue/sales
-   - Annual profit/net income/SDE/EBITDA
-   - Monthly revenue/profit
-   - Gross margin
-   - Inventory value
-   - Any financial multiples mentioned
-   
-3. Contact Information:
-   - Broker/agent name and company
-   - Seller name
-   - Phone numbers
-   - Email addresses
-   - Website URLs
-   
-4. Amazon/E-commerce Specific (if applicable):
-   - Amazon store name/URL
-   - FBA percentage
-   - Number of SKUs/ASINs
-   - Product categories
-   - Account health metrics
-   
-5. Additional Details:
-   - Reason for selling
-   - Number of employees
-   - Growth opportunities
-   - Training/transition offered
-   - Real estate included
-   - Listing ID/reference number
+• All text content
+• All numbers and figures
+• Names and contact info
+• Tables and lists
+• Headers and footers
 
-Please extract:
-- All headers and titles
-- All paragraphs of text
-- All numbers and financial figures (prices, revenue, etc.)
-- Contact information (names, emails, phone numbers)
-- Any tables or structured data
-- Any fine print or footer text
-
-Important: This is standard OCR text extraction from a business document. Simply transcribe all visible text from the image in order, maintaining the structure. If you cannot read certain parts, indicate [illegible] for those sections.
-
-Return the complete text transcription.`
+Just transcribe what you see.`
             },
             {
               type: 'image_url',
@@ -1034,8 +1123,29 @@ Extraction Instructions:
 
       console.log('AI analysis response length:', aiResponse.length);
       console.log('AI analysis response preview:', aiResponse.substring(0, 500));
-
-      const analysis = JSON.parse(aiResponse);
+      
+      let analysis;
+      try {
+        analysis = JSON.parse(aiResponse);
+      } catch (error) {
+        console.error('Failed to parse AI response as JSON:', error);
+        console.log('Original AI response:', aiResponse);
+        
+        // Attempt to fix common JSON issues (e.g., wrapped in markdown)
+        const jsonMatch = aiResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          console.log('Attempting to parse JSON from extracted markdown block...');
+          try {
+            analysis = JSON.parse(jsonMatch[1]);
+            console.log('Successfully parsed JSON after stripping markdown.');
+          } catch (nestedError) {
+            console.error('Still failed to parse JSON after stripping markdown:', nestedError);
+            throw new Error('AI returned a malformed data structure that could not be repaired.');
+          }
+        } else {
+          throw new Error('AI returned a malformed data structure.');
+        }
+      }
       
       // Log what was extracted
       console.log('Extracted data summary:', {

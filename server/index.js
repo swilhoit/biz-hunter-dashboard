@@ -2965,7 +2965,8 @@ app.delete('/api/clear', async (req, res) => {
     const { error } = await supabase
       .from('business_listings')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
+      .select();
     
     if (error) {
       throw new Error(`Database error: ${error.message}`);
@@ -3207,3 +3208,25 @@ async function quickFallbackScraper() {
     message: `Quick fallback: Added ${savedCount} example FBA listings for testing`
   };
 }
+
+app.get('/api/scrape/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const { default: EnhancedMultiScraper } = await import('../enhanced-multi-scraper.js');
+    const scraper = new EnhancedMultiScraper((log) => sendEvent(log));
+    const results = await scraper.runTwoStageScraping(req.query);
+    sendEvent({ level: 'COMPLETE', message: 'Scraping complete', data: results });
+  } catch (error) {
+    sendEvent({ level: 'ERROR', message: `Scraping failed: ${error.message}` });
+  } finally {
+    res.end();
+  }
+});

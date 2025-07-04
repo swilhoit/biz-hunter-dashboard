@@ -8,6 +8,7 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
   const [siteStatuses, setSiteStatuses] = useState({});
   const [totalSites, setTotalSites] = useState(0);
   const [completedSites, setCompletedSites] = useState(0);
+  const [scraping, setScraping] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [finalResults, setFinalResults] = useState(null);
   const [errors, setErrors] = useState([]);
@@ -127,68 +128,75 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     });
   };
   
-  const startScraping = async () => {
-    try {
-      setCurrentStage('Connecting to scraping server...');
-      addLog('info', 'Establishing connection to scraping server...');
+  const startScraping = () => {
+    setScraping(true);
+    setIsComplete(false);
+    setLogs([]);
+    setSiteStatuses({});
+    setStartTime(Date.now());
+    setCurrentTime(Date.now());
 
-      // For now, use traditional API call with simulation
-      fallbackToTraditionalAPI();
+    addLog('info', '🚀 Connecting to real-time log stream...');
 
-    } catch (error) {
-      console.error('Scraping start error:', error);
-      addLog('error', `Failed to start scraping: ${error.message}`);
-      setCurrentStage('Failed to connect to server');
-      fallbackToTraditionalAPI();
-    }
-  };
-
-  const fallbackToTraditionalAPI = async () => {
-    try {
-      addLog('info', 'Connecting to scraping server...');
-      setCurrentStage('Starting scraping process...');
-      
-      // Initialize site statuses based on selected sites
-      const sitesToScrape = localSelectedSites.map(siteId => {
-        const site = availableSites.find(s => s.id === siteId);
-        return site ? site.name : siteId;
-      });
-      
-      setTotalSites(sitesToScrape.length);
-      
-      // Don't initialize fake statuses - let real data populate them
-      addLog('info', `Initiating scraping for ${sitesToScrape.length} sites: ${sitesToScrape.join(', ')}`);
-      
-      // Start the actual API call
-      const SCRAPING_API_URL = import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001';
-      
-      setCurrentStage('Scraping in progress...');
-      addLog('info', 'Scraping started - waiting for real results...');
-      
-      const response = await fetch(`${SCRAPING_API_URL}/api/scrape`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          method,
-          selectedSites: localSelectedSites
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      // Apply the real results
-      applyFinalResults(result, sitesToScrape);
-      
-    } catch (error) {
-      addLog('error', `Scraping failed: ${error.message}`);
-      setCurrentStage('Scraping failed');
+    const siteParams = localSelectedSites.join(',');
+    
+    // Check if we're in production (Railway)
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction && !import.meta.env.VITE_SCRAPING_API_URL) {
+      addLog('error', '⚠️ Scraping service is not configured for production');
+      addLog('info', '💡 The scraping server needs to be deployed separately');
       setIsComplete(true);
-      setProgress(0);
+      setScraping(false);
+      setCurrentStage('Configuration needed');
+      return;
     }
+    
+    const eventSource = new EventSource(
+      `${import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001'}/api/scrape/stream?selectedSites=${siteParams}`
+    );
+
+    eventSource.onopen = () => {
+      addLog('success', '✅ Connection established. Scraping has started.');
+      addLog('warning', '⏳ Scraping can take up to 2 minutes per site...');
+    };
+
+    eventSource.onmessage = (event) => {
+      const log = JSON.parse(event.data);
+      
+      if (log.level === 'COMPLETE') {
+        addLog('success', '🎉 Scraping process complete on server.');
+        applyFinalResults(log.data);
+        eventSource.close();
+      } else {
+        addLog(log.level.toLowerCase(), log.message, log.data.source || null);
+
+        // Update site status from logs
+        if (log.data && log.data.source && log.message.includes('completed successfully')) {
+            updateSiteStatus(log.data.source, 'completed', {
+                found: log.data.listingsFound,
+                saved: 0, 
+                errors: 0
+            });
+            setCompletedSites(prev => prev + 1);
+        } else if (log.data && log.data.source && log.message.includes('failed')) {
+            updateSiteStatus(log.data.source, 'error', {
+                found: 0, saved: 0, errors: 1
+            });
+            setCompletedSites(prev => prev + 1);
+        }
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      addLog('error', '❌ Log stream error. The connection may have been closed.');
+      console.error("EventSource failed:", err);
+      eventSource.close();
+      setIsComplete(true);
+      setCurrentStage('Scraping failed');
+    };
+    
+    eventSourceRef.current = eventSource;
   };
 
   const applyFinalResults = (result, sites) => {
@@ -539,32 +547,20 @@ ${logText}
                     </div>
                   </div>
                   
-                  <div 
-                    ref={logContainerRef}
-                    className="bg-gray-900 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-600 p-3 h-96 overflow-y-auto font-mono text-xs"
-                    title="Click 'Copy' button above to copy all logs to clipboard"
-                  >
-                    {logs.length === 0 ? (
-                      <div className="text-gray-500 dark:text-gray-400 text-center py-8">
-                        Waiting for activity...
-                      </div>
-                    ) : (
-                      logs.map((log) => (
-                        <div key={log.id} className="mb-1 flex">
-                          <span className="text-gray-400 mr-2 flex-shrink-0">
-                            {new Date(log.timestamp).toLocaleTimeString()}
-                          </span>
+                  <div className="mt-4 h-96 overflow-y-auto bg-gray-900 rounded-lg p-4 font-mono text-xs">
+                    {logs.map((log, index) => (
+                      <div key={`${log.timestamp}-${index}`} className={`flex items-start ${getLogLevelColor(log.level)}`}>
+                        <span className="w-20 shrink-0 text-gray-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                        <p className="flex-1 whitespace-pre-wrap break-all">
                           {log.site && (
                             <span className="text-blue-400 mr-2 flex-shrink-0">
                               [{log.site}]
                             </span>
                           )}
-                          <span className={getLogLevelColor(log.level)}>
-                            {log.message}
-                          </span>
-                        </div>
-                      ))
-                    )}
+                          {log.message}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

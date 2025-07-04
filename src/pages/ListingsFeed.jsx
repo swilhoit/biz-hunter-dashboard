@@ -4,14 +4,14 @@ import Header from '../partials/Header';
 import ListingsTable from '../partials/deals/ListingsTable';
 import ListingsFilters from '../partials/deals/ListingsFilters';
 import ListingCard from '../partials/deals/ListingCard';
-import { useBusinessListings, useAddToPipeline } from '../hooks/useBusinessListings';
+import { useBusinessListings, useAddToPipeline, useClearListings } from '../hooks/useBusinessListings';
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
 import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown } from 'lucide-react';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2 } from 'lucide-react';
 
 function ListingsFeed() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,7 +23,8 @@ function ListingsFeed() {
   const [showDuplicateManager, setShowDuplicateManager] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
-  const [selectedSites, setSelectedSites] = useState(['quietlight', 'bizbuysell']);
+  const [sitesForScraper, setSitesForScraper] = useState(['quietlight', 'bizbuysell']);
+  const [activeFilters, setActiveFilters] = useState({});
 
   // Fetch real business listings data
   const { 
@@ -52,19 +53,18 @@ function ListingsFeed() {
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
   const { 
-    checkForNewListings, 
-    checkForNewListingsWithProgress, 
-    isChecking, 
-    progress, 
-    currentScraper, 
-    lastResults, 
-    clearResults,
+    startScraping,
+    isChecking,
+    lastResults,
     showProgressModal,
     currentMethod,
+    selectedSites,
+    handleSiteSelectionChange,
     handleProgressModalClose,
     handleProgressModalComplete
   } = useManualScraping();
   const { user } = useAuth();
+  const clearListingsMutation = useClearListings();
 
   // Close admin dropdown when clicking outside
   React.useEffect(() => {
@@ -80,13 +80,75 @@ function ListingsFeed() {
     };
   }, [showAdminDropdown]);
 
-  const filteredListings = listings.filter(listing => 
-    listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    listing.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    listing.amazon_category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    listing.marketplace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    listing.industry?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredListings = listings.filter(listing => {
+    // Search term filter
+    const matchesSearch = searchTerm === '' || 
+      listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.niche?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.industry?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.source?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.provider?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    
+    // Apply active filters - map to existing fields
+    if (activeFilters.priceRange?.min && listing.asking_price < parseFloat(activeFilters.priceRange.min)) return false;
+    if (activeFilters.priceRange?.max && listing.asking_price > parseFloat(activeFilters.priceRange.max)) return false;
+    
+    if (activeFilters.revenueRange?.min && listing.annual_revenue < parseFloat(activeFilters.revenueRange.min)) return false;
+    if (activeFilters.revenueRange?.max && listing.annual_revenue > parseFloat(activeFilters.revenueRange.max)) return false;
+    
+    // Use profit_multiple for valuation_multiple
+    const valuationMultiple = listing.profit_multiple || listing.valuation_multiple;
+    if (activeFilters.multipleRange?.min && valuationMultiple < parseFloat(activeFilters.multipleRange.min)) return false;
+    if (activeFilters.multipleRange?.max && valuationMultiple > parseFloat(activeFilters.multipleRange.max)) return false;
+    
+    // FBA percentage filter - skip if field doesn't exist
+    if (activeFilters.fbaPercentage?.min && listing.fba_percentage && listing.fba_percentage < parseFloat(activeFilters.fbaPercentage.min)) return false;
+    
+    // Categories filter - use niche or industry as fallback
+    if (activeFilters.categories?.length > 0) {
+      const category = listing.amazon_category || listing.niche || listing.industry || '';
+      const matchesCategory = activeFilters.categories.some(cat => 
+        category.toLowerCase().includes(cat.toLowerCase())
+      );
+      if (!matchesCategory) return false;
+    }
+    
+    // Marketplaces filter - use source or provider
+    if (activeFilters.marketplaces?.length > 0) {
+      const marketplace = listing.marketplace || listing.source || listing.provider || '';
+      if (!activeFilters.marketplaces.includes(marketplace)) return false;
+    }
+    
+    // Status filter
+    if (activeFilters.listingStatus?.length > 0) {
+      const status = listing.listing_status || 'live';
+      if (!activeFilters.listingStatus.includes(status)) return false;
+    }
+    
+    // Business age filter - calculate from established_year if available
+    if (activeFilters.businessAge?.min || activeFilters.businessAge?.max) {
+      let ageMonths = listing.business_age_months;
+      if (!ageMonths && listing.established_year) {
+        ageMonths = (new Date().getFullYear() - listing.established_year) * 12;
+      }
+      if (ageMonths) {
+        if (activeFilters.businessAge.min && ageMonths < parseFloat(activeFilters.businessAge.min)) return false;
+        if (activeFilters.businessAge.max && ageMonths > parseFloat(activeFilters.businessAge.max)) return false;
+      }
+    }
+    
+    // New listing filter - use new_listing field or check created_at
+    if (activeFilters.isNew) {
+      const isNew = listing.is_new || listing.new_listing || 
+        (listing.created_at && new Date(listing.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      if (!isNew) return false;
+    }
+    
+    return true;
+  });
 
   const handleAddToPipeline = async (listingId) => {
     const listing = listings.find(l => l.id === listingId);
@@ -141,7 +203,8 @@ function ListingsFeed() {
       
       for (const listingId of selectedListings) {
         try {
-          const response = await fetch(`http://localhost:3001/api/listings/${listingId}?userId=${user.id}`, {
+          const apiUrl = import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001';
+          const response = await fetch(`${apiUrl}/api/listings/${listingId}?userId=${user.id}`, {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
@@ -178,19 +241,6 @@ function ListingsFeed() {
     refetch();
   };
 
-  const handleCheckForNewListings = (method = 'traditional') => {
-    console.log(`🚀 [LISTINGS FEED] Starting ${method} scraping...`);
-    checkForNewListings((results) => {
-      console.log('✅ [LISTINGS FEED] Scraping completed, refetching listings...');
-      // Refetch listings after scraping completes
-      refetch();
-      // Show results modal
-      if (results) {
-        setShowResultsModal(true);
-      }
-    }, method);
-  };
-
   const handleDeleteListing = async (listingId) => {
     if (!user) {
       showError('You must be logged in to delete listings');
@@ -198,7 +248,8 @@ function ListingsFeed() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/listings/${listingId}?userId=${user.id}`, {
+      const apiUrl = import.meta.env.VITE_SCRAPING_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/listings/${listingId}?userId=${user.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -216,6 +267,20 @@ function ListingsFeed() {
     } catch (error) {
       console.error('Error deleting listing:', error);
       showError('Failed to delete listing');
+    }
+  };
+
+  const handleClearListings = () => {
+    if (window.confirm('Are you sure you want to delete ALL business listings? This cannot be undone.')) {
+      clearListingsMutation.mutate(undefined, {
+        onSuccess: () => {
+          showSuccess('All listings have been cleared.');
+          refetch();
+        },
+        onError: (err) => {
+          showError(`Failed to clear listings: ${err.message}`);
+        }
+      });
     }
   };
 
@@ -253,13 +318,13 @@ function ListingsFeed() {
                         {/* Traditional Scraper Button */}
                         <button 
                           onClick={() => {
-                            checkForNewListingsWithProgress('traditional', selectedSites);
+                            startScraping('traditional', sitesForScraper);
                             setShowAdminDropdown(false);
                           }}
                           disabled={isChecking || isLoading}
                           className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isChecking && currentScraper && !currentScraper.includes('AI') ? (
+                          {isChecking && currentMethod === 'traditional' ? (
                             <>
                               <Loader2 className="w-4 h-4 mr-3 animate-spin text-violet-600" />
                               In Progress...
@@ -275,13 +340,13 @@ function ListingsFeed() {
                         {/* ScrapeGraph AI Button */}
                         <button 
                           onClick={() => {
-                            checkForNewListingsWithProgress('scrapegraph', selectedSites);
+                            startScraping('scrapegraph', sitesForScraper);
                             setShowAdminDropdown(false);
                           }}
                           disabled={isChecking || isLoading}
                           className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isChecking && currentScraper && currentScraper.includes('AI') ? (
+                          {isChecking && currentMethod === 'scrapegraph' ? (
                             <>
                               <Loader2 className="w-4 h-4 mr-3 animate-spin text-emerald-600" />
                               AI Scraping...
@@ -290,6 +355,25 @@ function ListingsFeed() {
                             <>
                               <Brain className="w-4 h-4 mr-3 text-emerald-600" />
                               Check New Listings (AI-Powered)
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* Clear Listings Button */}
+                        <button
+                          onClick={handleClearListings}
+                          disabled={clearListingsMutation.isLoading}
+                          className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50"
+                        >
+                          {clearListingsMutation.isLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-3 animate-spin" />
+                              Clearing...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="w-4 h-4 mr-3" />
+                              Clear All Listings
                             </>
                           )}
                         </button>
@@ -369,9 +453,9 @@ function ListingsFeed() {
                     <span className="text-violet-800 dark:text-violet-200 font-medium">
                       Scraping in progress...
                     </span>
-                    {currentScraper && (
+                    {currentMethod && (
                       <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
-                        {currentScraper}
+                        Please see the modal for live progress.
                       </p>
                     )}
                   </div>
@@ -424,7 +508,7 @@ function ListingsFeed() {
               {/* Filters Panel */}
               {showFilters && (
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <ListingsFilters onFiltersChange={(filters) => console.log('Filters:', filters)} />
+                  <ListingsFilters onFiltersChange={(filters) => setActiveFilters(filters)} />
                 </div>
               )}
             </div>
@@ -567,23 +651,19 @@ function ListingsFeed() {
         isOpen={showResultsModal}
         onClose={() => {
           setShowResultsModal(false);
-          clearResults();
+          handleProgressModalComplete(lastResults);
         }}
         results={lastResults}
       />
       
       {/* Scraping Progress Modal */}
-      <ScrapingProgressModal 
+      <ScrapingProgressModal
         isOpen={showProgressModal}
-        onClose={handleProgressModalClose}
         method={currentMethod}
+        onClose={handleProgressModalClose}
+        onComplete={handleProgressModalComplete}
         selectedSites={selectedSites}
-        onSitesChange={setSelectedSites}
-        onComplete={(results) => {
-          handleProgressModalComplete(results);
-          // Refresh listings after scraping completes
-          refetch();
-        }}
+        onSitesChange={handleSiteSelectionChange}
       />
     </div>
   );

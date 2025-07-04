@@ -15,13 +15,14 @@ const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
 console.log('🔧 [EnhancedMultiScraper] SCRAPER_API_KEY:', SCRAPER_API_KEY ? 'Set' : 'Missing');
 
 class EnhancedMultiScraper {
-  constructor() {
+  constructor(logCallback = null) {
     this.totalFound = 0;
     this.totalSaved = 0;
     this.totalErrors = 0;
     this.duplicates = 0;
     this.listingsBySource = {};
     this.detailedLogs = [];
+    this.logCallback = logCallback;
     
     // Define all available sites with their configurations
     this.availableSites = {
@@ -30,7 +31,7 @@ class EnhancedMultiScraper {
         url: 'https://quietlight.com/amazon-fba-businesses-for-sale/',
         feedMethod: 'scrapeQuietLightFeed',
         detailMethod: 'scrapeQuietLightListing',
-        timeout: 60000,  // Increased timeout for ScraperAPI (60 seconds)
+        timeout: 120000,
         pagination: true,
         maxPages: 3
       },
@@ -39,7 +40,7 @@ class EnhancedMultiScraper {
         url: 'https://www.bizbuysell.com/amazon-stores-for-sale/',
         feedMethod: 'scrapeBizBuySellFeed',
         detailMethod: 'scrapeBizBuySellListing',
-        timeout: 60000,  // Increased timeout for ScraperAPI (60 seconds)
+        timeout: 120000,
         pagination: true,
         maxPages: 5
       },
@@ -48,7 +49,7 @@ class EnhancedMultiScraper {
         url: 'https://flippa.com/buy/monetization/amazon-fba',
         feedMethod: 'scrapeFlippaFeed',
         detailMethod: 'scrapeFlippaListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -57,7 +58,7 @@ class EnhancedMultiScraper {
         url: 'https://www.loopnet.com/biz/amazon-stores-for-sale/',
         feedMethod: 'scrapeLoopNetFeed',
         detailMethod: 'scrapeLoopNetListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -66,7 +67,7 @@ class EnhancedMultiScraper {
         url: 'https://empireflippers.com/marketplace/amazon-fba-businesses-for-sale/',
         feedMethod: 'scrapeEmpireFlippersFeed',
         detailMethod: 'scrapeEmpireFlippersListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -75,7 +76,7 @@ class EnhancedMultiScraper {
         url: 'https://investors.club/tech-stack/amazon-fba/',
         feedMethod: 'scrapeInvestorsClubFeed',
         detailMethod: 'scrapeInvestorsClubListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 2
       },
@@ -84,7 +85,7 @@ class EnhancedMultiScraper {
         url: 'https://websiteproperties.com/amazon-fba-business-for-sale/',
         feedMethod: 'scrapeWebsitePropertiesFeed',
         detailMethod: 'scrapeWebsitePropertiesListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -93,7 +94,7 @@ class EnhancedMultiScraper {
         url: 'https://www.bizquest.com/amazon-business-for-sale/',
         feedMethod: 'scrapeBizQuestFeed',
         detailMethod: 'scrapeBizQuestListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 3
       },
@@ -102,7 +103,7 @@ class EnhancedMultiScraper {
         url: 'https://acquire.com/amazon-fba-for-sale/',
         feedMethod: 'scrapeAcquireFeed',
         detailMethod: 'scrapeAcquireListing',
-        timeout: 45000,  // Increased timeout for ScraperAPI
+        timeout: 120000,  // Increased timeout for ScraperAPI
         pagination: true,
         maxPages: 2
       }
@@ -122,15 +123,19 @@ class EnhancedMultiScraper {
 
   log(level, message, data = {}) {
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [${level}] ${message}`, JSON.stringify(data, null, 2));
-    
-    // Add to detailed logs for frontend display
-    this.detailedLogs.push({
+    const logEntry = {
       timestamp,
       level,
       message,
       data
-    });
+    };
+    
+    console.log(`[${timestamp}] [${level}] ${message}`, JSON.stringify(data, null, 2));
+    this.detailedLogs.push(logEntry);
+
+    if (this.logCallback) {
+      this.logCallback(logEntry);
+    }
   }
 
   // Helper method to log found listings for frontend display
@@ -160,23 +165,19 @@ class EnhancedMultiScraper {
     this.log('INFO', 'Fetching page', { url });
     
     // Increased timeout for ScraperAPI requests with rendering
-    const REQUEST_TIMEOUT = 45000; // 45 seconds per request - needed for ScraperAPI with render=true
+    const REQUEST_TIMEOUT = 120000; // 120 seconds per request - needed for ScraperAPI with render=true
     
     for (let attempt = 1; attempt <= retries; attempt++) {
       console.log(`🔍 [GRANULAR LOG - fetchPage] Attempt ${attempt}/${retries}`);
       
       try {
-        // Try ScraperAPI first if available
-        if (SCRAPER_API_KEY && attempt === 1) {
+        if (SCRAPER_API_KEY) {
           console.log(`🔍 [GRANULAR LOG - fetchPage] Using ScraperAPI`);
           
           try {
-            // Enable rendering to bypass Cloudflare protection
-            // Note: This uses more API credits but is necessary for protected sites
             const scraperUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=us`;
             console.log(`🔍 [GRANULAR LOG - fetchPage] ScraperAPI URL constructed`);
             
-            // Create timeout controller
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
               console.log(`🔍 [GRANULAR LOG - fetchPage] Timeout triggered after ${REQUEST_TIMEOUT}ms`);
@@ -205,8 +206,6 @@ class EnhancedMultiScraper {
                 htmlLength: html.length
               });
               return html;
-            } else {
-              console.log(`🔍 [GRANULAR LOG - fetchPage] Response not OK: ${response.status}`);
             }
           } catch (error) {
             if (error.name === 'AbortError') {
@@ -214,30 +213,21 @@ class EnhancedMultiScraper {
               throw new Error(`ScraperAPI timeout after ${REQUEST_TIMEOUT}ms`);
             } else {
               this.log('ERROR', 'ScraperAPI failed', { error: error.message });
-              throw error;
             }
           }
-        } else if (!SCRAPER_API_KEY) {
-          // No ScraperAPI key configured
-          throw new Error('SCRAPER_API_KEY not configured - cannot bypass Cloudflare protection');
-        }
-
-        // NO DIRECT FETCH - Only use ScraperAPI to avoid Cloudflare blocks
-        throw new Error('ScraperAPI is required to bypass Cloudflare protection');
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          this.log('ERROR', `Fetch attempt ${attempt} timed out after ${REQUEST_TIMEOUT}ms`, { url });
-        } else {
-          this.log('ERROR', `Fetch attempt ${attempt} failed`, { url, error: error.message });
         }
         
-        if (attempt < retries) {
-          // Reduced delay for parallel processing
-          const delay = Math.min(1000 * attempt, 2000); // Cap delay at 2 seconds
-          await new Promise(resolve => setTimeout(resolve, delay));
-        } else {
+        throw new Error('ScraperAPI call failed or was not configured.');
+
+      } catch (error) {
+        this.log('ERROR', `Fetch attempt ${attempt} failed for ${url}: ${error.message}`);
+        
+        if (attempt >= retries) {
           throw new Error(`Failed to fetch ${url} after ${retries} attempts: ${error.message}`);
         }
+        
+        const delay = Math.min(1000 * attempt, 2000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
@@ -345,24 +335,18 @@ class EnhancedMultiScraper {
         return 'duplicate';
       }
 
-      // Insert new listing - include all available financial metrics
+      // Insert new listing - schema now includes annual_profit
       const listingToInsert = {
         name: listing.name,
         asking_price: listing.asking_price || 0,
         annual_revenue: listing.annual_revenue || 0,
         annual_profit: listing.annual_profit || 0,
-        monthly_revenue: listing.monthly_revenue || 0,
-        gross_revenue: listing.gross_revenue || 0,
-        net_revenue: listing.net_revenue || 0,
-        inventory_value: listing.inventory_value || 0,
-        profit_multiple: listing.profit_multiple || null,
         industry: listing.industry || 'Business',
         location: listing.location || 'Online',
         description: listing.description || '',
         highlights: Array.isArray(listing.highlights) ? listing.highlights : (listing.highlights ? listing.highlights.split(', ') : []),
         original_url: listing.original_url,
         source: listing.source || 'Unknown',
-        listing_status: listing.listing_status || 'live',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -988,56 +972,116 @@ class EnhancedMultiScraper {
   async scrapeBizBuySellListing(listingData) {
     this.log('INFO', 'Stage 2: Processing BizBuySell listing details', { url: listingData.url });
 
-    // BizBuySell data is already extracted from the listing card
-    // No need to fetch individual pages since it's an Angular SPA
+    // Enhanced: Now fetching individual listing pages to get revenue data
     try {
-      const askingPrice = this.extractPrice(listingData.priceText) || 750000;
+      // Fetch the actual listing page
+      this.log('INFO', 'Fetching BizBuySell listing page for detailed financials');
+      const html = await this.fetchPage(listingData.url);
+      const $ = cheerio.load(html);
       
-      // Extract cash flow if available
+      // Extract financial information from the listing page
+      let askingPrice = 0;
+      let annualRevenue = 0;
+      let annualProfit = 0;
       let cashFlow = 0;
-      if (listingData.cashFlow) {
-        cashFlow = this.extractPrice(listingData.cashFlow);
+      
+      // Method 1: Look for labeled financial data
+      $('dt, .label, .field-label, .details-label').each((i, elem) => {
+        const label = $(elem).text().toLowerCase().trim();
+        const value = $(elem).next('dd, .value, .field-value, .details-value').text().trim() ||
+                     $(elem).parent().find('dd, .value').text().trim();
+        
+        if (label.includes('asking price') || label.includes('price')) {
+          askingPrice = this.extractPrice(value) || askingPrice;
+        }
+        if (label.includes('gross revenue') || label.includes('annual revenue') || label.includes('revenue')) {
+          annualRevenue = this.extractPrice(value) || annualRevenue;
+        }
+        if (label.includes('cash flow') || label.includes('annual profit') || label.includes('net income')) {
+          cashFlow = this.extractPrice(value) || cashFlow;
+          annualProfit = cashFlow;
+        }
+      });
+      
+      // Method 2: Look for financial table
+      $('.financials table tr, .details-table tr, table.listing-details tr').each((i, elem) => {
+        const $row = $(elem);
+        const label = $row.find('td:first, th:first').text().toLowerCase().trim();
+        const value = $row.find('td:last').text().trim();
+        
+        if (label.includes('revenue') && !label.includes('potential')) {
+          annualRevenue = this.extractPrice(value) || annualRevenue;
+        }
+        if (label.includes('cash flow') || label.includes('profit')) {
+          cashFlow = this.extractPrice(value) || cashFlow;
+          annualProfit = cashFlow;
+        }
+      });
+      
+      // Method 3: Look in structured data
+      $('script[type="application/ld+json"]').each((i, elem) => {
+        try {
+          const data = JSON.parse($(elem).html());
+          if (data['@type'] === 'Product' || data['@type'] === 'LocalBusiness') {
+            if (data.offers?.price) {
+              askingPrice = parseFloat(data.offers.price) || askingPrice;
+            }
+          }
+        } catch (e) {
+          // Continue
+        }
+      });
+      
+      // Fallback to original price if not found
+      if (!askingPrice) {
+        askingPrice = this.extractPrice(listingData.priceText) || 750000;
       }
       
-      // Use description from listing card or create one
-      const description = listingData.description || 
+      // Extract description
+      const description = $('.business-description, .description, .overview, .listing-description').text().trim() ||
+                         $('meta[name="description"]').attr('content') ||
+                         listingData.description ||
                          `${listingData.title}. Located in ${listingData.location || 'USA'}.`;
-
-      // Don't estimate revenue - only use real data
-      let revenue = 0;
-      if (cashFlow > 0) {
-        // Cash flow is available, but we shouldn't estimate revenue from it
-        // Keep revenue as 0 unless we find actual revenue data
-      }
-
+      
+      // Extract location more thoroughly
+      const location = $('.location, .address, .listing-location').text().trim() || 
+                      listingData.location || 
+                      'United States';
+      
+      // Create highlights based on what we found
       const highlights = [];
-      if (cashFlow) highlights.push(`Cash Flow: $${cashFlow.toLocaleString()}`);
-      highlights.push('Amazon FBA', 'BizBuySell Listed');
-      if (listingData.location) highlights.push(listingData.location);
-
+      if (annualRevenue > 0) highlights.push(`Revenue: $${annualRevenue.toLocaleString()}`);
+      if (cashFlow > 0) highlights.push(`Cash Flow: $${cashFlow.toLocaleString()}`);
+      if (location && location !== 'United States') highlights.push(location);
+      if (highlights.length === 0) {
+        highlights.push('Amazon FBA', 'Established Business', 'BizBuySell');
+      }
+      
       const listing = {
         name: listingData.title,
         description: description.substring(0, 1000),
         asking_price: askingPrice,
-        annual_revenue: revenue,
-        annual_profit: cashFlow > 0 ? cashFlow : 0, // Use cash flow as proxy for profit if available
-        monthly_revenue: 0,
-        gross_revenue: 0,
-        net_revenue: 0,
+        annual_revenue: annualRevenue,
+        annual_profit: annualProfit,
+        monthly_revenue: annualRevenue > 0 ? Math.round(annualRevenue / 12) : 0,
+        gross_revenue: annualRevenue,
+        net_revenue: annualRevenue,
         inventory_value: 0,
-        profit_multiple: (askingPrice > 0 && cashFlow > 0) ? parseFloat((askingPrice / cashFlow).toFixed(2)) : null,
+        profit_multiple: (askingPrice > 0 && annualProfit > 0) ? 
+          parseFloat((askingPrice / annualProfit).toFixed(2)) : null,
         industry: 'E-commerce',
-        location: listingData.location || 'United States',
+        location: location,
         source: 'BizBuySell',
         original_url: listingData.url,
         highlights: highlights.slice(0, 3),
         listing_status: 'live'
       };
 
-      this.log('SUCCESS', 'Processed BizBuySell listing details', { 
+      this.log('SUCCESS', 'Processed BizBuySell listing with enhanced data', { 
         name: listing.name,
         askingPrice: listing.asking_price,
-        cashFlow
+        annualRevenue: listing.annual_revenue,
+        annualProfit: listing.annual_profit
       });
 
       return listing;
@@ -1977,374 +2021,131 @@ class EnhancedMultiScraper {
   // ============== EXISTING SCRAPERS (UPDATED) ==============
 
   // Process individual listings in parallel batches
-  async processListingsBatch(listingDataArray, maxConcurrent = 20) {
-    const results = [];
+  async processListingsBatch(listingDataArray, maxConcurrent = 5) {
+    this.log('INFO', `[Stage 2] Processing ${listingDataArray.length} listings with concurrency=${maxConcurrent}`);
+    const allDetailedListings = [];
     
-    // Process in chunks to control concurrency
     for (let i = 0; i < listingDataArray.length; i += maxConcurrent) {
       const batch = listingDataArray.slice(i, i + maxConcurrent);
+      this.log('INFO', `Processing batch ${Math.floor(i / maxConcurrent) + 1} with ${batch.length} listings...`);
       
-      this.log('INFO', `Processing batch ${Math.floor(i/maxConcurrent) + 1}`, { 
-        batchSize: batch.length,
-        progress: `${Math.min(i + maxConcurrent, listingDataArray.length)}/${listingDataArray.length}`
-      });
-      
-      // Process batch in parallel with individual timeouts
-      const batchPromises = batch.map(async (listingData, batchIndex) => {
-        const globalIndex = i + batchIndex;
-        
-        console.log(`  📋 [${globalIndex + 1}/${listingDataArray.length}] Processing: "${listingData.title}" from ${listingData.source}`);
-        
-        try {
-          // Use appropriate scraper based on source with timeout
-          const scrapingPromise = (() => {
-            // Find the site config based on source name
-            const siteEntry = Object.entries(this.availableSites).find(([key, config]) => 
-              config.name === listingData.source
-            );
-            
-            if (siteEntry) {
-              const [siteKey, siteConfig] = siteEntry;
-              const detailMethod = this[siteConfig.detailMethod];
-              if (detailMethod) {
-                return detailMethod.call(this, listingData);
-              }
-            }
-            
-            // Fallback for backward compatibility
-            switch (listingData.source) {
-              case 'QuietLight':
-                return this.scrapeQuietLightListing(listingData);
-              case 'BizBuySell':
-                return this.scrapeBizBuySellListing(listingData);
-              case 'Flippa':
-                return this.scrapeFlippaListing(listingData);
-              case 'Empire Flippers':
-                return this.scrapeEmpireFlippersListing(listingData);
-              default:
-                this.log('WARN', `No detail scraper found for source: ${listingData.source}`);
-                return Promise.resolve(null);
-            }
-          })();
-          
-          // Individual listing timeout (30 seconds per listing - increased for ScraperAPI)
-          const listingTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Individual listing timeout')), 30000);
-          });
-          
-          const listing = await Promise.race([scrapingPromise, listingTimeout]);
-          
-          if (listing) {
-            this.log('SUCCESS', `Listing ${globalIndex + 1} scraped successfully`, { 
-              name: listing.name,
-              source: listingData.source 
+      const promises = batch.map(listingData => {
+        const siteConfig = Object.values(this.availableSites).find(s => s.name === listingData.source);
+        if (siteConfig && this[siteConfig.detailMethod]) {
+          return this[siteConfig.detailMethod](listingData)
+            .catch(err => {
+              this.log('ERROR', `Detail scrape failed for ${listingData.url}`, { error: err.message });
+              return null; // Return null on failure to keep Promise.all going
             });
-            console.log(`    ✅ [${globalIndex + 1}] Scraped details for: "${listing.name}"`);
-            return listing;
-          } else {
-            console.log(`    ❌ [${globalIndex + 1}] Failed to get details for: "${listingData.title}"`);
-          }
-          
-          return null;
-          
-        } catch (error) {
-          this.log('ERROR', `Failed to scrape listing ${globalIndex + 1}`, { 
-            url: listingData.url,
-            source: listingData.source,
-            error: error.message 
-          });
-          console.log(`    ❌ [${globalIndex + 1}] Error scraping: "${listingData.title}" - ${error.message}`);
-          this.totalErrors++;
-          return null;
         }
+        return Promise.resolve(null);
       });
+
+      const results = await Promise.all(promises);
       
-      // Wait for batch to complete
-      const batchResults = await Promise.allSettled(batchPromises);
-      
-      // Extract successful results
-      batchResults.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value) {
-          results.push(result.value);
-        }
-      });
-      
-      // Small delay between batches to avoid overwhelming servers
+      // Filter out nulls from failed scrapes
+      const successfulListings = results.filter(r => r);
+      allDetailedListings.push(...successfulListings);
+
+      // Add a respectful delay between batches
       if (i + maxConcurrent < listingDataArray.length) {
-        await new Promise(resolve => setTimeout(resolve, 100)); // 0.1 second between batches - optimized
+        const delay = 1000; // 1 second delay
+        this.log('INFO', `Waiting ${delay}ms before next batch...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
-    return results;
+
+    this.log('SUCCESS', `[Stage 2] Finished processing. Extracted details for ${allDetailedListings.length} listings.`);
+    return allDetailedListings;
   }
 
   // Main execution method with multiselect support
   async runTwoStageScraping(options = {}) {
-    console.log('\n🔍 [GRANULAR LOG] runTwoStageScraping called at:', new Date().toISOString());
-    console.log('🔍 [GRANULAR LOG] Raw options:', JSON.stringify(options));
-    
-    const {
-      selectedSites = ['quietlight', 'bizbuysell'], // Default sites
-      maxPagesPerSite = null, // Use default from site config if null
-      maxListingsPerSource = 15
-    } = options;
-
-    console.log('🔍 [GRANULAR LOG] After destructuring:', {
-      selectedSites,
-      maxPagesPerSite,
-      maxListingsPerSource
-    });
-
-    this.log('INFO', '🚀 Starting Enhanced Multi-Scraper with Site Selection');
-    this.log('INFO', 'Configuration', {
-      supabaseUrl,
-      scraperApiConfigured: !!SCRAPER_API_KEY,
-      scraperApiKey: SCRAPER_API_KEY ? `${SCRAPER_API_KEY.substr(0, 8)}...` : 'NOT SET',
-      selectedSites,
-      totalSitesAvailable: Object.keys(this.availableSites).length
-    });
-
     const startTime = Date.now();
-    const allListings = [];
-    
-    try {
-      // Stage 1: Collect listing URLs from selected sites - PARALLEL with Individual Timeouts
-      console.log('\n🔍 [GRANULAR LOG] Starting Stage 1 at:', new Date().toISOString());
-      this.log('INFO', '📋 STAGE 1: Collecting listing URLs from selected sources...');
-      
-      console.log('🔍 [GRANULAR LOG] Available sites:', Object.keys(this.availableSites));
-      console.log('🔍 [GRANULAR LOG] Selected sites:', selectedSites);
-      
-      // Create promises for each selected site
-      const sourcePromises = [];
-      const siteNames = [];
-      
-      for (const siteKey of selectedSites) {
-        console.log(`\n🔍 [GRANULAR LOG] Processing site: ${siteKey}`);
-        
-        const siteConfig = this.availableSites[siteKey];
-        console.log(`🔍 [GRANULAR LOG] Site config:`, siteConfig);
-        
-        if (!siteConfig) {
-          console.log(`🔍 [GRANULAR LOG] Site config not found for ${siteKey}`);
-          this.log('WARN', `Unknown site: ${siteKey}, skipping`);
-          continue;
-        }
-        
-        const feedMethod = this[siteConfig.feedMethod];
-        console.log(`🔍 [GRANULAR LOG] Feed method: ${siteConfig.feedMethod}, exists: ${!!feedMethod}`);
-        
-        if (!feedMethod) {
-          console.log(`🔍 [GRANULAR LOG] Feed method not found: ${siteConfig.feedMethod}`);
-          this.log('WARN', `Feed method ${siteConfig.feedMethod} not found for ${siteKey}, skipping`);
-          continue;
-        }
-        
-        // Use custom pages per site or default from config
-        const pagesForSite = maxPagesPerSite || siteConfig.maxPages;
-        console.log(`🔍 [GRANULAR LOG] Pages for ${siteKey}: ${pagesForSite}`);
-        
-        const createSourcePromise = async (func, siteName, timeoutMs) => {
-          console.log(`🔍 [GRANULAR LOG] Creating promise for ${siteName} with timeout ${timeoutMs}ms`);
-          
-          const sourcePromise = func.call(this, pagesForSite);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error(`${siteName} timed out after ${timeoutMs}ms`)), timeoutMs);
-          });
-          
-          try {
-            console.log(`🔍 [GRANULAR LOG] Starting race for ${siteName} at:`, new Date().toISOString());
-            const result = await Promise.race([sourcePromise, timeoutPromise]);
-            console.log(`🔍 [GRANULAR LOG] ${siteName} completed successfully with ${result?.length || 0} results`);
-            // If we got a result, return it
-            return result || [];
-          } catch (error) {
-            // Log the specific error
-            if (error.message.includes('timed out')) {
-              this.log('WARN', `${siteName} scraping timed out`, { 
-                error: error.message,
-                timeout: `${timeoutMs}ms`,
-                suggestion: 'Consider increasing timeout or checking network speed'
-              });
-            } else {
-              this.log('ERROR', `${siteName} scraping failed`, { error: error.message });
-            }
-            // Return empty array on timeout/error
-            return [];
-          }
-        };
-        
-        sourcePromises.push(createSourcePromise(
-          feedMethod, 
-          siteConfig.name, 
-          siteConfig.timeout
-        ));
-        siteNames.push(siteConfig.name);
-      }
-      
-      if (sourcePromises.length === 0) {
-        throw new Error('No valid sites selected for scraping');
-      }
-      
-      this.log('INFO', 'Processing selected sources in parallel...', { 
-        sites: siteNames,
-        count: sourcePromises.length,
-        maxConcurrency: 'unlimited (all sites at once)'
-      });
-      
-      // Process all selected sources truly in parallel with individual timeouts
-      const stage1Results = await Promise.allSettled(sourcePromises);
-      
-      // Process results and combine listings
-      let successfulSources = 0;
-      const resultsBySource = {};
-      
-      stage1Results.forEach((result, index) => {
-        const siteName = siteNames[index];
-        const siteKey = selectedSites[index];
-        
-        if (result.status === 'fulfilled') {
-          const listings = result.value.slice(0, maxListingsPerSource);
-          allListings.push(...listings);
-          resultsBySource[siteName] = listings.length;
-          successfulSources++;
-          
-          this.log('SUCCESS', `${siteName} completed successfully`, { 
-            urlsFound: listings.length,
-            maxPages: maxPagesPerSite || this.availableSites[siteKey]?.maxPages
-          });
-        } else {
-          resultsBySource[siteName] = 0;
-          this.log('ERROR', `${siteName} failed`, { 
-            error: result.reason?.message 
-          });
-        }
-      });
-      
-      // Log results
-      this.log('SUCCESS', '✅ Stage 1 Complete - Multiselect Site Scraping', { 
-        totalUrls: allListings.length,
-        successfulSources: successfulSources,
-        sitesAttempted: selectedSites.length,
-        resultsBySource,
-        faultTolerance: {
-          sourcesAttempted: selectedSites.length,
-          sourcesSuccessful: successfulSources,
-          successRate: `${Math.round((successfulSources / selectedSites.length) * 100)}%`,
-          parallelProcessing: true,
-          paginationEnabled: true
-        }
-      });
+    this.log('INFO', '🚀 Enhanced Multi-Stage Scraping Process Starting...');
 
-      // Stage 2: Process individual listings in PARALLEL BATCHES
-      this.log('INFO', '🔍 STAGE 2: Extracting detailed information from individual listings...');
-      
-      const maxListingsToProcess = Math.min(allListings.length, 100); // Can handle more with 20 concurrent threads
-      const listingsToProcess = allListings.slice(0, maxListingsToProcess);
-      
-      // Process all listings in parallel batches (20 concurrent requests - ScraperAPI limit)
-      const scrapedListings = await this.processListingsBatch(listingsToProcess, 20);
-      
-      this.log('INFO', `✅ Stage 2 Complete - Successfully scraped ${scrapedListings.length} listings`);
+    const { selectedSites = null } = options;
+    const sitesToScrape = selectedSites
+      ? selectedSites.map(key => this.availableSites[key]).filter(Boolean)
+      : Object.values(this.availableSites);
 
-      // Stage 3: BATCH SAVE to database
-      this.log('INFO', '💾 STAGE 3: Saving listings to database...');
-      console.log('🔍 [STAGE 3 DEBUG] Number of listings to save:', scrapedListings.length);
-      console.log('🔍 [STAGE 3 DEBUG] First 3 listings to save:', scrapedListings.slice(0, 3).map(l => ({
-        name: l.name,
-        url: l.original_url,
-        source: l.source,
-        hasDescription: !!l.description,
-        hasHighlights: !!l.highlights && l.highlights.length > 0
-      })));
-      
-      const saveResults = await this.batchSaveListings(scrapedListings);
-      
-      // Update totals
-      this.totalFound = scrapedListings.length;
-      this.totalSaved = saveResults.created + saveResults.updated;
-      this.duplicates = saveResults.duplicates;
-      this.totalErrors += saveResults.errors;
-      
-      // Count by source
-      scrapedListings.forEach(listing => {
-        // Use a fallback source if undefined
-        const source = listing.source || 'Unknown';
-        if (!this.listingsBySource[source]) {
-          this.listingsBySource[source] = 0;
-        }
-        this.listingsBySource[source]++;
-      });
+    this.log('INFO', `Selected sites for scraping: ${sitesToScrape.map(s => s.name).join(', ')}`);
 
-      const duration = Math.floor((Date.now() - startTime) / 1000);
+    // STAGE 1: Collect all listing URLs from all sites
+    const allListingUrls = await this.collectAllListingUrls(sitesToScrape);
 
-      // Get final database count
-      const { count } = await supabase
-        .from('business_listings')
-        .select('*', { count: 'exact', head: true })
-        .or('name.ilike.%fba%,description.ilike.%fba%,name.ilike.%amazon%,description.ilike.%amazon%');
-
-      this.log('SUCCESS', '🎉 Enhanced Multi-Stage Scraping Complete', {
-        duration: `${duration} seconds`,
-        totalProcessed: maxListingsToProcess,
-        totalFound: this.totalFound,
-        totalSaved: this.totalSaved,
-        duplicates: this.duplicates,
-        totalErrors: this.totalErrors,
-        bySource: this.listingsBySource,
-        totalFBAInDatabase: count || 0,
-        parallelization: {
-          stage1Concurrent: selectedSites.length,
-          stage2BatchSize: 20,
-          stage3BatchSize: 10
-        }
-      });
-
-      return {
-        success: true,
-        totalProcessed: maxListingsToProcess,
-        totalFound: this.totalFound,
-        totalSaved: this.totalSaved,
-        duplicates: this.duplicates,
-        errors: this.totalErrors,
-        bySource: this.listingsBySource,
-        databaseTotal: count || 0,
-        logs: this.detailedLogs,
-        performance: {
-          duration,
-          parallelOptimized: true
-        }
-      };
-      
-    } catch (error) {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-      this.log('ERROR', 'Enhanced Multi-Stage Scraping Failed', {
-        duration: `${duration} seconds`,
-        error: error.message,
-        totalProcessed: allListings.length,
-        totalSaved: this.totalSaved,
-        totalErrors: this.totalErrors + 1,
-        stage: error.message.includes('Stage 1') ? 'URL Collection' : 
-               error.message.includes('timeout') ? 'Processing Timeout' : 'Unknown'
-      });
-
-      return {
-        success: false,
-        totalProcessed: allListings.length,
-        totalFound: this.totalFound,
-        totalSaved: this.totalSaved,
-        duplicates: this.duplicates,
-        errors: this.totalErrors + 1,
-        bySource: this.listingsBySource,
-        logs: this.detailedLogs,
-        errorMessage: error.message,
-        performance: {
-          duration,
-          parallelOptimized: true,
-          failed: true
-        }
-      };
+    if (allListingUrls.length === 0) {
+      this.log('WARN', 'No listings found in Stage 1. Ending process.');
+      return this.getFinalResults(startTime);
     }
+
+    this.log('SUCCESS', `✅ Stage 1 Complete - Found ${allListingUrls.length} total listings to process`);
+
+    // STAGE 2: Process all found listings concurrently
+    const detailedListings = await this.processListingsBatch(allListingUrls);
+    
+    // STAGE 3: Batch save to database
+    if (detailedListings.length > 0) {
+      await this.batchSaveListings(detailedListings);
+    } else {
+      this.log('WARN', 'No detailed listings were successfully scraped in Stage 2.');
+    }
+
+    return this.getFinalResults(startTime);
+  }
+
+  async collectAllListingUrls(sitesToScrape) {
+    this.log('INFO', '🚀 [Stage 1] Starting feed scraping for all sites...');
+    const allListingUrls = [];
+    const sitePromises = [];
+
+    for (const siteConfig of sitesToScrape) {
+      const { name, feedMethod, maxPages } = siteConfig;
+      
+      this.log('INFO', `[${name}] Starting feed scrape...`);
+
+      const sitePromise = this[feedMethod](maxPages)
+        .then(listings => {
+          this.log('SUCCESS', `[${name}] Feed scrape complete, found ${listings.length} listings.`);
+          allListingUrls.push(...listings);
+        })
+        .catch(error => {
+          this.log('ERROR', `[${name}] Feed scraper failed: ${error.message}`);
+          this.totalErrors++;
+        });
+
+      sitePromises.push(sitePromise);
+    }
+
+    await Promise.all(sitePromises);
+    
+    this.log('SUCCESS', `[Stage 1] All feed scrapers finished. Found ${allListingUrls.length} total URLs.`);
+    return allListingUrls;
+  }
+
+  getFinalResults(startTime) {
+    const endTime = Date.now();
+    const duration = Math.round((endTime - startTime) / 1000);
+    this.log('SUCCESS', '🎉 Enhanced Multi-Stage Scraping Complete', {
+      duration: `${duration} seconds`,
+      totalFound: this.totalFound,
+      totalSaved: this.totalSaved,
+      duplicates: this.duplicates,
+      totalErrors: this.totalErrors,
+      bySource: this.listingsBySource
+    });
+    return {
+      success: this.totalErrors === 0,
+      count: this.totalSaved,
+      totalFound: this.totalFound,
+      totalSaved: this.totalSaved,
+      duplicatesSkipped: this.duplicates,
+      executionTime: duration,
+      logs: this.detailedLogs,
+      errors: this.detailedLogs.filter(log => log.level === 'ERROR' || log.level === 'WARN'),
+      siteBreakdown: this.listingsBySource,
+      message: `Successfully scraped ${this.totalSaved} FBA business listings from multiple sources`
+    };
   }
 }
 

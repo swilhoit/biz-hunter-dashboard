@@ -20,8 +20,8 @@ function ListingsFilters({ onFiltersChange }) {
   ];
 
   const marketplaces = [
-    'Empire Flippers', 'FE International', 'Quiet Light', 'Website Closers', 
-    'Flippa', 'Motion Invest', 'BizBuySell'
+    'QuietLight', 'BizBuySell', 'EmpireFlippers', 'Flippa', 
+    'LoopNet', 'Investors.Club', 'Website Properties', 'BizQuest', 'Acquire.com'
   ];
 
   const listingStatuses = [

@@ -249,6 +249,21 @@ export const useFavorites = (userId?: string) => {
   });
 };
 
+export const useClearListings = () => {
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('business_listings')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
+
+      if (error) {
+        throw error;
+      }
+    }
+  });
+};
+
 export const useToggleFavorite = () => {
   const queryClient = useQueryClient();
   
