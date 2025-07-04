@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Log environment
 console.log('=== Server Starting ===');
@@ -26,6 +26,8 @@ console.log('Node Environment:', process.env.NODE_ENV);
 console.log('Server Time:', new Date().toISOString());
 console.log('Railway Environment:', process.env.RAILWAY_ENVIRONMENT || 'NOT SET');
 console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'SET' : 'NOT SET');
+console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
+console.log('VITE_OPENAI_API_KEY:', process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET');
 
 // Detect Railway environment
 const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
@@ -102,6 +104,137 @@ app.get('/api/test-env', (req, res) => {
   });
 });
 
+// OpenAI endpoints
+app.post('/api/openai/chat', async (req, res) => {
+  try {
+    const { messages, temperature = 0.7, max_tokens = 2000, model = 'gpt-4o-mini' } = req.body;
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    
+    if (!openAIKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({ apiKey: openAIKey });
+    
+    const completion = await openai.chat.completions.create({
+      model,
+      messages,
+      temperature,
+      max_tokens,
+    });
+    
+    res.json({ response: completion.choices[0]?.message?.content || '' });
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/openai/vision', async (req, res) => {
+  try {
+    const { image, prompt, max_tokens = 1500 } = req.body;
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    
+    if (!openAIKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({ apiKey: openAIKey });
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: image } }
+          ]
+        }
+      ],
+      max_tokens
+    });
+    
+    res.json({ response: response.choices[0]?.message?.content || '' });
+  } catch (error) {
+    console.error('OpenAI Vision API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/openai/analyze-document', async (req, res) => {
+  try {
+    const { content, fileName, fileType, analysisType } = req.body;
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    
+    if (!openAIKey) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({ apiKey: openAIKey });
+    
+    const prompt = `Analyze this business document and extract key information:
+
+Document Name: ${fileName}
+Document Type: ${fileType}
+
+Content:
+${content}
+
+Extract and format as JSON:
+{
+  "businessName": "...",
+  "description": "...",
+  "askingPrice": 0,
+  "annualRevenue": 0,
+  "annualProfit": 0,
+  "monthlyRevenue": 0,
+  "monthlyProfit": 0,
+  "keyFindings": [],
+  "financials": {
+    "hasDetailedPL": false,
+    "profitMargin": 0,
+    "revenueGrowth": 0,
+    "inventoryValue": 0
+  },
+  "redFlags": [],
+  "opportunities": []
+}`;
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a business document analyzer. Extract key business metrics and insights from documents.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+    
+    try {
+      const analysis = JSON.parse(completion.choices[0]?.message?.content || '{}');
+      res.json({ analysis });
+    } catch (parseError) {
+      res.json({ 
+        analysis: {
+          businessName: 'Document Analysis',
+          description: completion.choices[0]?.message?.content || '',
+          keyFindings: ['Unable to parse document structure']
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Document analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Serve static files
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
@@ -143,6 +276,9 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/health`);
   console.log(`   GET  /api/test-env`);
   console.log(`   GET  /api/scrape/stream`);
+  console.log(`   POST /api/openai/chat`);
+  console.log(`   POST /api/openai/vision`);
+  console.log(`   POST /api/openai/analyze-document`);
   
   if (isRailway) {
     console.log(`\n🚂 Railway URL: https://${process.env.RAILWAY_STATIC_URL || 'your-app.up.railway.app'}`);
