@@ -5,12 +5,14 @@ services:
     runtime: node
     region: oregon # Optional: specify a region
     plan: free # Change to 'starter' or higher for production
-    buildCommand: npm install && npm run build
+    buildCommand: rm -f bun.lockb && npm install && npm run build
     startCommand: npm run start:full
     envVars:
       - key: NODE_ENV
         value: production
       - key: OPENAI_API_KEY
+        sync: false # Set this in Render dashboard for security
+      - key: OPEN_AI_API_KEY
         sync: false # Set this in Render dashboard for security
       - key: VITE_OPENAI_API_KEY
         sync: false # Set this in Render dashboard for security
