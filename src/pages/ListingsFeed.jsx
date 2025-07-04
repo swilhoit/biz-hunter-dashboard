@@ -55,8 +55,24 @@ function ListingsFeed() {
     if (Object.keys(activeFilters).length > 0) {
       console.log('🔍 Active Filters:', activeFilters);
       console.log('📊 Filtered listings count:', filteredListings.length);
+      
+      // Debug price filtering specifically
+      if (activeFilters.priceRange?.min || activeFilters.priceRange?.max) {
+        console.log('💰 Price Filter Debug:');
+        console.log('  Min:', activeFilters.priceRange.min, 'Type:', typeof activeFilters.priceRange.min);
+        console.log('  Max:', activeFilters.priceRange.max, 'Type:', typeof activeFilters.priceRange.max);
+        
+        // Show some example listings with their prices
+        const examples = listings.slice(0, 5).map(l => ({
+          name: l.name.substring(0, 50) + '...',
+          price: l.asking_price,
+          wouldPassMin: !activeFilters.priceRange.min || l.asking_price >= parseFloat(activeFilters.priceRange.min),
+          wouldPassMax: !activeFilters.priceRange.max || l.asking_price <= parseFloat(activeFilters.priceRange.max)
+        }));
+        console.table(examples);
+      }
     }
-  }, [activeFilters, filteredListings.length]);
+  }, [activeFilters, filteredListings.length, listings]);
   
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
@@ -102,17 +118,27 @@ function ListingsFeed() {
     
     // Apply active filters - map to existing fields
     // Price range filter - ensure we're comparing numbers correctly
-    if (activeFilters.priceRange?.min) {
+    if (activeFilters.priceRange?.min && activeFilters.priceRange.min !== '') {
       const minPrice = parseFloat(activeFilters.priceRange.min);
-      if (!isNaN(minPrice) && listing.asking_price < minPrice) return false;
+      const listingPrice = listing.asking_price || 0;
+      if (!isNaN(minPrice) && minPrice > 0 && listingPrice < minPrice) return false;
     }
-    if (activeFilters.priceRange?.max) {
+    if (activeFilters.priceRange?.max && activeFilters.priceRange.max !== '') {
       const maxPrice = parseFloat(activeFilters.priceRange.max);
-      if (!isNaN(maxPrice) && listing.asking_price > maxPrice) return false;
+      const listingPrice = listing.asking_price || 0;
+      if (!isNaN(maxPrice) && maxPrice > 0 && listingPrice > maxPrice) return false;
     }
     
-    if (activeFilters.revenueRange?.min && listing.annual_revenue < parseFloat(activeFilters.revenueRange.min)) return false;
-    if (activeFilters.revenueRange?.max && listing.annual_revenue > parseFloat(activeFilters.revenueRange.max)) return false;
+    if (activeFilters.revenueRange?.min && activeFilters.revenueRange.min !== '') {
+      const minRevenue = parseFloat(activeFilters.revenueRange.min);
+      const listingRevenue = listing.annual_revenue || 0;
+      if (!isNaN(minRevenue) && minRevenue > 0 && listingRevenue < minRevenue) return false;
+    }
+    if (activeFilters.revenueRange?.max && activeFilters.revenueRange.max !== '') {
+      const maxRevenue = parseFloat(activeFilters.revenueRange.max);
+      const listingRevenue = listing.annual_revenue || 0;
+      if (!isNaN(maxRevenue) && maxRevenue > 0 && listingRevenue > maxRevenue) return false;
+    }
     
     // Use profit_multiple for valuation_multiple
     const valuationMultiple = listing.profit_multiple || listing.valuation_multiple;

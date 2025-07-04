@@ -17,7 +17,21 @@ import {
 import AIAnalysisService from '../../services/AIAnalysisService';
 
 interface DealAnalysisProps {
-  deal: any;
+  deal: {
+    id: string;
+    business_name: string;
+    amazon_category: string;
+    amazon_subcategory?: string;
+    asking_price: number;
+    annual_revenue: number;
+    annual_profit: number;
+    monthly_revenue?: number;
+    monthly_profit?: number;
+    amazon_store_url?: string;
+    fba_percentage?: number;
+    business_age?: number;
+    [key: string]: unknown;
+  };
 }
 
 interface AnalysisReport {
@@ -68,6 +82,7 @@ interface AnalysisReport {
 function DealAnalysis({ deal }: DealAnalysisProps) {
   const [analysis, setAnalysis] = useState<AnalysisReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [aiService] = useState(() => new AIAnalysisService());
 
@@ -80,14 +95,18 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
     
     setLoading(true);
     setError(null);
+    setLoadingStage('Initializing analysis...');
     
     try {
-      const report = await aiService.generateDealAnalysis(deal);
+      const report = await aiService.generateDealAnalysis(deal, (stage) => {
+        setLoadingStage(stage);
+      });
       setAnalysis(report);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate analysis');
     } finally {
       setLoading(false);
+      setLoadingStage('');
     }
   };
 
@@ -117,7 +136,12 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Generating AI analysis...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">This may take a few moments</p>
+          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">{loadingStage || 'This may take a few moments'}</p>
+          {loadingStage.includes('document') && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+              Analyzing uploaded documents for deeper insights...
+            </p>
+          )}
         </div>
       </div>
     );
@@ -190,6 +214,14 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           </div>
         </div>
         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{analysis.summary}</p>
+        {analysis.summary.includes('document') && (
+          <div className="mt-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Analysis enhanced with uploaded documents
+          </div>
+        )}
       </div>
 
       {/* Opportunity Score */}

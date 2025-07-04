@@ -17,8 +17,8 @@ interface DealData {
   fba_percentage?: number;
   business_age?: number;
   tags?: string[];
-  custom_fields?: any;
-  [key: string]: any;
+  custom_fields?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface DealDocument {
@@ -385,6 +385,10 @@ Format as JSON with keys: primaryKeywords, longTailOpportunities, seasonalTrends
   }
 
   private async calculateOpportunityScore(deal: DealData, documents: DealDocument[]): Promise<OpportunityScore> {
+    const documentContent = documents.length > 0 
+      ? `\n\nDetailed financial and business information from ${documents.length} documents:\n${documents.map(doc => doc.content).join('\n\n')}`
+      : '';
+
     const prompt = `Calculate an opportunity score (0-100) for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
@@ -395,14 +399,16 @@ Annual Profit: $${deal.annual_profit?.toLocaleString()}
 Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(1) : 'Unknown'}x
 Business Age: ${deal.business_age || 'Unknown'} years
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+${documentContent}
 
+Using all available information including financial statements and business details:
 Score breakdown (0-100 each):
-- Financial Health (revenue, profit, multiple)
-- Market Opportunity (category growth, competition)
-- Growth Potential (scalability, expansion)
-- Risk Assessment (dependencies, market risks)
+- Financial Health (revenue trends, profit margins, cash flow stability from documents)
+- Market Opportunity (category growth, competition, market size)
+- Growth Potential (scalability, expansion opportunities mentioned in documents)
+- Risk Assessment (dependencies, market risks, any red flags in documents)
 
-Provide overall score and reasoning.
+Provide overall score and reasoning based on comprehensive analysis.
 
 Format as JSON with keys: overall, breakdown, reasoning, improvements`;
 
@@ -451,6 +457,10 @@ Format as JSON with keys: overall, breakdown, reasoning, improvements`;
     growthOpportunities: string[];
     recommendations: string[];
   }> {
+    const documentContent = documents.length > 0 
+      ? `\n\nBusiness details and insights from documents:\n${documents.map(doc => doc.content).join('\n\n')}`
+      : '';
+
     const prompt = `Analyze risks and opportunities for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
@@ -459,13 +469,14 @@ Annual Revenue: $${deal.annual_revenue?.toLocaleString()}
 Annual Profit: $${deal.annual_profit?.toLocaleString()}
 Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(1) : 'Unknown'}x
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+${documentContent}
 
-Identify:
-1. Key risk factors (5-7 items)
-2. Growth opportunities (5-7 items)  
-3. Strategic recommendations (5-7 items)
+Based on all available information including documents:
+1. Key risk factors (5-7 items) - consider any red flags or concerns mentioned in documents
+2. Growth opportunities (5-7 items) - include any opportunities mentioned in broker materials
+3. Strategic recommendations (5-7 items) - based on comprehensive analysis
 
-Focus on Amazon-specific risks and opportunities.
+Focus on Amazon-specific risks and opportunities, and any specific details from the documents.
 
 Format as JSON with keys: riskFactors, growthOpportunities, recommendations`;
 
@@ -512,6 +523,10 @@ Format as JSON with keys: riskFactors, growthOpportunities, recommendations`;
   }
 
   private async generateSummary(deal: DealData, analysis: any, documents: DealDocument[]): Promise<string> {
+    const documentInfo = documents.length > 0 
+      ? `\nAnalysis based on ${documents.length} uploaded documents including: ${documents.map(d => d.file_name).join(', ')}`
+      : '';
+
     const prompt = `Create an executive summary for this Amazon FBA acquisition opportunity:
 
 Business: ${deal.business_name}
@@ -519,14 +534,20 @@ Category: ${deal.amazon_category}
 Price: $${deal.asking_price?.toLocaleString()}
 Revenue: $${deal.annual_revenue?.toLocaleString()}
 Profit: $${deal.annual_profit?.toLocaleString()}
+${documentInfo}
 
 Key Analysis Points:
 - Opportunity Score: ${analysis.opportunityScore?.overall || 'Unknown'}/100
 - Competition Level: ${analysis.competitiveAnalysis?.marketDynamics?.competitionLevel || 'Unknown'}
 - Top Risk: ${analysis.riskFactors?.[0] || 'Risk analysis needed'}
 - Top Opportunity: ${analysis.growthOpportunities?.[0] || 'Opportunity analysis needed'}
+- Document Analysis: ${documents.length > 0 ? 'Comprehensive review of financial documents and business materials completed' : 'No supporting documents analyzed'}
 
-Write a 2-3 paragraph executive summary highlighting the key investment thesis, main opportunities, and primary concerns.`;
+Write a 2-3 paragraph executive summary that:
+1. Highlights the key investment thesis based on all available data
+2. Incorporates key findings from the uploaded documents
+3. Addresses main opportunities and primary concerns
+4. Mentions if critical information is missing or if documents provided additional clarity`;
 
     const response = await this.client.chat.completions.create({
       model: this.model,
@@ -558,12 +579,29 @@ Write a 2-3 paragraph executive summary highlighting the key investment thesis, 
     if (deal.amazon_store_url) confidence += 5;
     if (deal.tags && deal.tags.length > 0) confidence += 5;
     
+    // Significantly increase confidence based on document analysis
+    if (documents.length > 0) {
+      confidence += 15; // Base boost for having documents
+      
+      // Additional boost based on document types
+      const hasFinancialDocs = documents.some(doc => 
+        doc.category?.toLowerCase().includes('financial') || 
+        doc.file_name.toLowerCase().includes('p&l') ||
+        doc.file_name.toLowerCase().includes('profit')
+      );
+      
+      if (hasFinancialDocs) confidence += 10;
+      
+      // More documents = more confidence (up to a limit)
+      confidence += Math.min(documents.length * 2, 10);
+    }
+    
     return Math.min(100, confidence);
   }
 
-  async refreshAnalysis(dealId: string, deal: DealData): Promise<AIAnalysisReport> {
+  async refreshAnalysis(dealId: string, deal: DealData, progressCallback?: (stage: string) => void): Promise<AIAnalysisReport> {
     // This would typically check if analysis is stale and regenerate if needed
-    return this.generateDealAnalysis(deal);
+    return this.generateDealAnalysis(deal, progressCallback);
   }
 }
 
