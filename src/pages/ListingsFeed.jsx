@@ -50,6 +50,14 @@ function ListingsFeed() {
     console.log('========================================');
   }, [listings, isLoading, error]);
   
+  // Debug active filters
+  React.useEffect(() => {
+    if (Object.keys(activeFilters).length > 0) {
+      console.log('🔍 Active Filters:', activeFilters);
+      console.log('📊 Filtered listings count:', filteredListings.length);
+    }
+  }, [activeFilters, filteredListings.length]);
+  
   const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
   const { 
@@ -93,8 +101,15 @@ function ListingsFeed() {
     if (!matchesSearch) return false;
     
     // Apply active filters - map to existing fields
-    if (activeFilters.priceRange?.min && listing.asking_price < parseFloat(activeFilters.priceRange.min)) return false;
-    if (activeFilters.priceRange?.max && listing.asking_price > parseFloat(activeFilters.priceRange.max)) return false;
+    // Price range filter - ensure we're comparing numbers correctly
+    if (activeFilters.priceRange?.min) {
+      const minPrice = parseFloat(activeFilters.priceRange.min);
+      if (!isNaN(minPrice) && listing.asking_price < minPrice) return false;
+    }
+    if (activeFilters.priceRange?.max) {
+      const maxPrice = parseFloat(activeFilters.priceRange.max);
+      if (!isNaN(maxPrice) && listing.asking_price > maxPrice) return false;
+    }
     
     if (activeFilters.revenueRange?.min && listing.annual_revenue < parseFloat(activeFilters.revenueRange.min)) return false;
     if (activeFilters.revenueRange?.max && listing.annual_revenue > parseFloat(activeFilters.revenueRange.max)) return false;

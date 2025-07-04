@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import { getConfigValue } from '../config/runtime-config';
+import { filesAdapter } from '../lib/database-adapter';
+import { supabase } from '../supabaseClient';
 
 interface DealData {
   id: string;
@@ -17,6 +19,15 @@ interface DealData {
   tags?: string[];
   custom_fields?: any;
   [key: string]: any;
+}
+
+interface DealDocument {
+  id: string;
+  file_name: string;
+  file_path: string;
+  category?: string;
+  file_type?: string;
+  content?: string; // Extracted content from the document
 }
 
 interface CompetitiveAnalysis {
@@ -85,29 +96,41 @@ export class AIAnalysisService {
     });
   }
 
-  async generateDealAnalysis(deal: DealData): Promise<AIAnalysisReport> {
+  async generateDealAnalysis(deal: DealData, progressCallback?: (stage: string) => void): Promise<AIAnalysisReport> {
     console.log(`Generating AI analysis for deal: ${deal.business_name}`);
 
     try {
+      // Fetch and analyze deal documents
+      progressCallback?.('Fetching deal documents...');
+      const documents = await this.fetchAndAnalyzeDealDocuments(deal.id, progressCallback);
+      
+      // Create enhanced deal data with document insights
+      const enhancedDeal = {
+        ...deal,
+        documentInsights: documents
+      };
+
       // Run multiple analyses in parallel for efficiency
+      progressCallback?.('Analyzing business data...');
       const [
         competitiveAnalysis,
         keywordAnalysis,
         opportunityScore,
         riskAndOpportunities
       ] = await Promise.all([
-        this.analyzeCompetition(deal),
-        this.analyzeKeywords(deal),
-        this.calculateOpportunityScore(deal),
-        this.analyzeRisksAndOpportunities(deal)
+        this.analyzeCompetition(enhancedDeal, documents),
+        this.analyzeKeywords(enhancedDeal, documents),
+        this.calculateOpportunityScore(enhancedDeal, documents),
+        this.analyzeRisksAndOpportunities(enhancedDeal, documents)
       ]);
 
-      const summary = await this.generateSummary(deal, {
+      progressCallback?.('Generating summary...');
+      const summary = await this.generateSummary(enhancedDeal, {
         competitiveAnalysis,
         keywordAnalysis,
         opportunityScore,
         ...riskAndOpportunities
-      });
+      }, documents);
 
       return {
         summary,
@@ -117,7 +140,7 @@ export class AIAnalysisService {
         riskFactors: riskAndOpportunities.riskFactors,
         growthOpportunities: riskAndOpportunities.growthOpportunities,
         recommendations: riskAndOpportunities.recommendations,
-        confidenceLevel: this.calculateConfidenceLevel(deal),
+        confidenceLevel: this.calculateConfidenceLevel(enhancedDeal, documents),
         lastUpdated: new Date().toISOString()
       };
     } catch (error) {
@@ -126,7 +149,138 @@ export class AIAnalysisService {
     }
   }
 
-  private async analyzeCompetition(deal: DealData): Promise<CompetitiveAnalysis> {
+  private async fetchAndAnalyzeDealDocuments(dealId: string, progressCallback?: (stage: string) => void): Promise<DealDocument[]> {
+    try {
+      // Fetch all documents for the deal
+      const files = await filesAdapter.fetchDealFiles(dealId);
+      
+      if (!files || files.length === 0) {
+        console.log('No documents found for deal:', dealId);
+        return [];
+      }
+
+      console.log(`Found ${files.length} documents for deal:`, dealId);
+      
+      const analyzedDocuments: DealDocument[] = [];
+      
+      // Process each document
+      for (const file of files) {
+        progressCallback?.(`Analyzing document: ${file.file_name}...`);
+        
+        try {
+          // Skip non-document files
+          if (!this.isAnalyzableDocument(file.file_type || '')) {
+            console.log(`Skipping non-analyzable file: ${file.file_name}`);
+            continue;
+          }
+
+          // Download and analyze the document
+          const content = await this.downloadAndAnalyzeDocument(file);
+          
+          if (content) {
+            analyzedDocuments.push({
+              id: file.id,
+              file_name: file.file_name,
+              file_path: file.file_path,
+              category: file.category,
+              file_type: file.file_type,
+              content: content
+            });
+          }
+        } catch (error) {
+          console.error(`Error analyzing document ${file.file_name}:`, error);
+          // Continue with other documents
+        }
+      }
+
+      console.log(`Successfully analyzed ${analyzedDocuments.length} documents`);
+      return analyzedDocuments;
+    } catch (error) {
+      console.error('Error fetching deal documents:', error);
+      return [];
+    }
+  }
+
+  private isAnalyzableDocument(fileType: string): boolean {
+    const analyzableTypes = ['pdf', 'txt', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
+    const extension = fileType.toLowerCase().split('.').pop() || '';
+    return analyzableTypes.includes(extension) || 
+           analyzableTypes.some(type => fileType.toLowerCase().includes(type));
+  }
+
+  private async downloadAndAnalyzeDocument(file: any): Promise<string | null> {
+    try {
+      // Download the file from Supabase storage
+      const { data, error } = await supabase.storage
+        .from('deal-documents')
+        .download(file.file_path);
+
+      if (error) {
+        console.error('Error downloading document:', error);
+        return null;
+      }
+
+      // Convert to File object for analysis
+      const blob = new Blob([data], { type: file.file_type || 'application/octet-stream' });
+      const fileObj = new File([blob], file.file_name, { type: file.file_type || 'application/octet-stream' });
+
+      // Use DocumentAnalysisService to analyze the document
+      const analysis = await DocumentAnalysisService.analyzeDocument(fileObj);
+      
+      // Extract relevant content from the analysis
+      const content = this.extractContentFromAnalysis(analysis);
+      
+      return content;
+    } catch (error) {
+      console.error('Error downloading/analyzing document:', error);
+      return null;
+    }
+  }
+
+  private extractContentFromAnalysis(analysis: DocumentAnalysis): string {
+    const parts: string[] = [];
+    
+    // Add business information
+    if (analysis.businessName) {
+      parts.push(`Business Name: ${analysis.businessName}`);
+    }
+    if (analysis.description) {
+      parts.push(`Description: ${analysis.description}`);
+    }
+    
+    // Add financial information
+    if (analysis.askingPrice) {
+      parts.push(`Asking Price: $${analysis.askingPrice.toLocaleString()}`);
+    }
+    if (analysis.annualRevenue) {
+      parts.push(`Annual Revenue: $${analysis.annualRevenue.toLocaleString()}`);
+    }
+    if (analysis.annualProfit) {
+      parts.push(`Annual Profit: $${analysis.annualProfit.toLocaleString()}`);
+    }
+    
+    // Add additional details
+    if (analysis.additionalInfo?.reasonForSelling) {
+      parts.push(`Reason for Selling: ${analysis.additionalInfo.reasonForSelling}`);
+    }
+    if (analysis.additionalInfo?.growthOpportunities) {
+      parts.push(`Growth Opportunities: ${analysis.additionalInfo.growthOpportunities}`);
+    }
+    
+    // Add key findings
+    if (analysis.keyFindings && analysis.keyFindings.length > 0) {
+      parts.push(`Key Findings: ${analysis.keyFindings.join('; ')}`);
+    }
+    
+    return parts.join('\n\n');
+  }
+
+  private async analyzeCompetition(deal: DealData, documents: DealDocument[]): Promise<CompetitiveAnalysis> {
+    // Compile document insights
+    const documentContent = documents.length > 0 
+      ? `\n\nAdditional insights from ${documents.length} uploaded documents:\n${documents.map(doc => doc.content).join('\n\n')}`
+      : '';
+
     const prompt = `Analyze the competitive landscape for this Amazon FBA business:
 
 Business: ${deal.business_name}
@@ -135,12 +289,14 @@ Subcategory: ${deal.amazon_subcategory || 'Not specified'}
 Annual Revenue: $${deal.annual_revenue?.toLocaleString()}
 Price: $${deal.asking_price?.toLocaleString()}
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+${documentContent}
 
-Provide a comprehensive competitive analysis including:
+Based on all available information including any P&L statements, broker teasers, or business documents provided, analyze:
 1. Key competitors in this space
 2. Market dynamics (competition level, barriers to entry)
 3. Market trends affecting this category
 4. Positioning analysis
+5. Any competitive advantages or unique selling points mentioned in the documents
 
 Format as JSON with keys: competitors, marketDynamics, positioningAnalysis`;
 
@@ -177,18 +333,24 @@ Format as JSON with keys: competitors, marketDynamics, positioningAnalysis`;
     }
   }
 
-  private async analyzeKeywords(deal: DealData): Promise<KeywordAnalysis> {
+  private async analyzeKeywords(deal: DealData, documents: DealDocument[]): Promise<KeywordAnalysis> {
+    const documentContent = documents.length > 0 
+      ? `\n\nAdditional product and market information from documents:\n${documents.map(doc => doc.content).join('\n\n')}`
+      : '';
+
     const prompt = `Analyze keyword opportunities for this Amazon business:
 
 Business: ${deal.business_name}
 Category: ${deal.amazon_category}
 Subcategory: ${deal.amazon_subcategory || 'Not specified'}
+${documentContent}
 
-Based on the category and business type, identify:
+Based on the category, business type, and any product details from the documents:
 1. Primary keywords with estimated search volume and difficulty
 2. Long-tail keyword opportunities
 3. Seasonal trends for this category
 4. Keyword strategy recommendations
+5. Any specific product keywords or niches mentioned in the documents
 
 Format as JSON with keys: primaryKeywords, longTailOpportunities, seasonalTrends, keywordStrategy`;
 
@@ -222,7 +384,7 @@ Format as JSON with keys: primaryKeywords, longTailOpportunities, seasonalTrends
     }
   }
 
-  private async calculateOpportunityScore(deal: DealData): Promise<OpportunityScore> {
+  private async calculateOpportunityScore(deal: DealData, documents: DealDocument[]): Promise<OpportunityScore> {
     const prompt = `Calculate an opportunity score (0-100) for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
@@ -284,7 +446,7 @@ Format as JSON with keys: overall, breakdown, reasoning, improvements`;
     }
   }
 
-  private async analyzeRisksAndOpportunities(deal: DealData): Promise<{
+  private async analyzeRisksAndOpportunities(deal: DealData, documents: DealDocument[]): Promise<{
     riskFactors: string[];
     growthOpportunities: string[];
     recommendations: string[];
@@ -349,7 +511,7 @@ Format as JSON with keys: riskFactors, growthOpportunities, recommendations`;
     }
   }
 
-  private async generateSummary(deal: DealData, analysis: any): Promise<string> {
+  private async generateSummary(deal: DealData, analysis: any, documents: DealDocument[]): Promise<string> {
     const prompt = `Create an executive summary for this Amazon FBA acquisition opportunity:
 
 Business: ${deal.business_name}
@@ -383,7 +545,7 @@ Write a 2-3 paragraph executive summary highlighting the key investment thesis, 
       `This ${deal.amazon_category} Amazon FBA business presents a potential acquisition opportunity with ${deal.annual_revenue ? '$' + deal.annual_revenue.toLocaleString() : 'undisclosed'} in annual revenue. A comprehensive analysis is recommended to evaluate the full investment potential and associated risks.`;
   }
 
-  private calculateConfidenceLevel(deal: DealData): number {
+  private calculateConfidenceLevel(deal: DealData, documents: DealDocument[]): number {
     let confidence = 50; // Base confidence
     
     // Increase confidence based on available data

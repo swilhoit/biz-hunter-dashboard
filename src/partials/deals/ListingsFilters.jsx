@@ -93,19 +93,22 @@ function ListingsFilters({ onFiltersChange }) {
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
-              placeholder="Min"
+              placeholder="e.g. 100000"
               value={filters.priceRange.min}
               onChange={(e) => handleFilterChange('priceRange', { ...filters.priceRange, min: e.target.value })}
               className="form-input text-sm"
             />
             <input
               type="number"
-              placeholder="Max"
+              placeholder="e.g. 500000"
               value={filters.priceRange.max}
               onChange={(e) => handleFilterChange('priceRange', { ...filters.priceRange, max: e.target.value })}
               className="form-input text-sm"
             />
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Enter full amount (e.g., 100000 for $100K)
+          </p>
         </div>
 
         {/* Revenue Range */}
@@ -116,19 +119,22 @@ function ListingsFilters({ onFiltersChange }) {
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
-              placeholder="Min"
+              placeholder="e.g. 50000"
               value={filters.revenueRange.min}
               onChange={(e) => handleFilterChange('revenueRange', { ...filters.revenueRange, min: e.target.value })}
               className="form-input text-sm"
             />
             <input
               type="number"
-              placeholder="Max"
+              placeholder="e.g. 250000"
               value={filters.revenueRange.max}
               onChange={(e) => handleFilterChange('revenueRange', { ...filters.revenueRange, max: e.target.value })}
               className="form-input text-sm"
             />
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Enter full amount (e.g., 50000 for $50K)
+          </p>
         </div>
 
         {/* Multiple Range */}
