@@ -179,8 +179,8 @@ SELECT
   de.deal_id,
   de.document_type,
   de.summary as document_summary,
-  dd.document_name,
-  dd.file_type
+  dd.file_name as document_name,
+  dd.mime_type as file_type
 FROM document_insights di
 JOIN document_extractions de ON di.extraction_id = de.id
 JOIN deal_documents dd ON de.document_id = dd.id;
