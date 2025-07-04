@@ -104,6 +104,36 @@ app.get('/api/test-env', (req, res) => {
   });
 });
 
+// Diagnostics endpoint for debugging OpenAI issues
+app.get('/api/diagnostics', (req, res) => {
+  const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+  
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      isRailway: isRailway,
+      platform: process.platform,
+      nodeVersion: process.version
+    },
+    openai: {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? `SET (${process.env.OPENAI_API_KEY.length} chars)` : 'NOT SET',
+      VITE_OPENAI_API_KEY: process.env.VITE_OPENAI_API_KEY ? `SET (${process.env.VITE_OPENAI_API_KEY.length} chars)` : 'NOT SET',
+      resolvedKey: openAIKey ? `Found (${openAIKey.length} chars)` : 'NOT FOUND'
+    },
+    supabase: {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'
+    },
+    other: {
+      SCRAPER_API_KEY: process.env.SCRAPER_API_KEY ? 'SET' : 'NOT SET',
+      PORT: process.env.PORT || '3000',
+      RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT || 'NOT SET'
+    }
+  });
+});
+
 // OpenAI endpoints
 app.post('/api/openai/chat', async (req, res) => {
   try {
@@ -275,6 +305,7 @@ app.listen(PORT, () => {
   console.log(`📡 API endpoints:`);
   console.log(`   GET  /api/health`);
   console.log(`   GET  /api/test-env`);
+  console.log(`   GET  /api/diagnostics`);
   console.log(`   GET  /api/scrape/stream`);
   console.log(`   POST /api/openai/chat`);
   console.log(`   POST /api/openai/vision`);
