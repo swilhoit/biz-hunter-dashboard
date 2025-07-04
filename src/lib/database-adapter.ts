@@ -65,7 +65,13 @@ export const dealsAdapter = {
   async fetchDealById(dealId: string) {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select(`
+        *,
+        listing:business_listings(
+          original_url,
+          source
+        )
+      `)
       .eq('id', dealId)
       .single();
 
@@ -93,7 +99,10 @@ export const dealsAdapter = {
       expected_close_date: data.next_action_date,
       notes: data.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: data.custom_fields?.image_url || getBusinessImage(data.business_name)
+      image_url: data.custom_fields?.image_url || getBusinessImage(data.business_name),
+      // Add listing information
+      listing_url: data.custom_fields?.listing_url || data.listing?.original_url || '',
+      listing_source: data.listing?.source || data.source || 'Unknown'
     };
 
     return mappedDeal;

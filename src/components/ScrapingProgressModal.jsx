@@ -150,9 +150,17 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
 
     const siteParams = sites.join(',');
     
+    // Debug logging
+    console.log('🔍 [SSE] Debug info:', {
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      envVar: import.meta.env.VITE_SCRAPING_API_URL,
+      isLocalhost: window.location.hostname === 'localhost'
+    });
+    
     // Use environment variable for API URL, fallback to current origin in production
     const apiUrl = import.meta.env.VITE_SCRAPING_API_URL || 
-                   (window.location.hostname === 'localhost' ? 'http://localhost:3001' : '');
+                   (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
     const eventSourceUrl = `${apiUrl}/api/scrape/stream?selectedSites=${siteParams}`;
     
     console.log('🔌 [SSE] Connecting to:', eventSourceUrl);
@@ -213,8 +221,21 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     };
 
     eventSource.onerror = (err) => {
-      addLog('error', '❌ Log stream error. The connection may have been closed.');
       console.error("EventSource failed:", err);
+      console.error("EventSource state:", eventSource.readyState);
+      console.error("EventSource URL:", eventSource.url);
+      
+      // More detailed error message
+      if (eventSource.readyState === EventSource.CLOSED) {
+        addLog('error', '❌ Connection to scraping service closed. The server may be unreachable.');
+      } else if (eventSource.readyState === EventSource.CONNECTING) {
+        addLog('error', '❌ Failed to connect to scraping service. Check if the API is running.');
+      } else {
+        addLog('error', '❌ Log stream error. The connection may have been closed.');
+      }
+      
+      addLog('info', `Attempted URL: ${eventSourceUrl}`);
+      
       eventSource.close();
       setIsComplete(true);
       setScraping(false);

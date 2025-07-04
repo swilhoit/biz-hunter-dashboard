@@ -46,6 +46,8 @@ app.get('/api/scrape/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering
   res.flushHeaders();
 
   const sendEvent = (data) => {
