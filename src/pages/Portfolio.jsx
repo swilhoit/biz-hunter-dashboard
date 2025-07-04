@@ -78,7 +78,7 @@ function Portfolio() {
     const { data: deals, error } = await supabase
       .from('deals')
       .select('*')
-      .eq('status', 'closed_won')
+      .eq('stage', 'closed_won')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

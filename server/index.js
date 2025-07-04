@@ -2667,6 +2667,236 @@ Return only the ASIN codes, one per line, without any additional text or formatt
   }
 });
 
+// General OpenAI endpoint for deal analysis
+app.post('/api/openai/chat', async (req, res) => {
+  try {
+    const { messages, temperature = 0.7, max_tokens = 2000, model = 'gpt-4o-mini' } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Messages array is required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    const response = await openai.chat.completions.create({
+      model,
+      messages,
+      temperature,
+      max_tokens,
+    });
+    
+    res.json({ 
+      success: true, 
+      response: response.choices[0]?.message?.content || ''
+    });
+    
+  } catch (error) {
+    console.error('Error in OpenAI chat:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Vision API endpoint for document analysis
+app.post('/api/openai/vision', async (req, res) => {
+  try {
+    const { image, prompt, max_tokens = 1000 } = req.body;
+    
+    if (!image || !prompt) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Image and prompt are required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: image } }
+          ]
+        }
+      ],
+      max_tokens,
+    });
+    
+    res.json({ 
+      success: true, 
+      response: response.choices[0]?.message?.content || ''
+    });
+    
+  } catch (error) {
+    console.error('Error in OpenAI vision:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Document analysis endpoint
+app.post('/api/openai/analyze-document', async (req, res) => {
+  try {
+    const { content, fileName, fileType, analysisType = 'business' } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Document content is required' 
+      });
+    }
+    
+    const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+    if (!openAIKey) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'OpenAI API key not configured on server' 
+      });
+    }
+    
+    // Import OpenAI dynamically
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({
+      apiKey: openAIKey
+    });
+    
+    let prompt = '';
+    
+    if (analysisType === 'business') {
+      prompt = `Analyze this business document and extract key information. Document: ${fileName || 'Unknown'}
+
+Content:
+${content}
+
+Extract the following information if available:
+1. Business name
+2. Business description/type
+3. Asking price
+4. Annual revenue
+5. Annual profit
+6. Monthly revenue
+7. Monthly profit  
+8. Key findings and important details
+9. Any red flags or concerns
+10. Growth opportunities mentioned
+
+For financial documents, also extract:
+- P&L details
+- Revenue trends
+- Profit margins
+- Inventory value
+- Expenses breakdown
+
+Format your response as a JSON object with these keys:
+{
+  "businessName": "...",
+  "description": "...",
+  "askingPrice": 0,
+  "annualRevenue": 0,
+  "annualProfit": 0,
+  "monthlyRevenue": 0,
+  "monthlyProfit": 0,
+  "keyFindings": [],
+  "redFlags": [],
+  "opportunities": [],
+  "financials": {
+    "hasDetailedPL": true/false,
+    "profitMargin": 0,
+    "revenueGrowth": "...",
+    "inventoryValue": 0
+  }
+}
+
+If a value is not found, use null or empty array as appropriate.`;
+    } else if (analysisType === 'vision') {
+      prompt = content; // Content is already the prompt for vision analysis
+    }
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert business analyst specializing in acquisition due diligence. Extract and analyze key business information from documents."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+    
+    const result = response.choices[0]?.message?.content || '';
+    
+    // Try to parse as JSON if it's a business analysis
+    if (analysisType === 'business') {
+      try {
+        const parsed = JSON.parse(result);
+        res.json({ 
+          success: true, 
+          analysis: parsed 
+        });
+      } catch (e) {
+        // If JSON parsing fails, return the raw result
+        res.json({ 
+          success: true, 
+          analysis: {
+            rawAnalysis: result,
+            businessName: 'Analysis Complete',
+            description: result.substring(0, 200) + '...',
+            keyFindings: [result]
+          }
+        });
+      }
+    } else {
+      res.json({ 
+        success: true, 
+        response: result 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in document analysis:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ 
