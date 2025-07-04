@@ -230,6 +230,23 @@ function DealOverview({ deal }) {
                 </div>
               </div>
             )}
+
+            {deal.listing_url && (
+              <div className="flex items-center">
+                <Globe className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Original Listing</p>
+                  <a 
+                    href={deal.listing_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    View on {deal.listing_source || 'Listing Site'}
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

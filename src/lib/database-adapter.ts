@@ -26,13 +26,43 @@ export const mapDealStatus = (status: string): string => {
   return statusMap[status] || status;
 };
 
+// Format listing source names for display
+export const formatListingSource = (source: string): string => {
+  const sourceMap: { [key: string]: string } = {
+    'empire_flippers': 'Empire Flippers',
+    'empire-flippers': 'Empire Flippers',
+    'flippa': 'Flippa',
+    'quietlight': 'Quiet Light',
+    'quiet_light': 'Quiet Light',
+    'quietlightbrokerage': 'Quiet Light',
+    'fe_international': 'FE International',
+    'fe-international': 'FE International',
+    'feinternational': 'FE International',
+    'investors_club': 'Investors Club',
+    'investors-club': 'Investors Club',
+    'investorsclub': 'Investors Club',
+    'website_closers': 'Website Closers',
+    'website-closers': 'Website Closers',
+    'microacquire': 'MicroAcquire',
+    'acquire.com': 'Acquire.com',
+    'bizbuysell': 'BizBuySell'
+  };
+  return sourceMap[source?.toLowerCase()] || source || 'Unknown';
+};
+
 // Adapter functions to work with existing database structure
 export const dealsAdapter = {
   // Fetch deals with proper mapping
   async fetchDeals() {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select(`
+        *,
+        listing:business_listings(
+          original_url,
+          source
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -57,7 +87,10 @@ export const dealsAdapter = {
       expected_close_date: deal.next_action_date,
       notes: deal.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: deal.custom_fields?.image_url || getBusinessImage(deal.business_name)
+      image_url: deal.custom_fields?.image_url || getBusinessImage(deal.business_name),
+      // Add listing information
+      listing_url: deal.custom_fields?.listing_url || deal.listing?.original_url || '',
+      listing_source: formatListingSource(deal.listing?.source || deal.source || 'Unknown')
     }));
   },
 
