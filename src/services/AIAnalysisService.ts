@@ -1,6 +1,7 @@
 import { filesAdapter } from '../lib/database-adapter';
 import { supabase } from '../lib/supabase';
 import { DocumentExtractors } from './DocumentExtractors';
+import { getConfigValue } from '../config/runtime-config';
 
 interface DealData {
   id: string;
@@ -606,54 +607,7 @@ export class DocumentAnalysisService {
     try {
       console.log('Starting document analysis for file:', file.name, 'Type:', file.type, 'Size:', file.size);
       
-      // Check if API key is available - try runtime config first
-      console.log('Checking for OpenAI API key...');
-      console.log('Window runtime config:', typeof window !== 'undefined' ? (window as any).__RUNTIME_CONFIG__ : 'Not available');
-      console.log('Import meta env:', import.meta.env);
-      
-      // Try multiple sources for the API key
-      const runtimeKey = getConfigValue('VITE_OPENAI_API_KEY');
-      const runtimeKeyAlt = getConfigValue('OPENAI_API_KEY');
-      const metaEnvKey = import.meta.env.VITE_OPENAI_API_KEY;
-      const metaEnvKeyAlt = import.meta.env.OPENAI_API_KEY;
-      
-      console.log('Runtime config VITE_OPENAI_API_KEY:', runtimeKey ? `Found (${runtimeKey.length} chars)` : 'Not found');
-      console.log('Runtime config OPENAI_API_KEY:', runtimeKeyAlt ? `Found (${runtimeKeyAlt.length} chars)` : 'Not found');
-      console.log('Meta env VITE_OPENAI_API_KEY:', metaEnvKey ? `Found (${metaEnvKey.length} chars)` : 'Not found');
-      console.log('Meta env OPENAI_API_KEY:', metaEnvKeyAlt ? `Found (${metaEnvKeyAlt.length} chars)` : 'Not found');
-      
-      const apiKey = runtimeKey || runtimeKeyAlt || metaEnvKey || metaEnvKeyAlt || import.meta.env.REACT_APP_OPENAI_API_KEY;
-      
-      console.log('Final API key found:', apiKey ? `Yes (${apiKey.length} chars)` : 'No');
-      
-      if (!apiKey) {
-        console.error('OpenAI API key not found');
-        const isDev = import.meta.env.DEV;
-        
-        if (!isDev) {
-          // Production-specific message
-          throw new Error(
-            `OpenAI API key not configured.\n\n` +
-            `To enable AI document analysis:\n` +
-            `1. Set VITE_OPENAI_API_KEY in your deployment environment (Railway, Vercel, etc.)\n` +
-            `2. Make sure to rebuild and redeploy after setting the variable\n` +
-            `3. Check that the variable name is exactly: VITE_OPENAI_API_KEY\n\n` +
-            `For now, you can still upload images or text files.`
-          );
-        } else {
-          // Development-specific message
-          throw new Error(
-            `OpenAI API key not configured.\n\n` +
-            `To enable AI document analysis:\n` +
-            `1. Add your OpenAI API key to .env.local\n` +
-            `2. Add this line: VITE_OPENAI_API_KEY=your_api_key_here\n` +
-            `3. Restart the development server\n\n` +
-            `For now, you can still upload images or text files.`
-          );
-        }
-      }
-      
-      // Process the document based on type
+      // Process the document based on type - all analysis happens server-side now
       console.log('Processing document:', file.name, 'Type:', file.type);
       progressCallback?.('Analyzing document...');
       

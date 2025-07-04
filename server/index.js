@@ -2103,7 +2103,7 @@ app.get('/api/portfolio/:userId', async (req, res) => {
     
     // Get portfolios with metrics
     const { data: portfolios, error: portfolioError } = await supabase
-      .from('portfolio_metrics')
+      .from('user_portfolios')
       .select('*')
       .eq('user_id', userId)
       .order('portfolio_name');
