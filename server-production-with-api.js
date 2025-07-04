@@ -9,6 +9,20 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+// For Railway: Copy VITE_ prefixed vars to non-prefixed versions if they don't exist
+if (!process.env.OPENAI_API_KEY && process.env.VITE_OPENAI_API_KEY) {
+  process.env.OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
+  console.log('Copied VITE_OPENAI_API_KEY to OPENAI_API_KEY');
+}
+
+if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
+  process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+}
+
+if (!process.env.SUPABASE_ANON_KEY && process.env.VITE_SUPABASE_ANON_KEY) {
+  process.env.SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -108,6 +122,16 @@ app.get('/api/test-env', (req, res) => {
 app.get('/api/diagnostics', (req, res) => {
   const openAIKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
   
+  // Get all env vars (filtered for security)
+  const allEnvVars = {};
+  Object.keys(process.env).forEach(key => {
+    if (key.includes('RAILWAY') || key === 'PORT' || key === 'NODE_ENV' || key === 'PATH' || key === 'HOME') {
+      allEnvVars[key] = process.env[key].substring(0, 50) + (process.env[key].length > 50 ? '...' : '');
+    } else if (key.includes('KEY') || key.includes('OPENAI') || key.includes('SUPABASE') || key.includes('VITE')) {
+      allEnvVars[key] = process.env[key] ? 'SET' : 'NOT SET';
+    }
+  });
+  
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -115,7 +139,9 @@ app.get('/api/diagnostics', (req, res) => {
       NODE_ENV: process.env.NODE_ENV || 'development',
       isRailway: isRailway,
       platform: process.platform,
-      nodeVersion: process.version
+      nodeVersion: process.version,
+      cwd: process.cwd(),
+      execPath: process.execPath
     },
     openai: {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY ? `SET (${process.env.OPENAI_API_KEY.length} chars)` : 'NOT SET',
@@ -130,7 +156,9 @@ app.get('/api/diagnostics', (req, res) => {
       SCRAPER_API_KEY: process.env.SCRAPER_API_KEY ? 'SET' : 'NOT SET',
       PORT: process.env.PORT || '3000',
       RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT || 'NOT SET'
-    }
+    },
+    allEnvVars: allEnvVars,
+    totalEnvVars: Object.keys(process.env).length
   });
 });
 
