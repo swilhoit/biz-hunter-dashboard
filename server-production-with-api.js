@@ -332,10 +332,33 @@ Extract and format as JSON:
   }
 });
 
-// Serve static files
-const distPath = path.join(__dirname, 'dist');
+// Serve static files - Try multiple possible locations for dist
+const possiblePaths = [
+  path.join(__dirname, 'dist'),
+  path.join(__dirname, '..', 'dist'),
+  path.join(process.cwd(), 'dist'),
+  '/opt/render/project/dist',
+  '/opt/render/project/src/dist'
+];
+
+let distPath = null;
+for (const tryPath of possiblePaths) {
+  console.log(`Checking for dist at: ${tryPath} - exists: ${fs.existsSync(tryPath)}`);
+  if (fs.existsSync(tryPath)) {
+    distPath = tryPath;
+    break;
+  }
+}
+
+if (!distPath) {
+  console.error('ERROR: Could not find dist directory in any of the expected locations!');
+  distPath = path.join(__dirname, 'dist'); // fallback
+}
+
+console.log(`\n📦 Using dist directory at: ${distPath}`);
+console.log('Directory exists:', fs.existsSync(distPath));
+
 if (fs.existsSync(distPath)) {
-  console.log(`\n📦 Serving static files from: ${distPath}`);
   app.use(express.static(distPath));
   
   // Fallback route for SPA
