@@ -14,6 +14,7 @@ import DealFunnel from '../partials/deals/DealFunnel';
 import PerformanceMetrics from '../partials/deals/PerformanceMetrics';
 import CategoryAnalysis from '../partials/deals/CategoryAnalysis';
 import TimelineAnalysis from '../partials/deals/TimelineAnalysis';
+import { AlertCircle } from 'lucide-react';
 
 function Dashboard() {
 
@@ -34,6 +35,19 @@ function Dashboard() {
 
         <main className="grow">
           <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+
+            {/* Placeholder Alert */}
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start">
+                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">Dashboard Under Development</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    This dashboard is a placeholder for future analytics and reporting features. Stay tuned for comprehensive business insights, performance metrics, and detailed analytics coming soon!
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* Dashboard actions */}
             <div className="sm:flex sm:justify-between sm:items-center mb-8">
