@@ -4,6 +4,7 @@ import { filesAdapter } from '../../lib/database-adapter';
 import FileViewerModal from '../../components/FileViewerModal';
 import StorageTest from '../../components/StorageTest';
 import { AIAnalysisService } from '../../services/AIAnalysisService';
+import { DocumentIntelligenceService } from '../../services/DocumentIntelligenceService';
 import { useToast } from '../../contexts/ToastContext';
 
 interface DealFilesProps {
@@ -245,7 +246,33 @@ function DealFiles({ dealId }: DealFilesProps) {
   const handleAnalyzeAllDocuments = async () => {
     try {
       setIsAnalyzing(true);
-      setAnalysisProgress('Starting AI analysis of all documents...');
+      setAnalysisProgress('Starting document intelligence extraction...');
+      
+      // Create Document Intelligence Service
+      const docIntelligence = new DocumentIntelligenceService();
+      
+      // Process each document with intelligence extraction
+      const totalFiles = files.length;
+      let processedCount = 0;
+      
+      for (const file of files) {
+        processedCount++;
+        setAnalysisProgress(`Processing document ${processedCount}/${totalFiles}: ${file.file_name}...`);
+        
+        try {
+          await docIntelligence.processDocument(
+            file.id,
+            dealId,
+            (stage: string) => setAnalysisProgress(`[${processedCount}/${totalFiles}] ${stage}`)
+          );
+        } catch (error) {
+          console.error(`Failed to process ${file.file_name}:`, error);
+          // Continue with other documents
+        }
+      }
+      
+      // Now run comprehensive analysis using cached extractions
+      setAnalysisProgress('Running comprehensive AI analysis...');
       
       // Get deal data from database
       const { dealsAdapter } = await import('../../lib/database-adapter');
@@ -265,10 +292,9 @@ function DealFiles({ dealId }: DealFilesProps) {
       );
 
       // Navigate to the Analysis tab with the results
-      showToast('Analysis complete! Check the Analysis tab for results.', 'success');
+      showToast('Document intelligence extraction and analysis complete!', 'success');
       
       // Trigger a navigation to the Analysis tab
-      // Since we're in a partial component, we'll dispatch a custom event
       window.dispatchEvent(new CustomEvent('navigate-to-analysis', { 
         detail: { dealId, analysis } 
       }));
@@ -461,6 +487,22 @@ function DealFiles({ dealId }: DealFilesProps) {
                         title="Download file"
                       >
                         <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const docIntelligence = new DocumentIntelligenceService();
+                          try {
+                            showToast(`Extracting intelligence from ${file.file_name}...`, 'info');
+                            await docIntelligence.processDocument(file.id, dealId);
+                            showToast(`Successfully extracted insights from ${file.file_name}`, 'success');
+                          } catch (error: any) {
+                            showToast(`Failed to extract from ${file.file_name}: ${error.message}`, 'error');
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                        title="Extract Intelligence"
+                      >
+                        <Brain className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDeleteFile(file.id, file.file_name || file.name || 'Unknown File')}
