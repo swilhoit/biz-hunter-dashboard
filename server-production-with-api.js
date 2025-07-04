@@ -9,10 +9,16 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// For Railway: Copy VITE_ prefixed vars to non-prefixed versions if they don't exist
-if (!process.env.OPENAI_API_KEY && process.env.VITE_OPENAI_API_KEY) {
-  process.env.OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
-  console.log('Copied VITE_OPENAI_API_KEY to OPENAI_API_KEY');
+// For Railway/Render: Copy VITE_ prefixed vars to non-prefixed versions if they don't exist
+// Also check for OPEN_AI_API_KEY (with underscore) as seen in .env
+if (!process.env.OPENAI_API_KEY) {
+  if (process.env.VITE_OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
+    console.log('Copied VITE_OPENAI_API_KEY to OPENAI_API_KEY');
+  } else if (process.env.OPEN_AI_API_KEY) {
+    process.env.OPENAI_API_KEY = process.env.OPEN_AI_API_KEY;
+    console.log('Copied OPEN_AI_API_KEY to OPENAI_API_KEY');
+  }
 }
 
 if (!process.env.SUPABASE_URL && process.env.VITE_SUPABASE_URL) {
@@ -171,11 +177,13 @@ app.post('/api/openai/chat', async (req, res) => {
     // Try multiple possible key names
     const openAIKey = process.env.OPENAI_API_KEY || 
                      process.env.VITE_OPENAI_API_KEY || 
+                     process.env.OPEN_AI_API_KEY ||
                      process.env.REACT_APP_OPENAI_API_KEY;
     
     console.log('[OpenAI Chat] Checking for API keys:');
     console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
     console.log('  VITE_OPENAI_API_KEY:', process.env.VITE_OPENAI_API_KEY ? 'SET' : 'NOT SET');
+    console.log('  OPEN_AI_API_KEY:', process.env.OPEN_AI_API_KEY ? 'SET' : 'NOT SET');
     console.log('  Resolved key:', openAIKey ? `Found (${openAIKey.length} chars)` : 'NOT FOUND');
     
     if (!openAIKey) {
@@ -218,6 +226,7 @@ app.post('/api/openai/vision', async (req, res) => {
     
     const openAIKey = process.env.OPENAI_API_KEY || 
                      process.env.VITE_OPENAI_API_KEY || 
+                     process.env.OPEN_AI_API_KEY ||
                      process.env.REACT_APP_OPENAI_API_KEY;
     
     if (!openAIKey) {
@@ -256,6 +265,7 @@ app.post('/api/openai/analyze-document', async (req, res) => {
     
     const openAIKey = process.env.OPENAI_API_KEY || 
                      process.env.VITE_OPENAI_API_KEY || 
+                     process.env.OPEN_AI_API_KEY ||
                      process.env.REACT_APP_OPENAI_API_KEY;
     
     if (!openAIKey) {
