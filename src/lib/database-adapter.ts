@@ -420,7 +420,7 @@ export const filesAdapter = {
       category: doc.category,
       uploaded_at: doc.uploaded_at,
       file_size: doc.file_size,
-      file_type: doc.file_type,
+      file_type: doc.mime_type,
       subcategory: doc.subcategory,
       tags: doc.tags,
       is_confidential: doc.is_confidential,
@@ -473,7 +473,7 @@ export const filesAdapter = {
           file_name: file.name,
           file_path: fileName,
           file_size: file.size,
-          file_type: file.type,
+          mime_type: file.type,
           category: metadata.category || 'general',
           subcategory: metadata.subcategory,
           uploaded_by: user.id,
@@ -611,7 +611,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, file_name, file_type')
+        .select('file_path, file_name, mime_type')
         .eq('id', fileId)
         .single();
 
@@ -653,7 +653,7 @@ export const filesAdapter = {
       return {
         blob: data,
         fileName: fileInfo.file_name,
-        fileType: fileInfo.file_type
+        fileType: fileInfo.mime_type
       };
     } catch (error) {
       console.error('getFileBlob error:', error);
