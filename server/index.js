@@ -1132,7 +1132,7 @@ async function scrapeWithDuplicatePrevention() {
     
     const { data, error } = await supabase
       .from('business_listings')
-      .upsert(preparedListings, { onConflict: 'name,original_url', ignoreDuplicates: true })
+      .upsert(preparedListings, { onConflict: 'name,original_url,source', ignoreDuplicates: true })
       .select();
     
     const insertTime = Math.round((Date.now() - insertStartTime) / 1000);

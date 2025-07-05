@@ -16,6 +16,7 @@ import DealAnalytics from './pages/DealAnalytics';
 import DealDetails from './pages/DealDetails';
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
+import OffMarketSellerDetails from './pages/OffMarketSellerDetails';
 import DealsDashboard from './pages/DealsDashboard';
 import AIAnalysis from './pages/AIAnalysis';
 import DealComparison from './pages/DealComparison';
@@ -119,6 +120,7 @@ function App() {
         <Route path="/deals/:id" element={<ProtectedRoute><DealDetails /></ProtectedRoute>} />
         <Route path="/listings" element={<ProtectedRoute><ListingsFeed /></ProtectedRoute>} />
         <Route path="/listings/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
+        <Route path="/off-market-seller/:id" element={<ProtectedRoute><OffMarketSellerDetails /></ProtectedRoute>} />
         <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
         <Route path="/explorer" element={<ProtectedRoute><Explorer /></ProtectedRoute>} />
         <Route path="/dashboard/fintech" element={<ProtectedRoute><Fintech /></ProtectedRoute>} />

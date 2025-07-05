@@ -4,6 +4,7 @@ import Header from '../partials/Header';
 import ListingsTable from '../partials/deals/ListingsTable';
 import ListingsFilters from '../partials/deals/ListingsFilters';
 import ListingCard from '../partials/deals/ListingCard';
+import OffMarketSellers from '../partials/deals/OffMarketSellers';
 import { useBusinessListings, useAddToPipeline, useClearListings } from '../hooks/useBusinessListings';
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
@@ -11,7 +12,8 @@ import { useAuth } from '../hooks/useAuth';
 import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users } from 'lucide-react';
 
 function ListingsFeed() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,8 +25,9 @@ function ListingsFeed() {
   const [showDuplicateManager, setShowDuplicateManager] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
-  const [sitesForScraper, setSitesForScraper] = useState(['quietlight', 'bizbuysell']);
+  const [sitesForScraper] = useState(['quietlight', 'bizbuysell']);
   const [activeFilters, setActiveFilters] = useState({});
+  const [activeTab, setActiveTab] = useState('on-market'); // 'on-market' or 'off-market'
 
   // Debug: Track when activeFilters changes
   React.useEffect(() => {
@@ -384,7 +387,11 @@ function ListingsFeed() {
             <div className="sm:flex sm:justify-between sm:items-center mb-8">
               <div className="mb-4 sm:mb-0">
                 <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">Amazon FBA Feed</h1>
-                <p className="text-gray-600 dark:text-gray-400">Curated Amazon FBA businesses ready for acquisition</p>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {activeTab === 'on-market' 
+                    ? 'Curated Amazon FBA businesses ready for acquisition' 
+                    : 'Off-market sellers and business opportunities'}
+                </p>
               </div>
 
               <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
@@ -524,15 +531,34 @@ function ListingsFeed() {
                 {/* Display listing count */}
                 <div className="flex items-center px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                    {isLoading ? 'Loading...' : `${filteredListings.length} listings`}
-                    {hideDuplicates && <span className="ml-1 text-xs">(duplicates hidden)</span>}
+                    {isLoading ? 'Loading...' : activeTab === 'on-market' ? `${filteredListings.length} listings` : '5 sellers'}
+                    {hideDuplicates && activeTab === 'on-market' && <span className="ml-1 text-xs">(duplicates hidden)</span>}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Scraping Status Indicator */}
-            {isChecking && (
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-2 bg-gray-100 dark:bg-gray-800 mb-6">
+                <TabsTrigger 
+                  value="on-market" 
+                  className="flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                >
+                  <Store className="w-4 h-4" />
+                  On Market
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="off-market" 
+                  className="flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                >
+                  <Users className="w-4 h-4" />
+                  Off Market
+                </TabsTrigger>
+              </TabsList>
+
+            {/* Scraping Status Indicator - Only show for on-market tab */}
+            {isChecking && activeTab === 'on-market' && (
               <div className="bg-violet-50 dark:bg-violet-900/20 rounded-lg p-4 mb-6">
                 <div className="flex items-center">
                   <Loader2 className="w-5 h-5 mr-3 animate-spin text-violet-600 dark:text-violet-400" />
@@ -550,9 +576,11 @@ function ListingsFeed() {
               </div>
             )}
 
-            {/* Search and Controls */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-              <div className="flex flex-col sm:flex-row gap-4">
+            {/* On Market Tab Content */}
+            <TabsContent value="on-market" className="mt-0">
+              {/* Search and Controls */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4">
                 {/* Search */}
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -726,6 +754,13 @@ function ListingsFeed() {
                 )}
               </>
             )}
+            </TabsContent>
+
+            {/* Off Market Tab Content */}
+            <TabsContent value="off-market" className="mt-0">
+              <OffMarketSellers onAddToPipeline={handleAddToPipeline} />
+            </TabsContent>
+            </Tabs>
           </div>
         </main>
       </div>

@@ -415,7 +415,7 @@ export const filesAdapter = {
     // Map the results to expected format
     const allFiles = (data || []).map(doc => ({
       id: doc.id,
-      file_name: doc.document_name,
+      file_name: doc.file_name || doc.document_name,
       file_path: doc.file_path,
       category: doc.category,
       uploaded_at: doc.uploaded_at,
@@ -470,7 +470,7 @@ export const filesAdapter = {
         .from('deal_documents')
         .insert({
           deal_id: dealId,
-          document_name: file.name,
+          file_name: file.name,
           file_path: fileName,
           file_size: file.size,
           file_type: file.type,
@@ -523,7 +523,7 @@ export const filesAdapter = {
       // Get file info first to get the file path for storage deletion
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name, deal_id, uploaded_by')
+        .select('file_path, file_name, deal_id, uploaded_by')
         .eq('id', fileId)
         .single();
 
@@ -566,7 +566,7 @@ export const filesAdapter = {
       }
 
       console.log('Successfully deleted from database');
-      return { success: true, fileName: fileInfo.document_name };
+      return { success: true, fileName: fileInfo.file_name };
     } catch (error) {
       console.error('File deletion failed:', error);
       throw error instanceof Error ? error : new Error('Delete failed');
@@ -578,7 +578,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name')
+        .select('file_path, file_name')
         .eq('id', fileId)
         .single();
 
@@ -597,7 +597,7 @@ export const filesAdapter = {
 
       return {
         url: data.signedUrl,
-        fileName: fileInfo.document_name
+        fileName: fileInfo.file_name
       };
     } catch (error) {
       throw error instanceof Error ? error : new Error('Failed to get file URL');
@@ -611,7 +611,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name, file_type')
+        .select('file_path, file_name, file_type')
         .eq('id', fileId)
         .single();
 
@@ -652,7 +652,7 @@ export const filesAdapter = {
 
       return {
         blob: data,
-        fileName: fileInfo.document_name,
+        fileName: fileInfo.file_name,
         fileType: fileInfo.file_type
       };
     } catch (error) {
