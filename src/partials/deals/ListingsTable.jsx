@@ -86,6 +86,9 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 Revenue & Profit
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                YoY Trend
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Listed
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -163,6 +166,22 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     Profit: {listing.annual_profit ? formatCurrency(listing.annual_profit) : 'TBD'}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {listing.yoy_trend_percent !== null && listing.yoy_trend_percent !== undefined ? (
+                    <div className={`flex items-center text-sm font-medium ${
+                      listing.yoy_trend_percent > 0 ? 'text-green-600 dark:text-green-400' : 
+                      listing.yoy_trend_percent < 0 ? 'text-red-600 dark:text-red-400' : 
+                      'text-gray-600 dark:text-gray-400'
+                    }`}>
+                      {listing.yoy_trend_percent > 0 && '↑'}
+                      {listing.yoy_trend_percent < 0 && '↓'}
+                      {listing.yoy_trend_percent === 0 && '→'}
+                      <span className="ml-1">{Math.abs(listing.yoy_trend_percent)}%</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">-</div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">

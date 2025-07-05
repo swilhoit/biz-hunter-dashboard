@@ -43,7 +43,11 @@ function CSVUpload() {
     'inventory_value': 'inventory_value',
     'real_estate_included': 'real_estate_included',
     'image_urls': 'image_urls',
-    'scrape_timestamp': 'scraped_at'
+    'scrape_timestamp': 'scraped_at',
+    'yoy_trend': 'yoy_trend_percent',
+    'yoy_growth': 'yoy_trend_percent',
+    'revenue_growth': 'yoy_trend_percent',
+    'year_over_year': 'yoy_trend_percent'
   };
 
   const handleFileSelect = (e) => {
@@ -132,6 +136,15 @@ function CSVUpload() {
         // Handle multiplier
         else if (dbField === 'multiple') {
           const numValue = parseFloat(value);
+          if (!isNaN(numValue)) {
+            transformed[dbField] = numValue;
+          }
+        }
+        // Handle YoY trend percentage
+        else if (dbField === 'yoy_trend_percent') {
+          // Remove % sign if present and parse
+          const cleanValue = value.toString().replace('%', '').trim();
+          const numValue = parseFloat(cleanValue);
           if (!isNaN(numValue)) {
             transformed[dbField] = numValue;
           }
@@ -248,7 +261,7 @@ function CSVUpload() {
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Upload a CSV file with business listing data. The file should include columns like: name, asking_price, annual_revenue, location, industry, etc.
+                    Upload a CSV file with business listing data. The file should include columns like: name, asking_price, annual_revenue, location, industry, yoy_trend, etc.
                   </p>
                 </div>
 

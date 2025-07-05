@@ -12,6 +12,7 @@ import AddDealModal from '../components/AddDealModal';
 import { Deal, DealStatus } from '../types/deal';
 import { dbAdapter, mapDealStatus } from '../lib/database-adapter';
 import { useAuth } from '@/hooks/useAuth';
+import { calculateOpportunityScore, getScoreColor, getScoreLabel } from '../utils/dealScoring';
 
 const dealStages: { status: DealStatus; title: string; color: string }[] = [
   { status: 'prospecting', title: 'Prospecting', color: 'bg-gray-500' },
@@ -259,7 +260,7 @@ function DealPipelineIntegrated() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Asking Price</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Revenue</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Source</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Seller</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Opportunity Score</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
@@ -307,11 +308,20 @@ function DealPipelineIntegrated() {
                             <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
                               {deal.source ? deal.source.replace('_', ' ') : 'N/A'}
                             </td>
-                            <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
-                              <div>{deal.seller_name || 'N/A'}</div>
-                              {deal.seller_email && (
-                                <div className="text-xs">{deal.seller_email}</div>
-                              )}
+                            <td className="px-4 py-4 text-sm">
+                              <div className="flex items-center space-x-2">
+                                <span className={`text-2xl font-bold ${getScoreColor(calculateOpportunityScore(deal))}`}>
+                                  {calculateOpportunityScore(deal)}
+                                </span>
+                                <div>
+                                  <div className={`text-xs font-medium ${getScoreColor(calculateOpportunityScore(deal))}`}>
+                                    {getScoreLabel(calculateOpportunityScore(deal))}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    /100
+                                  </div>
+                                </div>
+                              </div>
                             </td>
                             <td className="px-4 py-4 text-sm">
                               <div className="flex items-center space-x-2">
