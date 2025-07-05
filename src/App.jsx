@@ -90,6 +90,7 @@ import TooltipPage from './pages/component/TooltipPage';
 import AccordionPage from './pages/component/AccordionPage';
 import IconsPage from './pages/component/IconsPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import CSVUpload from './pages/CSVUpload';
 
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -173,6 +174,7 @@ function App() {
         <Route path="/onboarding-02" element={<Onboarding02 />} />
         <Route path="/onboarding-03" element={<Onboarding03 />} />
         <Route path="/onboarding-04" element={<Onboarding04 />} />
+        <Route path="/admin/csv-upload" element={<ProtectedRoute><CSVUpload /></ProtectedRoute>} />
         <Route path="/component/button" element={<ButtonPage />} />
         <Route path="/component/form" element={<FormPage />} />
         <Route path="/component/dropdown" element={<DropdownPage />} />

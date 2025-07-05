@@ -104,7 +104,10 @@
       "Bash(render services list)",
       "Bash(render services:*)",
       "Bash(npm ls:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(./scripts/auto-setup-google-ads.sh:*)",
+      "Bash(open:*)"
     ],
     "deny": []
   }

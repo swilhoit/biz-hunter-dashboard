@@ -11,7 +11,7 @@ import DealASINsTable from '../partials/deals/DealASINsTable';
 import DealCommunications from '../partials/deals/DealCommunications';
 import DealTasks from '../partials/deals/DealTasks';
 import DealNotes from '../partials/deals/DealNotes';
-// import SimpleDealEditModal from '../components/SimpleDealEditModal';
+import DealEditModal from '../components/DealEditModal';
 // import { Deal } from '../types/deal'; // Removed TypeScript import
 import { dealsAdapter } from '../lib/database-adapter';
 
@@ -195,10 +195,10 @@ function DealDetails() {
                 </div>
                 <div className="flex space-x-2">
                   <button 
-                    onClick={() => setIsEditing(!isEditing)}
+                    onClick={() => setIsEditing(true)}
                     className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                   >
-                    {isEditing ? 'Cancel Edit' : 'Edit Deal'}
+                    Edit Deal
                   </button>
                   <button 
                     onClick={handleDelete}
@@ -241,6 +241,14 @@ function DealDetails() {
           </div>
         </main>
       </div>
+      
+      {/* Edit Modal */}
+      <DealEditModal
+        deal={currentDeal}
+        isOpen={isEditing}
+        onClose={() => setIsEditing(false)}
+        onSave={handleEdit}
+      />
     </div>
   );
 }

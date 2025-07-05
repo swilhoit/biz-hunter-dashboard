@@ -1955,6 +1955,14 @@ app.post('/api/ai/openai-proxy', async (req, res) => {
   }
 });
 
+// Google Ads API Routes
+const googleAdsRouter = require('./api/google-ads.js');
+app.use('/api/google-ads', googleAdsRouter);
+
+// Google Ads ADC Routes (using Application Default Credentials)
+const googleAdsADCRouter = require('./api/google-ads-adc.js');
+app.use('/api/google-ads-adc', googleAdsADCRouter);
+
 // Notifications Management
 app.get('/api/notifications/:userId', async (req, res) => {
   try {

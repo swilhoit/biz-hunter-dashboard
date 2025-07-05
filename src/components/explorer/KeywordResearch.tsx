@@ -14,9 +14,14 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { fetchKeywordData, fetchRelatedKeywords } from '../../utils/explorer/junglescout';
+import { fetchDataForKeywords, fetchRelatedKeywords } from '../../utils/explorer/junglescout';
 import { generateKeywords } from '../../utils/explorer/aiKeywordGenerator';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import { 
+  mergeKeywordData, 
+  fetchGoogleAdsKeywordData,
+  formatCompetitionLevel 
+} from '../../utils/explorer/keywordDataMerger';
 
 interface KeywordData {
   keyword: string;
@@ -25,6 +30,12 @@ interface KeywordData {
   ppcBid: number;
   relevancyScore: number;
   trendData?: Array<{ date: string; volume: number }>;
+  // Google Ads data
+  googleAdsSearchVolume?: number;
+  competitionLevel?: string;
+  competitionIndex?: number;
+  googleAdsAvgCpc?: number;
+  dataSources?: string[];
 }
 
 interface KeywordResearchProps {
@@ -53,8 +64,32 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
 
     try {
       const keywordList = keywords.split(',').map(k => k.trim());
-      const data = await fetchKeywordData(keywordList);
-      setKeywordData(data);
+      
+      // Fetch data from both sources in parallel
+      const [jungleScoutData, googleAdsData] = await Promise.all([
+        fetchDataForKeywords(keywordList).catch(() => []),
+        fetchGoogleAdsKeywordData(keywordList).catch(() => [])
+      ]);
+      
+      // Merge the data from both sources
+      const mergedData = mergeKeywordData(jungleScoutData, googleAdsData);
+      
+      // Convert merged data to component format
+      const formattedData = mergedData.map(item => ({
+        keyword: item.keyword,
+        searchVolume: item.combinedSearchVolume,
+        searchVolumeTrend: item.searchVolumeTrend || 0,
+        ppcBid: item.recommendedBid,
+        relevancyScore: item.relevancyScore || 0,
+        trendData: item.trendData,
+        googleAdsSearchVolume: item.googleAdsSearchVolume,
+        competitionLevel: item.competitionLevel,
+        competitionIndex: item.competitionIndex,
+        googleAdsAvgCpc: item.googleAdsAvgCpc,
+        dataSources: item.dataSources
+      }));
+      
+      setKeywordData(formattedData);
     } catch (err) {
       setError('Failed to fetch keyword data');
       console.error(err);
@@ -209,9 +244,12 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
                           <TableRow>
                             <TableHead>Keyword</TableHead>
                             <TableHead className="text-right">Search Volume</TableHead>
+                            <TableHead className="text-right">Google Ads Volume</TableHead>
+                            <TableHead className="text-right">Competition</TableHead>
                             <TableHead className="text-right">Trend</TableHead>
                             <TableHead className="text-right">PPC Bid</TableHead>
-                            <TableHead>Relevancy</TableHead>
+                            <TableHead className="text-right">Google CPC</TableHead>
+                            <TableHead>Sources</TableHead>
                             <TableHead className="text-right">Action</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -221,6 +259,26 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
                               <TableCell className="font-medium">{kw.keyword}</TableCell>
                               <TableCell className="text-right">
                                 {formatNumberWithCommas(kw.searchVolume)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {kw.googleAdsSearchVolume !== undefined ? (
+                                  formatNumberWithCommas(kw.googleAdsSearchVolume)
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {kw.competitionLevel ? (
+                                  <Badge variant={
+                                    kw.competitionLevel === 'High' ? 'destructive' :
+                                    kw.competitionLevel === 'Medium' ? 'secondary' :
+                                    'outline'
+                                  }>
+                                    {formatCompetitionLevel(kw.competitionLevel, kw.competitionIndex)}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span className={`flex items-center justify-end gap-1 ${
@@ -233,17 +291,20 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
                               <TableCell className="text-right">
                                 ${kw.ppcBid.toFixed(2)}
                               </TableCell>
+                              <TableCell className="text-right">
+                                {kw.googleAdsAvgCpc ? (
+                                  `$${kw.googleAdsAvgCpc.toFixed(2)}`
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                    <div 
-                                      className="bg-violet-600 h-2 rounded-full"
-                                      style={{ width: `${kw.relevancyScore}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {kw.relevancyScore}%
-                                  </span>
+                                <div className="flex gap-1">
+                                  {kw.dataSources?.map(source => (
+                                    <Badge key={source} variant="outline" className="text-xs">
+                                      {source === 'JungleScout' ? 'JS' : 'GA'}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </TableCell>
                               <TableCell className="text-right">

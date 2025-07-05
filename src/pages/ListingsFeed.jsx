@@ -13,9 +13,11 @@ import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users } from 'lucide-react';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 function ListingsFeed() {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,6 +101,11 @@ function ListingsFeed() {
   }, [showAdminDropdown]);
 
   const filteredListings = listings.filter(listing => {
+    // Filter out off-market listings when on the on-market tab
+    if (activeTab === 'on-market' && listing.is_off_market) {
+      return false;
+    }
+    
     // Search term filter
     const matchesSearch = searchTerm === '' || 
       listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -473,6 +480,18 @@ function ListingsFeed() {
                         </button>
                         
                         <div className="my-1 border-t border-gray-200 dark:border-gray-600"></div>
+                        
+                        {/* CSV Upload */}
+                        <button 
+                          onClick={() => {
+                            navigate('/admin/csv-upload');
+                            setShowAdminDropdown(false);
+                          }}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        >
+                          <Upload className="w-4 h-4 mr-3 text-blue-600" />
+                          Import CSV
+                        </button>
                         
                         {/* Duplicate Management */}
                         <button 
