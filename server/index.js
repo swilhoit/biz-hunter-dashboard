@@ -13,6 +13,7 @@ import multer from 'multer';
 import fs from 'fs';
 import { dirname } from 'path';
 import seoRoutes from './api/seo.js';
+import filesRoutes from './api/files.js';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
@@ -41,6 +42,7 @@ app.use(morgan('dev'));
 
 // API Routes
 app.use('/api/seo', seoRoutes);
+app.use('/api/files', filesRoutes);
 
 // Function to find an available port
 async function findAvailablePort(startPort = 3001) {

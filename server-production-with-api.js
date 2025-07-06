@@ -6,6 +6,10 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 
+// Import API routes
+import seoRoutes from './server/api/seo.js';
+import filesRoutes from './server/api/files.js';
+
 // Add uncaught exception handler
 process.on('uncaughtException', (err) => {
   console.error('FATAL: Uncaught exception:', err);
@@ -55,6 +59,10 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// API Routes
+app.use('/api/seo', seoRoutes);
+app.use('/api/files', filesRoutes);
 
 // Log environment
 console.log('=== Server Starting ===');

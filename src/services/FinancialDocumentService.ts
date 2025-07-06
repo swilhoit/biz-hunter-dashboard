@@ -236,7 +236,7 @@ export class FinancialDocumentService {
         console.warn('⚠️ Direct download failed, trying server endpoint:', directDownloadError);
         
         // Fallback: use server endpoint for download
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
         const response = await fetch(`${API_BASE_URL}/api/files/download/${documentId}`);
 
         if (!response.ok) {

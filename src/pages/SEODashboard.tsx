@@ -61,7 +61,8 @@ function SEODashboard() {
       setError(null);
 
       // Call your backend API that integrates with DataForSEO
-      const response = await fetch(`http://localhost:3001/api/seo/domain-overview`, {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE_URL}/api/seo/domain-overview`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
