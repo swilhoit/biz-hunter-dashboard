@@ -35,7 +35,36 @@ export interface StructuredData {
     ebitda?: number;
     askingPrice?: number;
     multiple?: number;
+    grossMargin?: number;
+    netMargin?: number;
+    growthRate?: number;
+    cashFlow?: number;
+    inventory?: number;
     [key: string]: any;
+  };
+  businessStory?: {
+    foundingStory?: string;
+    milestones?: string[];
+    challenges?: string[];
+    achievements?: string[];
+    turningPoints?: string[];
+    futureVision?: string;
+  };
+  marketPosition?: {
+    competitiveAdvantages?: string[];
+    uniqueSellingPoints?: string[];
+    marketShare?: string;
+    customerBase?: string;
+    brandStrength?: string;
+    barriers?: string[];
+  };
+  operations?: {
+    businessModel?: string;
+    keyProcesses?: string[];
+    suppliers?: string[];
+    fulfillmentMethod?: string;
+    scalability?: string;
+    automation?: string;
   };
   contacts?: Array<{
     name: string;
@@ -48,16 +77,33 @@ export interface StructuredData {
     asin?: string;
     category?: string;
     revenue?: number;
+    ranking?: string;
+    reviews?: number;
   }>;
   legal?: {
     entityType?: string;
     jurisdiction?: string;
     liabilities?: string[];
+    intellectualProperty?: string[];
+    contracts?: string[];
   };
   dates?: {
     established?: string;
     fiscalYearEnd?: string;
     lastUpdated?: string;
+    saleTimeline?: string;
+  };
+  opportunities?: {
+    growth?: string[];
+    expansion?: string[];
+    optimization?: string[];
+    untapped?: string[];
+  };
+  risks?: {
+    business?: string[];
+    market?: string[];
+    operational?: string[];
+    financial?: string[];
   };
   [key: string]: any;
 }
@@ -177,6 +223,8 @@ export class DocumentIntelligenceService {
       // Download document content from server
       progressCallback?.('Downloading document...');
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      
+      // Use the server endpoint which handles file path encoding properly
       const response = await fetch(`${API_BASE_URL}/api/files/download/${documentId}`);
       
       if (!response.ok) {
@@ -202,10 +250,102 @@ export class DocumentIntelligenceService {
       
       if (DocumentExtractors.canExtractText(file.name)) {
         rawText = await DocumentExtractors.extractTextFromFile(file);
-      } else if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.pdf')) {
-        // Use vision API for images and PDFs
+      } else if (file.type.startsWith('image/')) {
+        // Use vision API for images
         const analysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
         rawText = this.analysisToText(analysis);
+      } else if (file.name.toLowerCase().endsWith('.pdf')) {
+        // Handle PDFs with proper text extraction
+        progressCallback?.('Processing PDF document...');
+        
+        try {
+          // First try to extract text from the PDF using PDF.js
+          console.log('Attempting PDF text extraction for:', file.name);
+          const pdfjs = await import('pdfjs-dist');
+          
+          // Set worker source
+          if (pdfjs.GlobalWorkerOptions) {
+            pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+            console.log('PDF.js worker configured with version:', pdfjs.version);
+          } else {
+            console.warn('PDF.js GlobalWorkerOptions not available');
+          }
+          
+          const arrayBuffer = await file.arrayBuffer();
+          console.log('PDF arrayBuffer size:', arrayBuffer.byteLength);
+          
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+          console.log('PDF loaded successfully, pages:', pdf.numPages);
+          
+          progressCallback?.('Extracting text from PDF pages...');
+          
+          // Extract text from all pages
+          const textPromises = [];
+          const maxPages = Math.min(pdf.numPages, 20); // Process up to 20 pages
+          
+          for (let i = 1; i <= maxPages; i++) {
+            progressCallback?.(`Processing page ${i}/${maxPages}...`);
+            textPromises.push(
+              pdf.getPage(i).then(page => 
+                page.getTextContent().then(textContent => {
+                  const pageText = textContent.items.map((item: any) => item.str).join(' ');
+                  console.log(`Page ${i} text length:`, pageText.length);
+                  return pageText;
+                })
+              )
+            );
+          }
+          
+          const pageTexts = await Promise.all(textPromises);
+          rawText = pageTexts.join('\n\n');
+          
+          console.log('Total extracted text length:', rawText.length);
+          console.log('Text preview:', rawText.substring(0, 200));
+          
+          // Check if we got meaningful text
+          if (!rawText || rawText.trim().length < 100) {
+            console.warn('Insufficient text extracted from PDF:', rawText.length, 'characters');
+            throw new Error('PDF appears to be scanned or contains minimal text');
+          }
+          
+          progressCallback?.(`Extracted ${rawText.length} characters from PDF`);
+          
+        } catch (pdfError) {
+          console.error('PDF text extraction failed:', pdfError);
+          console.warn('PDF may be scanned or image-based, extracting content differently...');
+          progressCallback?.('PDF appears to be scanned, extracting content...');
+          
+          // For scanned PDFs, we need to handle them differently
+          // Instead of relying on the generic vision API fallback, 
+          // let's create a more specific prompt for business documents
+          try {
+            // Try to get at least some basic info from the file
+            const fileName = file.name || 'business document';
+            const fileSize = file.size || 0;
+            
+            // Create a context-aware prompt
+            rawText = `Business document: ${fileName} (${Math.round(fileSize / 1024)}KB PDF)
+            
+This appears to be a business acquisition or summary document based on the filename and context. 
+The PDF could not be text-extracted, suggesting it may be a scanned document or image-based PDF.
+Key information typically found in such documents includes:
+- Business overview and history
+- Financial performance metrics
+- Market position and competitive advantages
+- Growth opportunities and risks
+- Valuation and asking price
+
+Please analyze this document thoroughly to extract all relevant business information.`;
+            
+            console.log('Using context-aware fallback for scanned PDF');
+          } catch (fallbackError) {
+            console.error('Fallback processing also failed:', fallbackError);
+            // Last resort - use the vision API
+            const analysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
+            console.log('Vision analysis result:', analysis);
+            rawText = this.analysisToText(analysis);
+          }
+        }
       } else {
         throw new Error('Unsupported file type for extraction');
       }
@@ -283,12 +423,21 @@ export class DocumentIntelligenceService {
    * Extract structured data from text
    */
   private async extractStructuredData(text: string, fileName: string): Promise<StructuredData> {
-    const prompt = `Extract structured data from this business document.
+    const prompt = `You are analyzing a business summary document. Extract ALL relevant information, paying special attention to the business story, context, and strategic details.
 
 Document: ${fileName}
-Content: ${text.substring(0, 8000)}
+Content: ${text.substring(0, 10000)}
 
-Extract and return as JSON:
+Extract comprehensive information and return as JSON. Look for:
+- The founding story and journey of the business
+- Key milestones and achievements
+- Competitive advantages and market position
+- Financial metrics WITH their context (not just numbers)
+- Growth trajectory and future potential
+- Operational strengths and scalability
+- Risks and opportunities
+
+Return as JSON:
 {
   "financials": {
     "revenue": number or null,
@@ -296,8 +445,35 @@ Extract and return as JSON:
     "ebitda": number or null,
     "askingPrice": number or null,
     "multiple": number or null,
-    "margins": {},
-    "growth": {}
+    "grossMargin": number or null,
+    "netMargin": number or null,
+    "growthRate": number or null,
+    "cashFlow": number or null,
+    "inventory": number or null
+  },
+  "businessStory": {
+    "foundingStory": "How and why the business was started",
+    "milestones": ["Key achievements and growth points"],
+    "challenges": ["Obstacles overcome"],
+    "achievements": ["Notable successes"],
+    "turningPoints": ["Critical moments that shaped the business"],
+    "futureVision": "Where the business is headed"
+  },
+  "marketPosition": {
+    "competitiveAdvantages": ["What makes this business stand out"],
+    "uniqueSellingPoints": ["USPs"],
+    "marketShare": "Position in market",
+    "customerBase": "Customer demographics and loyalty",
+    "brandStrength": "Brand recognition and value",
+    "barriers": ["Barriers to entry for competitors"]
+  },
+  "operations": {
+    "businessModel": "How the business operates",
+    "keyProcesses": ["Core operational processes"],
+    "suppliers": ["Key supplier relationships"],
+    "fulfillmentMethod": "FBA/FBM/Hybrid",
+    "scalability": "Ability to scale",
+    "automation": "Level of automation"
   },
   "contacts": [
     {
@@ -312,22 +488,39 @@ Extract and return as JSON:
       "name": string,
       "asin": string or null,
       "category": string or null,
-      "revenue": number or null
+      "revenue": number or null,
+      "ranking": "BSR or category ranking",
+      "reviews": number or null
     }
   ],
   "legal": {
     "entityType": string or null,
     "jurisdiction": string or null,
-    "liabilities": []
+    "liabilities": [],
+    "intellectualProperty": ["Trademarks, patents, etc"],
+    "contracts": ["Key contracts or agreements"]
   },
   "dates": {
     "established": string or null,
     "fiscalYearEnd": string or null,
-    "lastUpdated": string or null
+    "lastUpdated": string or null,
+    "saleTimeline": "Expected sale timeline"
+  },
+  "opportunities": {
+    "growth": ["Growth opportunities"],
+    "expansion": ["Expansion possibilities"],
+    "optimization": ["Areas for improvement"],
+    "untapped": ["Untapped potential"]
+  },
+  "risks": {
+    "business": ["Business-specific risks"],
+    "market": ["Market-related risks"],
+    "operational": ["Operational risks"],
+    "financial": ["Financial risks"]
   }
 }
 
-Return ONLY valid JSON.`;
+IMPORTANT: Extract actual details from the document, not generic placeholders. If information is not present, use null or empty array.`;
 
     const payload = {
       model: 'gpt-4o-mini',
@@ -400,18 +593,45 @@ Return as JSON:
    * Generate document summary
    */
   private async generateSummary(text: string, structuredData: StructuredData): Promise<string> {
-    const prompt = `Generate a concise summary of this business document.
+    // Check if we have actual content to summarize
+    if (!text || text.trim().length < 50) {
+      return 'Document content could not be extracted. Manual review is recommended to access the information in this document.';
+    }
+    
+    // Check if this is a scanned PDF fallback
+    if (text.includes('PDF could not be text-extracted') && text.includes('scanned document')) {
+      // Generate a more helpful summary for scanned PDFs
+      return `This appears to be a scanned PDF business document that could not be automatically processed for text extraction. The document likely contains important business information such as financial statements, business overview, or acquisition details that require manual review.
+
+To properly analyze this document, please download it and review it manually, or use OCR software to extract the text content. Key information to look for includes:
+• Business financials (revenue, profit, EBITDA)
+• Valuation and asking price
+• Business operations and model
+• Market position and growth opportunities
+• Risk factors and considerations
+
+Once the document content is accessible, it can be re-processed for automated analysis.`;
+    }
+    
+    const prompt = `Generate a comprehensive summary of this business acquisition document that captures both the metrics AND the story.
 
 Key data extracted:
 ${JSON.stringify(structuredData, null, 2)}
 
 Document content:
-${text.substring(0, 4000)}
+${text.substring(0, 6000)}
 
-Write a 2-3 paragraph summary highlighting:
-1. Document type and purpose
-2. Key financial metrics or business information
-3. Important findings or notable items`;
+Write a 3-4 paragraph summary that includes:
+
+1. **Business Overview & Story**: What is this business, how did it start, and what makes it unique? Include the founding story, key milestones, and what the business has achieved.
+
+2. **Financial Performance & Context**: Don't just list numbers - explain what they mean. How has the business grown? What's the trajectory? Include revenue, profit, margins, and valuation in context.
+
+3. **Strategic Position & Opportunity**: What are the competitive advantages? What's the market position? What opportunities exist for a new owner? Include barriers to entry and growth potential.
+
+4. **Key Insights & Considerations**: What are the most important things a potential buyer should know? Include both opportunities and risks.
+
+IMPORTANT: Write in a narrative style that tells the business's story while incorporating the metrics. This should read like an executive summary that gives the full picture, not just a data dump.`;
 
     const payload = {
       model: 'gpt-4o-mini',
@@ -488,10 +708,11 @@ Return only the category name.`;
    */
   private async extractInsights(extraction: DocumentExtraction): Promise<DocumentInsight[]> {
     const insights: DocumentInsight[] = [];
+    const data = extraction.structured_data;
 
-    // Extract financial insights
-    if (extraction.structured_data.financials) {
-      const fin = extraction.structured_data.financials;
+    // Extract financial insights with context
+    if (data.financials) {
+      const fin = data.financials;
       
       if (fin.revenue) {
         insights.push({
@@ -499,70 +720,150 @@ Return only the category name.`;
           insight_type: 'financial_metric',
           insight_category: 'revenue',
           title: 'Annual Revenue',
-          description: `Document shows annual revenue of $${fin.revenue.toLocaleString()}`,
+          description: `Annual revenue of $${fin.revenue.toLocaleString()}${fin.growthRate ? ` with ${fin.growthRate}% growth rate` : ''}`,
           value: fin.revenue,
           confidence: 0.9
         });
       }
 
-      if (fin.profit) {
+      if (fin.profit && fin.netMargin) {
         insights.push({
           extraction_id: extraction.id,
           insight_type: 'financial_metric',
           insight_category: 'profit',
-          title: 'Annual Profit',
-          description: `Document shows annual profit of $${fin.profit.toLocaleString()}`,
-          value: fin.profit,
+          title: 'Profitability',
+          description: `Annual profit of $${fin.profit.toLocaleString()} (${fin.netMargin}% net margin)`,
+          value: { profit: fin.profit, margin: fin.netMargin },
           confidence: 0.9
         });
       }
 
-      if (fin.multiple) {
+      if (fin.multiple && fin.askingPrice) {
         insights.push({
           extraction_id: extraction.id,
           insight_type: 'financial_metric',
           insight_category: 'general',
-          title: 'Valuation Multiple',
-          description: `Business valued at ${fin.multiple}x`,
-          value: fin.multiple,
+          title: 'Valuation',
+          description: `Asking price of $${fin.askingPrice.toLocaleString()} at ${fin.multiple}x multiple`,
+          value: { askingPrice: fin.askingPrice, multiple: fin.multiple },
           confidence: 0.85
         });
       }
     }
 
-    // Extract risk insights
-    const riskKeywords = ['risk', 'liability', 'lawsuit', 'compliance', 'violation'];
-    const riskMatches = riskKeywords.filter(keyword => 
-      extraction.raw_text.toLowerCase().includes(keyword)
-    );
+    // Extract business story insights
+    if (data.businessStory) {
+      if (data.businessStory.milestones?.length > 0) {
+        insights.push({
+          extraction_id: extraction.id,
+          insight_type: 'key_term',
+          insight_category: 'general',
+          title: 'Key Milestones',
+          description: `Business milestones: ${data.businessStory.milestones.slice(0, 3).join('; ')}`,
+          value: data.businessStory.milestones,
+          confidence: 0.85
+        });
+      }
 
-    if (riskMatches.length > 0) {
-      insights.push({
-        extraction_id: extraction.id,
-        insight_type: 'risk_factor',
-        insight_category: 'legal',
-        title: 'Potential Risk Indicators',
-        description: `Document contains risk-related keywords: ${riskMatches.join(', ')}`,
-        value: { keywords: riskMatches },
-        confidence: 0.7
-      });
+      if (data.businessStory.achievements?.length > 0) {
+        insights.push({
+          extraction_id: extraction.id,
+          insight_type: 'opportunity',
+          insight_category: 'market',
+          title: 'Proven Success',
+          description: `Notable achievements: ${data.businessStory.achievements.slice(0, 2).join('; ')}`,
+          value: data.businessStory.achievements,
+          confidence: 0.8
+        });
+      }
     }
 
-    // Extract opportunity insights
-    const opportunityKeywords = ['growth', 'expansion', 'potential', 'opportunity', 'untapped'];
-    const opportunityMatches = opportunityKeywords.filter(keyword => 
-      extraction.raw_text.toLowerCase().includes(keyword)
-    );
-
-    if (opportunityMatches.length > 0) {
+    // Extract competitive advantages
+    if (data.marketPosition?.competitiveAdvantages?.length > 0) {
       insights.push({
         extraction_id: extraction.id,
         insight_type: 'opportunity',
         insight_category: 'market',
-        title: 'Growth Opportunities',
-        description: `Document mentions growth-related terms: ${opportunityMatches.join(', ')}`,
-        value: { keywords: opportunityMatches },
-        confidence: 0.7
+        title: 'Competitive Advantages',
+        description: `Key advantages: ${data.marketPosition.competitiveAdvantages.slice(0, 3).join('; ')}`,
+        value: data.marketPosition.competitiveAdvantages,
+        confidence: 0.85
+      });
+    }
+
+    // Extract growth opportunities
+    if (data.opportunities?.growth?.length > 0) {
+      insights.push({
+        extraction_id: extraction.id,
+        insight_type: 'opportunity',
+        insight_category: 'market',
+        title: 'Growth Potential',
+        description: `Growth opportunities: ${data.opportunities.growth.slice(0, 3).join('; ')}`,
+        value: data.opportunities.growth,
+        confidence: 0.8
+      });
+    }
+
+    // Extract specific risks
+    if (data.risks) {
+      const allRisks = [
+        ...(data.risks.business || []),
+        ...(data.risks.market || []),
+        ...(data.risks.operational || []),
+        ...(data.risks.financial || [])
+      ];
+      
+      if (allRisks.length > 0) {
+        insights.push({
+          extraction_id: extraction.id,
+          insight_type: 'risk_factor',
+          insight_category: 'general',
+          title: 'Identified Risks',
+          description: `Key risks: ${allRisks.slice(0, 3).join('; ')}`,
+          value: data.risks,
+          confidence: 0.75
+        });
+      }
+    }
+
+    // Extract operational insights
+    if (data.operations) {
+      if (data.operations.scalability) {
+        insights.push({
+          extraction_id: extraction.id,
+          insight_type: 'opportunity',
+          insight_category: 'operations',
+          title: 'Scalability',
+          description: `Scalability assessment: ${data.operations.scalability}`,
+          value: data.operations.scalability,
+          confidence: 0.8
+        });
+      }
+
+      if (data.operations.fulfillmentMethod) {
+        insights.push({
+          extraction_id: extraction.id,
+          insight_type: 'key_term',
+          insight_category: 'operations',
+          title: 'Fulfillment Method',
+          description: `Uses ${data.operations.fulfillmentMethod} fulfillment`,
+          value: data.operations.fulfillmentMethod,
+          confidence: 0.9
+        });
+      }
+    }
+
+    // Extract product insights
+    if (data.products?.length > 0) {
+      const topProducts = data.products.slice(0, 3);
+      insights.push({
+        extraction_id: extraction.id,
+        insight_type: 'product_info',
+        insight_category: 'product',
+        title: 'Product Portfolio',
+        description: `Key products: ${topProducts.map(p => p.name).join(', ')}`,
+        value: topProducts,
+        confidence: 0.85
       });
     }
 
@@ -607,12 +908,19 @@ Return only the category name.`;
     
     if (analysis.businessName) parts.push(`Business: ${analysis.businessName}`);
     if (analysis.description) parts.push(`Description: ${analysis.description}`);
-    if (analysis.askingPrice) parts.push(`Asking Price: $${analysis.askingPrice}`);
-    if (analysis.annualRevenue) parts.push(`Annual Revenue: $${analysis.annualRevenue}`);
-    if (analysis.annualProfit) parts.push(`Annual Profit: $${analysis.annualProfit}`);
+    if (analysis.askingPrice && analysis.askingPrice > 0) parts.push(`Asking Price: $${analysis.askingPrice.toLocaleString()}`);
+    if (analysis.annualRevenue && analysis.annualRevenue > 0) parts.push(`Annual Revenue: $${analysis.annualRevenue.toLocaleString()}`);
+    if (analysis.annualProfit && analysis.annualProfit > 0) parts.push(`Annual Profit: $${analysis.annualProfit.toLocaleString()}`);
+    if (analysis.monthlyRevenue && analysis.monthlyRevenue > 0) parts.push(`Monthly Revenue: $${analysis.monthlyRevenue.toLocaleString()}`);
+    if (analysis.monthlyProfit && analysis.monthlyProfit > 0) parts.push(`Monthly Profit: $${analysis.monthlyProfit.toLocaleString()}`);
     
     if (analysis.keyFindings && analysis.keyFindings.length > 0) {
-      parts.push(`Key Findings: ${analysis.keyFindings.join('; ')}`);
+      parts.push(`Key Findings:\n${analysis.keyFindings.map(f => `- ${f}`).join('\n')}`);
+    }
+    
+    // If we have very little content, indicate extraction issues
+    if (parts.length === 0 || (parts.length === 1 && parts[0].includes('PDF document'))) {
+      return 'Document analysis yielded limited results. The document may be a scanned image or contain non-extractable content. Manual review recommended.';
     }
 
     return parts.join('\n\n');

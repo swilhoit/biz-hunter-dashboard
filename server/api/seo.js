@@ -26,9 +26,11 @@ const getAuthHeader = () => {
 // Domain overview endpoint
 router.post('/domain-overview', async (req, res) => {
   try {
+    console.log('🔍 [SEO API] Starting domain overview request for:', req.body);
     const { domain } = req.body;
 
     if (!domain) {
+      console.log('❌ [SEO API] No domain provided');
       return res.status(400).json({ error: 'Domain parameter is required' });
     }
 
@@ -38,84 +40,101 @@ router.post('/domain-overview', async (req, res) => {
       console.error('DATAFORSEO_USERNAME:', DATAFORSEO_USERNAME ? 'SET' : 'NOT SET');
       console.error('DATAFORSEO_PASSWORD:', DATAFORSEO_PASSWORD ? 'SET' : 'NOT SET');
       
-      // Return mock data when credentials are missing
-      return res.json({
-        domain_authority: 42,
-        page_authority: 38,
-        trust_flow: 35,
-        citation_flow: 42,
-        organic_traffic: 45200,
-        paid_traffic: 8500,
-        direct_traffic: 12300,
-        referral_traffic: 3200,
-        keywords_count: 1234,
-        keywords_top_3: 45,
-        keywords_top_10: 123,
-        keywords_top_100: 789,
-        backlinks_count: 3456,
-        referring_domains: 892,
-        dofollow_backlinks: 2234,
-        page_speed_score: 85,
-        mobile_score: 78,
-        visibility_score: 68,
-        content_quality_score: 72,
-        organic_competitors: 156,
-        keywords: [
-          { keyword: 'amazon fba business', position: 3, search_volume: 12100, difficulty: 45, trend: 'up', url: '/blog/fba-guide' },
-          { keyword: 'buy amazon business', position: 5, search_volume: 8900, difficulty: 38, trend: 'up', url: '/marketplace' },
-        ],
-        top_pages: [
-          { url: '/marketplace', traffic: 8500, bounce_rate: 32, avg_time_on_page: '3:45', keywords_count: 45 },
-          { url: '/blog/fba-guide', traffic: 6200, bounce_rate: 28, avg_time_on_page: '4:12', keywords_count: 32 },
-        ],
-        traffic_data: {
-          labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-          organic: [32000, 35000, 38000, 42000, 45000, 45200],
-          paid: [8000, 8500, 9000, 9500, 10000, 10500],
-        },
-        api_errors: ['DataForSEO credentials not configured'],
-        data_completeness: 0 // Mock data only
+      return res.status(500).json({
+        error: 'DataForSEO API credentials not configured',
+        details: 'Please set DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD environment variables',
+        data_completeness: 0
       });
     }
 
+    console.log('✅ [SEO API] Credentials found, proceeding with API calls');
+
     // Clean domain (remove protocol if present)
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    console.log('🧹 [SEO API] Cleaned domain:', cleanDomain);
 
     // Make multiple API calls to gather comprehensive SEO data
-    console.log(`Fetching comprehensive SEO data for domain: ${cleanDomain}`);
+    console.log(`🔄 [SEO API] Fetching comprehensive SEO data for domain: ${cleanDomain}`);
     
-    const promises = [
-      // Core metrics
-      fetchDomainMetrics(cleanDomain),
-      fetchOrganicKeywords(cleanDomain),
-      fetchTopPages(cleanDomain),
-      fetchBacklinksSummary(cleanDomain),
-      // Additional metrics for complete data
-      fetchKeywordRankingDistribution(cleanDomain),
-      fetchCompetitorAnalysis(cleanDomain),
-      fetchTechnicalSEOMetrics(cleanDomain),
-      fetchTrafficAnalytics(cleanDomain),
+    // Helper function to add delay between API calls
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    // Sequential API calls with delays to avoid rate limiting
+    const apiCalls = [
+      { name: 'domainMetrics', fn: fetchDomainMetrics },
+      { name: 'keywords', fn: fetchOrganicKeywords },
+      { name: 'topPages', fn: fetchTopPages },
+      { name: 'backlinks', fn: fetchBacklinksSummary },
+      { name: 'keywordDistribution', fn: fetchKeywordRankingDistribution },
+      { name: 'competitorData', fn: fetchCompetitorAnalysis },
+      { name: 'technicalMetrics', fn: fetchTechnicalSEOMetrics },
+      { name: 'trafficAnalytics', fn: fetchTrafficAnalytics }
     ];
 
-    const [
-      domainMetrics,
-      keywords,
-      topPages,
-      backlinks,
-      keywordDistribution,
-      competitorData,
-      technicalMetrics,
-      trafficAnalytics
-    ] = await Promise.allSettled(promises);
+    console.log('📋 [SEO API] API calls configured:', apiCalls.map(call => call.name));
+    const results = {};
+    console.log('🏁 [SEO API] Starting sequential API calls...');
+    
+    for (let i = 0; i < apiCalls.length; i++) {
+      const { name, fn } = apiCalls[i];
+             try {
+         console.log(`Calling ${name}...`);
+         
+         // Special handling for traffic analytics to pass top pages data
+         let result;
+         if (name === 'trafficAnalytics') {
+           result = await fn(cleanDomain, results.topPages);
+         } else {
+           result = await fn(cleanDomain);
+         }
+         
+         // Store the actual result
+         results[name] = result;
+         
+         console.log(`✅ ${name} completed successfully`);
+         
+         // Add small delay between calls (except for the last one)
+         if (i < apiCalls.length - 1) {
+           await delay(200); // 200ms delay between calls
+         }
+       } catch (error) {
+         console.error(`❌ ${name} failed:`, error.message);
+         results[name] = null;
+       }
+    }
+
+         // Structure results for existing extractData function
+     console.log('🔄 [SEO API] Structuring results for processing...');
+     const domainMetrics = { status: 'fulfilled', value: results.domainMetrics };
+     const keywords = { status: 'fulfilled', value: results.keywords };
+     const topPages = { status: 'fulfilled', value: results.topPages };
+     const backlinks = { status: 'fulfilled', value: results.backlinks };
+     const keywordDistribution = { status: 'fulfilled', value: results.keywordDistribution };
+     const competitorData = { status: 'fulfilled', value: results.competitorData };
+     const technicalMetrics = { status: 'fulfilled', value: results.technicalMetrics };
+     const trafficAnalytics = { status: 'fulfilled', value: results.trafficAnalytics };
+     console.log('✅ [SEO API] Results structured');
+
+     // Mark as rejected if null
+     if (!results.domainMetrics) { domainMetrics.status = 'rejected'; domainMetrics.reason = new Error('API call failed'); }
+     if (!results.keywords) { keywords.status = 'rejected'; keywords.reason = new Error('API call failed'); }
+     if (!results.topPages) { topPages.status = 'rejected'; topPages.reason = new Error('API call failed'); }
+     if (!results.backlinks) { backlinks.status = 'rejected'; backlinks.reason = new Error('API call failed'); }
+     if (!results.keywordDistribution) { keywordDistribution.status = 'rejected'; keywordDistribution.reason = new Error('API call failed'); }
+     if (!results.competitorData) { competitorData.status = 'rejected'; competitorData.reason = new Error('API call failed'); }
+     if (!results.technicalMetrics) { technicalMetrics.status = 'rejected'; technicalMetrics.reason = new Error('API call failed'); }
+     if (!results.trafficAnalytics) { trafficAnalytics.status = 'rejected'; trafficAnalytics.reason = new Error('API call failed'); }
 
     // Track API errors and data completeness
+    console.log('📊 [SEO API] Setting up data extraction...');
     const apiErrors = [];
     let successfulCalls = 0;
-    const totalCalls = promises.length;
+    const totalCalls = apiCalls.length;
+    console.log('📊 [SEO API] Total calls:', totalCalls);
 
     // Helper function to safely extract data
     const extractData = (promiseResult, defaultValue = null, errorMessage = '') => {
-      if (promiseResult.status === 'fulfilled') {
+      if (promiseResult.status === 'fulfilled' && promiseResult.value) {
         successfulCalls++;
         return promiseResult.value;
       } else {
@@ -147,7 +166,7 @@ router.post('/domain-overview', async (req, res) => {
       citation_flow: domainData.citation_flow || 0,
       
       // Traffic metrics
-      organic_traffic: domainData.organic_traffic || 0,
+      organic_traffic: trafficData.organic_traffic || 0,
       paid_traffic: trafficData.paid_traffic || 0,
       direct_traffic: trafficData.direct_traffic || 0,
       referral_traffic: trafficData.referral_traffic || 0,
@@ -181,6 +200,13 @@ router.post('/domain-overview', async (req, res) => {
       api_errors: apiErrors,
       data_completeness: dataCompleteness,
       last_updated: new Date().toISOString(),
+      
+      // Data source disclaimer
+      disclaimer: {
+        message: "Traffic and keyword data are estimates based on DataForSEO calculations and may not reflect actual website analytics.",
+        note: "For accurate traffic data, please refer to your Google Analytics or similar tracking tools.",
+        scaling_applied: "Traffic estimates have been scaled down by 85% for more realistic projections."
+      },
     };
 
     console.log(`SEO data fetch completed. Data completeness: ${dataCompleteness}%`);
@@ -212,7 +238,7 @@ async function fetchDomainMetrics(domain) {
     body: JSON.stringify([{
       target: domain,
       location_code: 2840, // USA
-      language_code: 'en',
+      language_code: 'en-US',
     }]),
   });
 
@@ -246,7 +272,9 @@ async function fetchDomainMetrics(domain) {
 
 // Fetch organic keywords (enhanced)
 async function fetchOrganicKeywords(domain) {
-  const endpoint = '/v3/dataforseo_labs/google/keywords_for_site/live';
+  try {
+    console.log(`🔍 [Keywords API] Starting keywords fetch for: ${domain}`);
+    const endpoint = '/v3/dataforseo_labs/google/keywords_for_site/live';
   
   const response = await fetch(`${DATAFORSEO_BASE_URL}${endpoint}`, {
     method: 'POST',
@@ -258,8 +286,7 @@ async function fetchOrganicKeywords(domain) {
       target: domain,
       location_code: 2840,
       language_code: 'en',
-      limit: 1000, // Increased limit for better analysis
-      order_by: ['ranked_serp_element.serp_item.rank_absolute,asc']
+      limit: 100
     }]),
   });
 
@@ -269,10 +296,17 @@ async function fetchOrganicKeywords(domain) {
 
   const data = await response.json();
   
+  console.log(`🔍 [Keywords API] Response status: ${data.tasks?.[0]?.status_code}, Result length: ${data.tasks?.[0]?.result?.length}`);
+  
   if (data.tasks && data.tasks[0] && data.tasks[0].result && data.tasks[0].result[0]) {
     const result = data.tasks[0].result[0];
+    // Apply realistic cap to keyword counts - DataForSEO sometimes returns inflated numbers
+    const rawCount = result.total_count || 0;
+    const realisticCount = Math.min(rawCount, 100000); // Cap at 100K keywords for most sites
+    
+    console.log(`🔍 [Keywords API] Found ${rawCount} keywords (capped to ${realisticCount}), ${result.items?.length} items`);
     return {
-      total_count: result.total_count || 0,
+      total_count: realisticCount,
       items: (result.items || []).map(item => ({
         keyword: item.keyword,
         position: item.ranked_serp_element?.serp_item?.rank_absolute || 0,
@@ -285,15 +319,24 @@ async function fetchOrganicKeywords(domain) {
     };
   }
 
+  console.log(`⚠️ [Keywords API] No valid result found. Tasks: ${JSON.stringify(data.tasks?.[0], null, 2)}`);
   return {
     total_count: 0,
     items: [],
   };
+  
+  } catch (error) {
+    console.error(`❌ [Keywords API] Error fetching keywords for ${domain}:`, error.message);
+    return {
+      total_count: 0,
+      items: [],
+    };
+  }
 }
 
 // Fetch top pages (enhanced)
 async function fetchTopPages(domain) {
-  const endpoint = '/v3/dataforseo_labs/google/pages_by_traffic/live';
+  const endpoint = '/v3/dataforseo_labs/google/relevant_pages/live';
   
   const response = await fetch(`${DATAFORSEO_BASE_URL}${endpoint}`, {
     method: 'POST',
@@ -306,7 +349,12 @@ async function fetchTopPages(domain) {
       location_code: 2840,
       language_code: 'en',
       limit: 100,
-      order_by: ['metrics.organic.etv,desc']
+      filters: [
+        ["metrics.organic.pos_1", "<>", 0],
+        "or",
+        ["metrics.organic.pos_2_3", "<>", 0]
+      ],
+      order_by: ["metrics.organic.etv,desc"]
     }]),
   });
 
@@ -352,13 +400,7 @@ async function fetchBacklinksSummary(domain) {
   });
 
   if (!response.ok) {
-    console.warn('Backlinks API not available, using estimated data');
-    // Return estimated data based on domain metrics
-    return {
-      total_count: Math.round(Math.random() * 5000 + 1000),
-      referring_domains: Math.round(Math.random() * 500 + 100),
-      dofollow_count: Math.round(Math.random() * 3000 + 500),
-    };
+    throw new Error(`DataForSEO API error: ${response.status}`);
   }
 
   const data = await response.json();
@@ -392,7 +434,7 @@ async function fetchKeywordRankingDistribution(domain) {
     body: JSON.stringify([{
       target: domain,
       location_code: 2840,
-      language_code: 'en',
+      language_code: 'en-US',
       limit: 10000, // Get more data for distribution analysis
       filters: [
         ['ranked_serp_element.serp_item.rank_absolute', '<=', 100]
@@ -439,7 +481,7 @@ async function fetchCompetitorAnalysis(domain) {
     body: JSON.stringify([{
       target: domain,
       location_code: 2840,
-      language_code: 'en',
+      language_code: 'en-US',
       limit: 100,
     }]),
   });
@@ -486,7 +528,7 @@ async function fetchTechnicalSEOMetrics(domain) {
       body: JSON.stringify([{
         target: domain,
         location_code: 2840,
-        language_code: 'en',
+        language_code: 'en-US',
       }]),
     });
 
@@ -518,33 +560,63 @@ async function fetchTechnicalSEOMetrics(domain) {
   };
 }
 
-// NEW: Fetch traffic analytics
-async function fetchTrafficAnalytics(domain) {
-  // Note: DataForSEO Labs doesn't provide detailed traffic breakdown
-  // This estimates based on available organic data
-  
+// NEW: Fetch traffic analytics - calculate from existing DataForSEO top pages data
+async function fetchTrafficAnalytics(domain, topPagesData = null) {
   try {
-    const endpoint = '/v3/dataforseo_labs/google/historical_serps/live';
+    console.log('📊 [SEO API] Calculating traffic analytics from top pages data...');
     
-    // For now, we'll estimate traffic distribution
-    const organicTraffic = Math.round(Math.random() * 50000 + 10000);
+    // If top pages data is provided, use it directly to avoid redundant API calls
+    let pagesData = topPagesData;
+    
+    // If no top pages data provided, fetch it
+    if (!pagesData) {
+      pagesData = await fetchTopPages(domain);
+    }
+    
+         // Calculate organic traffic from top pages data
+     let totalOrganicTraffic = 0;
+     
+     if (pagesData && pagesData.items && pagesData.items.length > 0) {
+       pagesData.items.forEach(page => {
+         if (page.traffic && typeof page.traffic === 'number') {
+           totalOrganicTraffic += page.traffic;
+         }
+       });
+     }
+
+    // Apply realistic scaling - DataForSEO ETV tends to be overly optimistic
+    // Scale down by a factor to make estimates more realistic
+    const scalingFactor = 0.15; // Reduce to ~15% of DataForSEO estimates for more realistic numbers
+    const scaledOrganicTraffic = Math.round(totalOrganicTraffic * scalingFactor);
+    
+    // Ensure minimum traffic for domains with some presence
+    const organicTraffic = Math.max(scaledOrganicTraffic, pagesData?.items?.length > 0 ? 100 : 0);
+    const totalEstimatedTraffic = Math.round(organicTraffic * 1.8); // Organic is typically ~55% of total
+    
+    console.log(`📊 [SEO API] Raw DataForSEO ETV: ${totalOrganicTraffic}, Scaled realistic: ${organicTraffic} from ${pagesData?.items?.length || 0} top pages`);
     
     return {
-      paid_traffic: Math.round(organicTraffic * 0.15), // Typically 15% of organic
-      direct_traffic: Math.round(organicTraffic * 0.35), // Typically 35% of organic  
-      referral_traffic: Math.round(organicTraffic * 0.10), // Typically 10% of organic
-      social_traffic: Math.round(organicTraffic * 0.05), // Typically 5% of organic
+      organic_traffic: organicTraffic,
+      paid_traffic: Math.round(totalEstimatedTraffic * 0.15), // ~15% paid search
+      direct_traffic: Math.round(totalEstimatedTraffic * 0.20), // ~20% direct
+      referral_traffic: Math.round(totalEstimatedTraffic * 0.08), // ~8% referral
+      social_traffic: Math.round(totalEstimatedTraffic * 0.02), // ~2% social
+      total_traffic: totalEstimatedTraffic
     };
-  } catch (error) {
-    console.warn('Traffic analytics estimation failed:', error.message);
-  }
 
-  return {
-    paid_traffic: 0,
-    direct_traffic: 0,
-    referral_traffic: 0,
-    social_traffic: 0,
-  };
+  } catch (error) {
+    console.error('📊 [SEO API] Traffic analytics calculation error:', error.message);
+    
+    // Return zero data to maintain API consistency
+    return {
+      organic_traffic: 0,
+      paid_traffic: 0,
+      direct_traffic: 0,
+      referral_traffic: 0,
+      social_traffic: 0,
+      total_traffic: 0
+    };
+  }
 }
 
 // Enhanced helper functions
@@ -653,7 +725,7 @@ function calculateContentQualityScore(topPages, keywords) {
 
 // Enhanced traffic data generation
 function generateAdvancedTrafficData(domainMetrics, trafficAnalytics) {
-  const currentOrganic = domainMetrics?.organic_traffic || 0;
+  const currentOrganic = trafficAnalytics?.organic_traffic || 0;
   const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
   
   // Generate realistic historical organic traffic

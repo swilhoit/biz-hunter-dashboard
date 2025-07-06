@@ -33,7 +33,19 @@ function FinancialExtractionModal({
     equity: { total: 0 }
   });
 
-  if (!isOpen || !extraction) return null;
+  console.log('💰 FinancialExtractionModal rendered:', {
+    isOpen,
+    hasExtraction: !!extraction,
+    fileName,
+    financialData: extraction?.financial_data,
+    revenue: extraction?.financial_data?.revenue?.total,
+    netIncome: extraction?.financial_data?.netIncome
+  });
+
+  if (!isOpen || !extraction) {
+    console.log('💰 Modal not showing because:', { isOpen, hasExtraction: !!extraction });
+    return null;
+  }
 
   const validationIssues = extraction.validation_status?.issues || [];
   const hasErrors = validationIssues.some(issue => issue.severity === 'error');
@@ -72,6 +84,7 @@ function FinancialExtractionModal({
   };
 
   const handleConfirm = () => {
+    console.log('💰 Confirm button clicked!');
     const updatedExtraction = {
       ...extraction,
       financial_data: editedData,
@@ -82,6 +95,11 @@ function FinancialExtractionModal({
         issues: []
       }
     };
+    console.log('💰 Updated extraction to save:', {
+      dealId: updatedExtraction.deal_id,
+      revenue: updatedExtraction.financial_data?.revenue?.total,
+      netIncome: updatedExtraction.financial_data?.netIncome
+    });
     onConfirm(updatedExtraction);
   };
 

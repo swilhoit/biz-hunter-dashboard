@@ -145,55 +145,6 @@ function SEODashboard() {
     } catch (err) {
       console.error('Error fetching SEO data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch SEO data');
-      
-      // Set mock data for development only if no real data available
-      setSeoData({
-        website: domain,
-        metrics: {
-          domain_authority: 42,
-          page_authority: 38,
-          trust_flow: 35,
-          citation_flow: 42,
-          organic_traffic: 45200,
-          paid_traffic: 8500,
-          direct_traffic: 12300,
-          referral_traffic: 3200,
-          keywords_count: 1234,
-          keywords_top_3: 45,
-          keywords_top_10: 123,
-          keywords_top_100: 789,
-          backlinks_count: 3456,
-          referring_domains: 892,
-          dofollow_backlinks: 2234,
-          page_speed_score: 85,
-          mobile_score: 78,
-          visibility_score: 68,
-          content_quality_score: 72,
-          organic_competitors: 156,
-        },
-        keywords: [
-          { keyword: 'amazon fba business', position: 3, search_volume: 12100, difficulty: 45, trend: 'up', url: '/blog/fba-guide' },
-          { keyword: 'buy amazon business', position: 5, search_volume: 8900, difficulty: 38, trend: 'up', url: '/marketplace' },
-          { keyword: 'fba acquisition', position: 8, search_volume: 22300, difficulty: 62, trend: 'stable', url: '/how-it-works' },
-          { keyword: 'amazon seller tools', position: 12, search_volume: 5600, difficulty: 35, trend: 'up', url: '/tools' },
-          { keyword: 'ecommerce valuation', position: 15, search_volume: 7800, difficulty: 41, trend: 'down', url: '/valuation' },
-        ],
-        topPages: [
-          { url: '/marketplace', traffic: 8500, bounce_rate: 32, avg_time_on_page: '3:45', keywords_count: 45 },
-          { url: '/blog/fba-guide', traffic: 6200, bounce_rate: 28, avg_time_on_page: '4:12', keywords_count: 32 },
-          { url: '/valuation-tool', traffic: 5800, bounce_rate: 35, avg_time_on_page: '2:56', keywords_count: 28 },
-          { url: '/about', traffic: 4500, bounce_rate: 45, avg_time_on_page: '2:15', keywords_count: 15 },
-          { url: '/contact', traffic: 3200, bounce_rate: 25, avg_time_on_page: '5:23', keywords_count: 8 },
-        ],
-        trafficData: {
-          labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-          organic: [32000, 35000, 38000, 42000, 45000, 45200],
-          paid: [8000, 8500, 9000, 9500, 10000, 10500],
-        },
-        lastUpdated: new Date().toISOString(),
-        api_errors: ['Using fallback data due to API error'],
-        data_completeness: 0,
-      });
     } finally {
       setLoading(false);
       setRefreshing(false);

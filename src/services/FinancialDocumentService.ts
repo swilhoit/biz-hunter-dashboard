@@ -225,11 +225,17 @@ export class FinancialDocumentService {
       
       try {
         // Try direct Supabase Storage download first
-        const encodedFilePath = encodeFilePath(document.file_path);
+        console.log('📁 Original file path:', document.file_path);
+        
+        // Check if the path is already encoded
+        const isAlreadyEncoded = document.file_path.includes('%');
+        const filePath = isAlreadyEncoded ? document.file_path : encodeFilePath(document.file_path);
+        
+        console.log('📁 File path for download:', filePath);
         
         const { data: fileData, error: downloadError } = await supabaseAny.storage
           .from('deal-documents')
-          .download(encodedFilePath);
+          .download(filePath);
 
         if (downloadError || !fileData) {
           throw new Error(`Direct download failed: ${downloadError?.message || 'Unknown error'}`);
@@ -265,6 +271,7 @@ export class FinancialDocumentService {
       // Extract text content
       progressCallback?.('Extracting document content...');
       let documentContent = '';
+      let useHybridApproach = false;
       
       if (DocumentExtractors.canExtractText(file.name)) {
         console.log('📄 Extracting text from file:', file.name);
@@ -272,9 +279,18 @@ export class FinancialDocumentService {
         console.log('📄 Extracted content length:', documentContent.length);
         console.log('📄 Content preview:', documentContent.substring(0, 500));
         
-        // Log specific details for Excel files
+        // For Excel files, consider hybrid approach for complex layouts
         if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
           console.log('📊 Excel file detected. First 1000 chars:', documentContent.substring(0, 1000));
+          
+          // Check if the spreadsheet seems complex (many empty cells, unclear structure)
+          const lines = documentContent.split('\n');
+          const emptyRatio = lines.filter(line => line.split(',').filter(cell => cell.trim() === '').length > 5).length / lines.length;
+          
+          if (emptyRatio > 0.3 || documentContent.length > 50000) {
+            console.log('📊 Complex spreadsheet detected, will use hybrid approach');
+            useHybridApproach = true;
+          }
         }
       } else if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.pdf')) {
         // Use vision API for images and PDFs
@@ -289,22 +305,62 @@ export class FinancialDocumentService {
       // Extract financial data based on document type
       progressCallback?.('Extracting financial data...');
       console.log('💰 Extracting financial data for document type:', documentType);
-      const financialData = await this.extractFinancialData(documentContent, documentType);
+      
+      let financialData: DetailedFinancials;
+      if (useHybridApproach) {
+        financialData = await this.extractWithHybridApproach(file, documentContent, documentType, progressCallback);
+      } else {
+        financialData = await this.extractFinancialDataFromContent(documentContent, documentType);
+      }
+      
       console.log('💰 Extracted financial data:', JSON.stringify(financialData, null, 2).substring(0, 500));
 
       // Extract period information
       progressCallback?.('Identifying reporting period...');
-      const periodInfo = await this.extractPeriodInfo(documentContent, documentType);
+      let periodInfo;
+      try {
+        periodInfo = await this.extractPeriodInfo(documentContent, documentType, financialData);
+        console.log('📅 Period info extracted:', periodInfo);
+      } catch (error) {
+        console.error('⚠️ Failed to extract period info:', error);
+        // Use default period based on financial data if available
+        if (financialData?.revenue?.byMonth && Object.keys(financialData.revenue.byMonth).length > 0) {
+          const months = Object.keys(financialData.revenue.byMonth).sort();
+          periodInfo = {
+            startDate: `${months[0]}-01`,
+            endDate: `${months[months.length - 1]}-${new Date(parseInt(months[months.length - 1].split('-')[0]), parseInt(months[months.length - 1].split('-')[1]), 0).getDate()}`,
+            periodType: 'annual' as const,
+            isPartial: months.length % 12 !== 0
+          };
+        } else {
+          const currentYear = new Date().getFullYear();
+          periodInfo = {
+            startDate: `${currentYear}-01-01`,
+            endDate: `${currentYear}-12-31`,
+            periodType: 'annual' as const,
+            isPartial: false
+          };
+        }
+      }
 
       // Calculate confidence scores
+      console.log('📊 Calculating confidence scores...');
       const confidenceScores = this.calculateConfidenceScores(financialData);
+      console.log('📊 Confidence scores:', confidenceScores);
 
       // Validate extracted data
       progressCallback?.('Validating financial data...');
       const validationStatus = this.validateFinancialData(financialData, documentType);
+      console.log('✅ Validation status:', validationStatus);
 
       // Get user info for extracted_by
-      const { data: { user } } = await supabaseAny.auth.getUser();
+      let userId = 'system';
+      try {
+        const { data: { user } } = await supabaseAny.auth.getUser();
+        userId = user?.id || 'system';
+      } catch (error) {
+        console.warn('⚠️ Could not get user info:', error);
+      }
 
       // Create extraction record
       const extraction: FinancialExtraction = {
@@ -318,7 +374,7 @@ export class FinancialDocumentService {
         document_type: documentType,
         confidence_scores: confidenceScores,
         validation_status: validationStatus,
-        extracted_by: user?.id || 'system'
+        extracted_by: userId
       };
 
       progressCallback?.('Financial extraction complete!');
@@ -328,6 +384,7 @@ export class FinancialDocumentService {
         revenue: extraction.financial_data?.revenue?.total,
         netIncome: extraction.financial_data?.netIncome
       });
+      console.log('✨ Full extraction object being returned:', extraction);
       return extraction;
 
     } catch (error) {
@@ -429,16 +486,19 @@ Return only the document type.`;
   }
 
   /**
-   * Extract financial data from document
+   * Extract financial data from document content
    */
-  private async extractFinancialData(
+  private async extractFinancialDataFromContent(
     content: string,
     documentType: FinancialDocumentType
   ): Promise<DetailedFinancials> {
     const prompt = this.getExtractionPrompt(documentType, content);
 
+    // Allow model configuration via environment variable
+    const model = import.meta.env.VITE_FINANCIAL_EXTRACTION_MODEL || 'gpt-4o';
+    
     const payload = {
-      model: 'gpt-4o',
+      model: model,
       messages: [
         {
           role: 'system',
@@ -592,12 +652,48 @@ Instructions:
    */
   private async extractPeriodInfo(
     content: string,
-    documentType: FinancialDocumentType
+    documentType: FinancialDocumentType,
+    financialData?: DetailedFinancials
   ): Promise<PeriodInfo> {
-    const prompt = `Extract the financial reporting period from this document.
+    // First try to detect from monthly data if available
+    if (financialData?.revenue?.byMonth && Object.keys(financialData.revenue.byMonth).length > 0) {
+      const months = Object.keys(financialData.revenue.byMonth).sort();
+      const firstMonth = months[0];
+      const lastMonth = months[months.length - 1];
+      
+      // Calculate if it spans multiple years
+      const firstYear = parseInt(firstMonth.split('-')[0]);
+      const lastYear = parseInt(lastMonth.split('-')[0]);
+      const monthCount = months.length;
+      
+      return {
+        startDate: `${firstMonth}-01`,
+        endDate: `${lastMonth}-${new Date(parseInt(lastMonth.split('-')[0]), parseInt(lastMonth.split('-')[1]), 0).getDate()}`,
+        periodType: monthCount > 12 ? 'annual' : monthCount === 12 ? 'annual' : monthCount === 3 ? 'quarterly' : 'monthly',
+        isPartial: monthCount % 12 !== 0
+      };
+    }
+
+    // Fall back to AI extraction with better prompting
+    const prompt = `Extract the financial reporting period from this document. Look for specific date ranges, years, and period indicators.
 
 Document type: ${documentType}
 Content: ${content.substring(0, 5000)}
+
+Common date patterns to look for:
+- "For the year ended December 31, 2023"
+- "Year ending 2023" 
+- "2023 Financial Statement"
+- "January 2023 - December 2023"
+- "Q1 2023", "Q2 2023", etc.
+- Column headers with months and years like "Jan 2023", "Feb 2023"
+- "As of December 31, 2023"
+- "12 months ended..."
+
+If you find year information but no specific months, assume:
+- Income statements: January 1 to December 31 of that year
+- Balance sheets: As of December 31 of that year
+- If multiple years mentioned, use the most recent complete year
 
 Return JSON:
 {
@@ -618,8 +714,40 @@ Return JSON:
 
     try {
       const response = await this._callOpenAIProxy('chat.completions.create', payload);
-      return JSON.parse(response.choices[0]?.message?.content || '{}');
-    } catch {
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log('📅 AI extracted period:', result);
+      
+      // Validate the extracted dates
+      if (result.startDate && result.endDate) {
+        const startYear = parseInt(result.startDate.split('-')[0]);
+        const endYear = parseInt(result.endDate.split('-')[0]);
+        
+        // Basic validation - years should be reasonable
+        if (startYear >= 2000 && startYear <= 2030 && endYear >= 2000 && endYear <= 2030) {
+          return result;
+        }
+      }
+      
+      throw new Error('Invalid dates extracted');
+      
+    } catch (error) {
+      console.error('⚠️ Failed to extract period via AI:', error);
+      
+      // Try to extract year from content using regex as fallback
+      const yearMatches = content.match(/\b(20\d{2})\b/g);
+      if (yearMatches && yearMatches.length > 0) {
+        // Use the most recent year found
+        const years = yearMatches.map(y => parseInt(y)).sort((a, b) => b - a);
+        const mostRecentYear = years[0];
+        
+        return {
+          startDate: `${mostRecentYear}-01-01`,
+          endDate: `${mostRecentYear}-12-31`,
+          periodType: 'annual',
+          isPartial: false
+        };
+      }
+      
       // Default to current year
       const currentYear = new Date().getFullYear();
       return {
@@ -638,6 +766,9 @@ Return JSON:
     data: any,
     documentType: FinancialDocumentType
   ): DetailedFinancials {
+    // Helper function to round to 2 decimal places
+    const round2 = (num: number) => Math.round(num * 100) / 100;
+    
     // Ensure all required fields exist
     const normalized = {
       revenue: data.revenue || { total: 0, breakdown: {} },
@@ -662,13 +793,28 @@ Return JSON:
       margins: data.margins || this.calculateMargins(data)
     };
 
+    // Round all financial values to 2 decimal places
+    if (normalized.revenue.total) normalized.revenue.total = round2(normalized.revenue.total);
+    if (normalized.cogs.total) normalized.cogs.total = round2(normalized.cogs.total);
+    if (normalized.grossProfit) normalized.grossProfit = round2(normalized.grossProfit);
+    if (normalized.operatingExpenses.total) normalized.operatingExpenses.total = round2(normalized.operatingExpenses.total);
+    if (normalized.ebitda) normalized.ebitda = round2(normalized.ebitda);
+    if (normalized.netIncome) normalized.netIncome = round2(normalized.netIncome);
+
     // Calculate missing values
     if (!normalized.grossProfit && normalized.revenue.total && normalized.cogs.total) {
-      normalized.grossProfit = normalized.revenue.total - normalized.cogs.total;
+      normalized.grossProfit = round2(normalized.revenue.total - normalized.cogs.total);
     }
 
     if (!normalized.ebitda && normalized.grossProfit && normalized.operatingExpenses.total) {
-      normalized.ebitda = normalized.grossProfit - normalized.operatingExpenses.total;
+      normalized.ebitda = round2(normalized.grossProfit - normalized.operatingExpenses.total);
+    }
+
+    // Round monthly revenue data
+    if (normalized.revenue.byMonth) {
+      Object.keys(normalized.revenue.byMonth).forEach(month => {
+        normalized.revenue.byMonth[month] = round2(normalized.revenue.byMonth[month]);
+      });
     }
 
     return normalized;
@@ -788,6 +934,36 @@ Return JSON:
       });
     }
 
+    // Validate monthly revenue sums match total
+    if (data.revenue.byMonth && Object.keys(data.revenue.byMonth).length > 0) {
+      const monthlySum = Object.values(data.revenue.byMonth).reduce((sum, val) => sum + val, 0);
+      const totalRevenue = data.revenue.total;
+      const difference = Math.abs(monthlySum - totalRevenue);
+      
+      // Allow for small rounding differences (0.01%)
+      if (difference > totalRevenue * 0.0001 && difference > 1) {
+        issues.push({
+          field: 'revenue.byMonth',
+          issue: `Monthly revenue sum (${monthlySum.toFixed(2)}) does not match total revenue (${totalRevenue.toFixed(2)})`,
+          severity: 'warning'
+        });
+      }
+    }
+
+    // Validate gross profit calculation
+    if (data.revenue.total > 0 && data.cogs.total >= 0) {
+      const calculatedGrossProfit = data.revenue.total - data.cogs.total;
+      const difference = Math.abs(calculatedGrossProfit - data.grossProfit);
+      
+      if (difference > 1) {
+        issues.push({
+          field: 'grossProfit',
+          issue: `Gross profit calculation mismatch. Expected: ${calculatedGrossProfit.toFixed(2)}, Found: ${data.grossProfit.toFixed(2)}`,
+          severity: 'warning'
+        });
+      }
+    }
+
     // Balance sheet validation
     const assetLiabilityDiff = Math.abs(data.assets.total - (data.liabilities.total + data.equity.total));
     if (assetLiabilityDiff > 100 && data.assets.total > 0) {
@@ -803,6 +979,15 @@ Return JSON:
       issues.push({
         field: 'metrics.grossMargin',
         issue: 'Gross margin appears to be out of valid range',
+        severity: 'warning'
+      });
+    }
+
+    // Net income validation
+    if (data.netIncome > data.revenue.total) {
+      issues.push({
+        field: 'netIncome',
+        issue: 'Net income exceeds total revenue',
         severity: 'warning'
       });
     }
@@ -888,12 +1073,18 @@ Return JSON:
       created_at: new Date().toISOString()
     };
 
+    // Use upsert to handle duplicate constraints
     const { error } = await supabaseAny
       .from('financial_history')
-      .insert(historyRecord);
+      .upsert(historyRecord, {
+        onConflict: 'deal_id,period_start,period_end,period_type',
+        ignoreDuplicates: false
+      });
 
     if (error) {
-      console.error('Failed to create financial history:', error);
+      console.error('Failed to create/update financial history:', error);
+    } else {
+      console.log('✅ Financial history record created/updated successfully');
     }
   }
 
@@ -939,6 +1130,72 @@ Return JSON:
   private documentAnalysisToText(analysis: any): string {
     // Convert the analysis object to readable text
     return JSON.stringify(analysis, null, 2);
+  }
+
+  /**
+   * Use hybrid approach for complex spreadsheets
+   */
+  private async extractWithHybridApproach(
+    file: File,
+    textContent: string,
+    documentType: FinancialDocumentType,
+    progressCallback?: (stage: string) => void
+  ): Promise<DetailedFinancials> {
+    progressCallback?.('Using advanced AI vision for complex spreadsheet...');
+    
+    try {
+      // First, try with the text content we have
+      const textBasedExtraction = await this.extractFinancialDataFromContent(textContent, documentType);
+      
+      // If we got good results from text (high confidence), use it
+      const confidence = this.calculateConfidenceScores(textBasedExtraction);
+      if (confidence.overall > 0.85) {
+        console.log('✅ Text extraction confidence high enough, skipping image analysis');
+        return textBasedExtraction;
+      }
+      
+      // Otherwise, try vision API for better context understanding
+      console.log('👁️ Using vision API for better context understanding');
+      const visionAnalysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
+      
+      // Combine insights from both approaches
+      const prompt = `You have two sources of financial data:
+
+1. Text extraction (may have formatting issues):
+${textContent.substring(0, 5000)}
+
+2. Vision analysis of the document:
+${JSON.stringify(visionAnalysis, null, 2).substring(0, 5000)}
+
+Extract the most accurate financial data, preferring exact numbers from text extraction but using vision analysis for context and structure understanding.
+
+Return the financial data in the standard JSON format with revenue, expenses, etc.`;
+
+      const payload = {
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a financial analyst expert. Combine multiple data sources to extract the most accurate financial information.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 4000
+      };
+
+      const response = await this._callOpenAIProxy('chat.completions.create', payload);
+      let content = response.choices[0]?.message?.content || '{}';
+      content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      
+      const hybridExtraction = JSON.parse(content);
+      return this.normalizeFinancialData(hybridExtraction, documentType);
+      
+    } catch (error) {
+      console.error('Hybrid approach failed, falling back to text extraction:', error);
+      // Fall back to pure text extraction
+      return await this.extractFinancialDataFromContent(textContent, documentType);
+    }
   }
 
   /**

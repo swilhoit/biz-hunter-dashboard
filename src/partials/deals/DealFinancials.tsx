@@ -111,9 +111,9 @@ function DealFinancials({ deal }: DealFinancialsProps) {
     netIncome: deal.annual_profit || 0,
     ebitda: deal.ebitda || 0,
     metrics: {
-      grossMargin: deal.gross_margin || calculateProfitMargin() / 100,
-      operatingMargin: deal.operating_margin || 0,
-      netMargin: deal.net_margin || calculateProfitMargin() / 100
+      grossMargin: calculateProfitMargin() / 100,
+      operatingMargin: 0,
+      netMargin: calculateProfitMargin() / 100
     }
   };
 
@@ -256,6 +256,14 @@ function DealFinancials({ deal }: DealFinancialsProps) {
       color: 'text-orange-600 dark:text-orange-400',
       bgColor: 'bg-orange-50 dark:bg-orange-900/20',
       isAIExtracted: latestExtraction && financialData.metrics.netMargin ? true : false,
+    },
+    {
+      title: 'Inventory Value',
+      value: formatCurrency(latestExtraction?.financial_data?.assets?.current?.inventory || 0),
+      icon: DollarSign,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
+      isAIExtracted: latestExtraction && latestExtraction.financial_data?.assets?.current?.inventory ? true : false,
     },
   ];
 
@@ -449,6 +457,14 @@ function DealFinancials({ deal }: DealFinancialsProps) {
                     </p>
                   </div>
                 )}
+                {latestExtraction.financial_data.assets?.current?.inventory && latestExtraction.financial_data.assets.current.inventory > 0 && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Inventory</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(latestExtraction.financial_data.assets.current.inventory)}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -597,6 +613,7 @@ function DealFinancials({ deal }: DealFinancialsProps) {
           extraction={pendingExtraction}
           onConfirm={handleConfirmExtraction}
           onReject={handleRejectExtraction}
+          fileName={`Financial Document - ${pendingExtraction.document_type}`}
         />
       )}
     </div>

@@ -49,6 +49,8 @@ interface AnalysisReport {
       marketTrends: string[];
     };
     positioningAnalysis: string;
+    criticalRisks?: string[];
+    redFlags?: string[];
   };
   keywordAnalysis: {
     primaryKeywords: Array<{
@@ -71,10 +73,13 @@ interface AnalysisReport {
     };
     reasoning: string;
     improvements: string[];
+    majorConcerns?: string[];
+    dealBreakers?: string[];
   };
   riskFactors: string[];
   growthOpportunities: string[];
   recommendations: string[];
+  dueDiligencePriorities?: string[];
   confidenceLevel: number;
   lastUpdated: string;
 }
@@ -260,6 +265,39 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <p className="text-sm text-gray-700 dark:text-gray-300">{analysis.opportunityScore.reasoning}</p>
         </div>
+        
+        {/* Major Concerns and Deal Breakers */}
+        {(analysis.opportunityScore.majorConcerns?.length > 0 || analysis.opportunityScore.dealBreakers?.length > 0) && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {analysis.opportunityScore.majorConcerns?.length > 0 && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Major Concerns
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.opportunityScore.majorConcerns.map((concern, index) => (
+                    <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {concern}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysis.opportunityScore.dealBreakers?.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Potential Deal Breakers
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.opportunityScore.dealBreakers.map((breaker, index) => (
+                    <li key={index} className="text-sm text-red-700 dark:text-red-300">• {breaker}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Competitive Analysis */}
@@ -315,6 +353,39 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Positioning Analysis</h5>
           <p className="text-sm text-gray-700 dark:text-gray-300">{analysis.competitiveAnalysis.positioningAnalysis}</p>
         </div>
+        
+        {/* Critical Risks and Red Flags from Competitive Analysis */}
+        {(analysis.competitiveAnalysis.criticalRisks?.length > 0 || analysis.competitiveAnalysis.redFlags?.length > 0) && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {analysis.competitiveAnalysis.criticalRisks?.length > 0 && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Critical Market Risks
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.competitiveAnalysis.criticalRisks.map((risk, index) => (
+                    <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {risk}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysis.competitiveAnalysis.redFlags?.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Red Flags
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.competitiveAnalysis.redFlags.map((flag, index) => (
+                    <li key={index} className="text-sm text-red-700 dark:text-red-300">• {flag}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Keyword Analysis */}
@@ -416,6 +487,27 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           ))}
         </div>
       </div>
+
+      {/* Due Diligence Priorities */}
+      {analysis.dueDiligencePriorities?.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Due Diligence Priorities</h3>
+          </div>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">Critical items to verify before proceeding:</p>
+            <ul className="space-y-2">
+              {analysis.dueDiligencePriorities.map((priority, index) => (
+                <li key={index} className="text-sm text-yellow-700 dark:text-yellow-300 flex items-start">
+                  <span className="font-bold mr-2">{index + 1}.</span>
+                  {priority}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

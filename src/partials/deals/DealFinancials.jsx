@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Calculator, PieChart, CalendarDays, ChevronRight, Info, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Calculator, PieChart, CalendarDays, ChevronRight, Info, Download, Brain, Activity } from 'lucide-react';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -15,6 +15,7 @@ import {
   Filler
 } from 'chart.js';
 import { format, subMonths, addMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { ForecastingService } from '../../services/ForecastingService';
 
 ChartJS.register(
   CategoryScale,
@@ -38,6 +39,63 @@ function DealFinancials({ deal }) {
     startDate: startOfMonth(subMonths(new Date(), 6)),
     endDate: endOfMonth(new Date())
   });
+  const [monthlyRevenueData, setMonthlyRevenueData] = useState(null);
+  const [forecastMethod, setForecastMethod] = useState('auto');
+  const [forecastData, setForecastData] = useState(null);
+  
+  // Load monthly revenue data from financial extractions if available
+  useEffect(() => {
+    const loadMonthlyData = async () => {
+      try {
+        const { supabase } = await import('../../lib/supabase');
+        const { data, error } = await supabase
+          .from('financial_extractions')
+          .select('financial_data')
+          .eq('deal_id', deal.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (data && data.financial_data?.revenue?.byMonth) {
+          setMonthlyRevenueData(data.financial_data.revenue.byMonth);
+          
+          // Adjust date range to match actual data
+          const months = Object.keys(data.financial_data.revenue.byMonth).sort();
+          if (months.length > 0) {
+            const firstDate = new Date(months[0] + '-01');
+            const lastDate = new Date(months[months.length - 1] + '-01');
+            setDateRange({
+              startDate: startOfMonth(firstDate),
+              endDate: endOfMonth(lastDate)
+            });
+            
+            // Set time range to 'custom' to show all data
+            setTimeRange('custom');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load monthly revenue data:', error);
+      }
+    };
+    
+    if (deal?.id) {
+      loadMonthlyData();
+    }
+  }, [deal?.id]);
+  
+  // Generate forecast data when parameters change
+  useEffect(() => {
+    if (showForecast && monthlyRevenueData && Object.keys(monthlyRevenueData).length > 0) {
+      const forecastResult = ForecastingService.generateForecast(
+        monthlyRevenueData,
+        forecastMonths,
+        forecastMethod
+      );
+      setForecastData(forecastResult);
+    } else {
+      setForecastData(null);
+    }
+  }, [showForecast, monthlyRevenueData, forecastMonths, forecastMethod]);
   
   const formatCurrency = (amount) => {
     if (!amount) return 'N/A';
@@ -91,59 +149,55 @@ function DealFinancials({ deal }) {
   const generateTimeSeriesData = () => {
     const months = [];
     const currentDate = new Date();
-    const monthsToShow = Math.ceil((dateRange.endDate - dateRange.startDate) / (1000 * 60 * 60 * 24 * 30));
     
-    // Historical months
-    for (let i = monthsToShow - 1; i >= 0; i--) {
-      const date = subMonths(dateRange.endDate, i);
-      if (date >= dateRange.startDate && date <= dateRange.endDate) {
-        months.push({
-          date,
-          label: format(date, 'MMM yyyy'),
-          isHistorical: true
+    // If we have actual monthly revenue data, use it
+    if (monthlyRevenueData && Object.keys(monthlyRevenueData).length > 0) {
+      // Sort months chronologically
+      const sortedMonths = Object.keys(monthlyRevenueData).sort();
+      
+      // Create data points for each actual month
+      sortedMonths.forEach(monthKey => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        
+        if (date >= dateRange.startDate && date <= dateRange.endDate) {
+          const revenue = monthlyRevenueData[monthKey];
+          const profitMargin = calculateProfitMargin() / 100 || 0.15; // Use actual margin or default to 15%
+          
+          months.push({
+            label: format(date, 'MMM yyyy'),
+            revenue: revenue,
+            profit: revenue * profitMargin,
+            isHistorical: true,
+            isActualData: true
+          });
+        }
+      });
+      
+      // Add forecast months if enabled using pre-calculated forecast data
+      if (showForecast && months.length > 0 && forecastData) {
+        const profitMargin = calculateProfitMargin() / 100 || 0.15;
+        
+        forecastData.forecast.forEach(point => {
+          const forecastDate = new Date(point.date + '-01');
+          months.push({
+            label: format(forecastDate, 'MMM yyyy'),
+            revenue: point.value,
+            profit: point.value * profitMargin,
+            isHistorical: false,
+            isActualData: false,
+            lowerBound: point.lowerBound,
+            upperBound: point.upperBound,
+            confidence: point.confidence
+          });
         });
       }
+      
+      return months;
     }
     
-    // Forecast months
-    if (showForecast) {
-      for (let i = 1; i <= forecastMonths; i++) {
-        const date = addMonths(currentDate, i);
-        months.push({
-          date,
-          label: format(date, 'MMM yyyy'),
-          isHistorical: false
-        });
-      }
-    }
-    
-    // Generate data with trends
-    const baseMonthlyRevenue = deal.monthly_revenue || (deal.annual_revenue / 12) || 50000;
-    const baseMonthlyProfit = deal.monthly_profit || (deal.annual_profit / 12) || 15000;
-    const profitMargin = calculateProfitMargin() / 100;
-    
-    // Calculate growth trend from historical data
-    const monthlyGrowthRate = 0.03; // 3% monthly growth for deals
-    const seasonalFactors = [0.9, 0.95, 1.0, 1.1, 1.15, 1.2, 1.1, 1.0, 0.95, 0.9, 0.85, 1.2]; // Monthly seasonal factors
-    
-    const data = months.map((month, index) => {
-      const monthOfYear = month.date.getMonth();
-      const seasonalFactor = seasonalFactors[monthOfYear];
-      const growthFactor = Math.pow(1 + monthlyGrowthRate, index - (monthsToShow - 1));
-      const randomVariation = month.isHistorical ? (0.9 + Math.random() * 0.2) : 1;
-      
-      const revenue = baseMonthlyRevenue * growthFactor * seasonalFactor * randomVariation;
-      const profit = revenue * profitMargin * (0.9 + Math.random() * 0.2);
-      
-      return {
-        label: month.label,
-        revenue,
-        profit,
-        isHistorical: month.isHistorical
-      };
-    });
-    
-    return data;
+    // NO FALLBACK MOCK DATA - Return empty array if no real data
+    return [];
   };
 
   const timeSeriesData = generateTimeSeriesData();
@@ -155,14 +209,43 @@ function DealFinancials({ deal }) {
     plugins: {
       legend: {
         position: 'top',
+        labels: {
+          filter: (legendItem) => {
+            // Hide confidence interval datasets from legend
+            return legendItem.text !== 'Lower Bound' && 
+                   legendItem.text !== 'Confidence Interval';
+          }
+        }
       },
       tooltip: {
         callbacks: {
           label: (context) => {
             const label = context.dataset.label || '';
             const value = formatCurrency(context.parsed.y);
+            
+            // Skip hidden datasets
+            if (label === 'Lower Bound' || label === 'Confidence Interval') {
+              return null;
+            }
+            
+            // Add confidence interval to forecast tooltips
+            if (label.includes('Forecast') && context.dataIndex && timeSeriesData[context.dataIndex]) {
+              const dataPoint = timeSeriesData[context.dataIndex];
+              if (dataPoint.lowerBound && dataPoint.upperBound) {
+                return [
+                  `${label}: ${value}`,
+                  `95% CI: ${formatCurrency(dataPoint.lowerBound)} - ${formatCurrency(dataPoint.upperBound)}`
+                ];
+              }
+            }
+            
             return `${label}: ${value}`;
           }
+        },
+        filter: (tooltipItem) => {
+          // Hide lower bound and confidence interval from tooltip
+          return tooltipItem.dataset.label !== 'Lower Bound' && 
+                 tooltipItem.dataset.label !== 'Confidence Interval';
         }
       }
     },
@@ -196,19 +279,53 @@ function DealFinancials({ deal }) {
         tension: 0.3
       });
       
-      // Forecast revenue
+      // Forecast revenue with confidence intervals
       if (showForecast && forecastData.length > 0) {
         const forecastRevenue = new Array(historicalLength - 1).fill(null);
-        forecastRevenue.push(historicalData[historicalLength - 1].revenue);
-        forecastData.forEach(d => forecastRevenue.push(d.revenue));
+        const upperBound = new Array(historicalLength - 1).fill(null);
+        const lowerBound = new Array(historicalLength - 1).fill(null);
         
+        forecastRevenue.push(historicalData[historicalLength - 1].revenue);
+        upperBound.push(historicalData[historicalLength - 1].revenue);
+        lowerBound.push(historicalData[historicalLength - 1].revenue);
+        
+        forecastData.forEach(d => {
+          forecastRevenue.push(d.revenue);
+          upperBound.push(d.upperBound || d.revenue);
+          lowerBound.push(d.lowerBound || d.revenue);
+        });
+        
+        // Confidence interval band
+        datasets.push({
+          label: 'Confidence Interval',
+          data: upperBound,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          fill: '+1',
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0.3
+        });
+        
+        datasets.push({
+          label: 'Lower Bound',
+          data: lowerBound,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          fill: false,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          tension: 0.3
+        });
+        
+        // Main forecast line
         datasets.push({
           label: 'Revenue Forecast',
           data: forecastRevenue,
           borderColor: 'rgb(34, 197, 94)',
-          backgroundColor: 'rgba(34, 197, 94, 0.05)',
+          backgroundColor: 'transparent',
           borderDash: [5, 5],
-          fill: true,
+          fill: false,
           tension: 0.3
         });
       }
@@ -270,78 +387,40 @@ function DealFinancials({ deal }) {
   
   const forecast = forecastSummary();
 
-  // Generate product-level revenue breakdown
-  const generateProductBreakdown = () => {
-    const monthlyRevenue = deal.monthly_revenue || (deal.annual_revenue / 12) || 50000;
-    
-    // Generate sample product data based on deal info
-    const products = [
-      {
-        name: 'Main Product A',
-        revenue: monthlyRevenue * 0.45,
-        units: Math.floor(monthlyRevenue * 0.45 / 35),
-        avgPrice: 35
-      },
-      {
-        name: 'Product B',
-        revenue: monthlyRevenue * 0.25,
-        units: Math.floor(monthlyRevenue * 0.25 / 28),
-        avgPrice: 28
-      },
-      {
-        name: 'Product C',
-        revenue: monthlyRevenue * 0.18,
-        units: Math.floor(monthlyRevenue * 0.18 / 42),
-        avgPrice: 42
-      },
-      {
-        name: 'Product D',
-        revenue: monthlyRevenue * 0.12,
-        units: Math.floor(monthlyRevenue * 0.12 / 22),
-        avgPrice: 22
-      }
-    ];
-    
-    return {
-      products,
-      // Cost breakdown
-      costs: {
-        cogs: monthlyRevenue * 0.4, // Cost of goods sold
-        marketing: monthlyRevenue * 0.15, // Marketing spend
-        operations: monthlyRevenue * 0.1, // Operational costs
-        fulfillment: monthlyRevenue * 0.08, // Shipping/fulfillment
-        other: monthlyRevenue * 0.07 // Other expenses
-      },
-      // Market metrics
-      market: {
-        marketShare: 0.15, // 15% market share
-        growthRate: 0.25, // 25% YoY growth
-        customerAcquisitionCost: 45,
-        customerLifetimeValue: 180,
-        churnRate: 0.05 // 5% monthly churn
-      },
-      // Operational metrics
-      operations: {
-        orderVolume: Math.floor(monthlyRevenue / 50), // Avg order value $50
-        conversionRate: 0.035, // 3.5%
-        avgOrderValue: 50,
-        inventoryTurnover: 8.5,
-        returnRate: 0.08 // 8% return rate
-      }
-    };
-  };
-
-  const financialData = generateProductBreakdown();
+  // No mock product breakdown data - only show real extracted data
 
   // Generate quarterly comparison data
+  // Generate quarterly data from actual monthly data if available
   const generateQuarterlyData = () => {
-    const baseRevenue = deal.monthly_revenue || 50000;
-    return [
-      { quarter: 'Q1 2024', revenue: baseRevenue * 2.8, profit: baseRevenue * 0.56, margin: 20 },
-      { quarter: 'Q2 2024', revenue: baseRevenue * 3.1, profit: baseRevenue * 0.65, margin: 21 },
-      { quarter: 'Q3 2024', revenue: baseRevenue * 3.3, profit: baseRevenue * 0.72, margin: 22 },
-      { quarter: 'Q4 2024', revenue: baseRevenue * 3.6, profit: baseRevenue * 0.79, margin: 22 }
-    ];
+    if (!monthlyRevenueData || Object.keys(monthlyRevenueData).length === 0) {
+      return []; // No mock data - return empty if no real data
+    }
+
+    const quarters = {};
+    const profitMargin = calculateProfitMargin() / 100 || 0.15;
+
+    // Group monthly data by quarters
+    Object.entries(monthlyRevenueData).forEach(([monthKey, revenue]) => {
+      const [year, month] = monthKey.split('-');
+      const monthNum = parseInt(month);
+      const quarterNum = Math.ceil(monthNum / 3);
+      const quarterKey = `Q${quarterNum} ${year}`;
+
+      if (!quarters[quarterKey]) {
+        quarters[quarterKey] = { quarter: quarterKey, revenue: 0, profit: 0 };
+      }
+      
+      quarters[quarterKey].revenue += revenue;
+      quarters[quarterKey].profit += revenue * profitMargin;
+    });
+
+    return Object.values(quarters).sort((a, b) => {
+      // Sort by year then quarter
+      const [aQ, aYear] = a.quarter.split(' ');
+      const [bQ, bYear] = b.quarter.split(' ');
+      if (aYear !== bYear) return parseInt(aYear) - parseInt(bYear);
+      return parseInt(aQ.slice(1)) - parseInt(bQ.slice(1));
+    });
   };
 
   const quarterlyData = generateQuarterlyData();
@@ -535,7 +614,15 @@ function DealFinancials({ deal }) {
       {/* Revenue Trends with Forecasting */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Revenue Trends & Forecast</h3>
+          <div className="flex items-center space-x-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Revenue Trends & Forecast</h3>
+            {monthlyRevenueData && Object.keys(monthlyRevenueData).length > 0 && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                <span className="w-2 h-2 mr-1 bg-green-500 rounded-full"></span>
+                Actual Data
+              </span>
+            )}
+          </div>
           <div className="flex items-center space-x-2">
             <select
               value={view}
@@ -599,226 +686,161 @@ function DealFinancials({ deal }) {
               </label>
               
               {showForecast && (
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Forecast:</span>
-                  <select
-                    value={forecastMonths}
-                    onChange={(e) => setForecastMonths(parseInt(e.target.value))}
-                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                  >
-                    <option value="1">1 month</option>
-                    <option value="3">3 months</option>
-                    <option value="6">6 months</option>
-                    <option value="12">12 months</option>
-                  </select>
-                </div>
+                <>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Forecast:</span>
+                    <select
+                      value={forecastMonths}
+                      onChange={(e) => setForecastMonths(parseInt(e.target.value))}
+                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="1">1 month</option>
+                      <option value="3">3 months</option>
+                      <option value="6">6 months</option>
+                      <option value="12">12 months</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Brain className="w-4 h-4 text-gray-500" />
+                    <select
+                      value={forecastMethod}
+                      onChange={(e) => setForecastMethod(e.target.value)}
+                      className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="auto">Auto (AI Selected)</option>
+                      <option value="linear">Linear Regression</option>
+                      <option value="exponential">Exponential Smoothing</option>
+                      <option value="arima">ARIMA</option>
+                    </select>
+                  </div>
+                </>
               )}
             </div>
           </div>
           
-          {showForecast && (
-            <div className="mt-3 flex items-start space-x-2">
-              <Info className="w-4 h-4 text-blue-500 mt-0.5" />
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Forecast is based on historical trends, seasonality patterns, and 3% monthly growth rate. Actual results may vary.
-              </p>
+          {showForecast && timeSeriesData.length > 0 && forecastData && (
+            <div className="mt-3">
+              <div className="flex items-start space-x-2">
+                <Activity className="w-4 h-4 text-blue-500 mt-0.5" />
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  <p>
+                    Forecast using <span className="font-medium">{forecastData.method.replace(/_/g, ' ')}</span> method
+                    {forecastData.accuracy && (
+                      <>
+                        {forecastData.accuracy.r2 !== undefined && (
+                          <span> • R² = {(forecastData.accuracy.r2 * 100).toFixed(0)}%</span>
+                        )}
+                        {forecastData.accuracy.mape !== undefined && (
+                          <span> • MAPE = {forecastData.accuracy.mape.toFixed(1)}%</span>
+                        )}
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-1">
+                    {monthlyRevenueData && Object.keys(monthlyRevenueData).length >= 12 && 
+                      "Seasonality patterns detected and included in forecast • "}
+                    Confidence intervals shown as shaded area
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6" style={{ height: '400px' }}>
-          <Line data={getChartData()} options={chartOptions} />
-        </div>
+        {timeSeriesData.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6" style={{ height: '400px' }}>
+            <Line data={getChartData()} options={chartOptions} />
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6" style={{ height: '400px' }}>
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="text-gray-400 mb-4">
+                  <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <p className="text-gray-600 dark:text-gray-400 text-lg">No Revenue Data Available</p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">Upload and extract P&L documents to view revenue trends</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Product Revenue & Cost Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Product breakdown removed - no real product-level data available */}
+
+      {/* Quarterly Performance - Only show if real data exists */}
+      {quarterlyData.length > 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Revenue by Product</h3>
-          <div style={{ height: '300px' }}>
-            <Doughnut 
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Quarterly Performance</h3>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <span className="w-2 h-2 mr-1 bg-green-500 rounded-full"></span>
+              From Actual Data
+            </span>
+          </div>
+          <div style={{ height: '350px' }}>
+            <Bar 
               data={{
-                labels: financialData.products.map(p => p.name),
-                datasets: [{
-                  data: financialData.products.map(p => p.revenue),
-                  backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'],
-                  borderWidth: 0
-                }]
+                labels: quarterlyData.map(q => q.quarter),
+                datasets: [
+                  {
+                    label: 'Revenue',
+                    data: quarterlyData.map(q => q.revenue),
+                    backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                    borderColor: 'rgb(34, 197, 94)',
+                    borderWidth: 1
+                  },
+                  {
+                    label: 'Profit',
+                    data: quarterlyData.map(q => q.profit),
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1
+                  }
+                ]
               }}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                  legend: { position: 'bottom' },
+                  legend: { position: 'top' },
                   tooltip: {
                     callbacks: {
-                      label: (context) => {
-                        const product = financialData.products[context.dataIndex];
-                        return [
-                          `${context.label}: ${formatCurrency(context.parsed)}`,
-                          `Units: ${product.units.toLocaleString()}`,
-                          `Avg Price: $${product.avgPrice}`
-                        ];
-                      }
+                      label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
                     }
                   }
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Cost Structure</h3>
-          <div style={{ height: '300px' }}>
-            <Pie 
-              data={{
-                labels: ['COGS', 'Marketing', 'Operations', 'Fulfillment', 'Other'],
-                datasets: [{
-                  data: [
-                    financialData.costs.cogs,
-                    financialData.costs.marketing,
-                    financialData.costs.operations,
-                    financialData.costs.fulfillment,
-                    financialData.costs.other
-                  ],
-                  backgroundColor: [
-                    '#3B82F6',
-                    '#8B5CF6',
-                    '#F59E0B',
-                    '#EF4444',
-                    '#6B7280'
-                  ],
-                  borderWidth: 0
-                }]
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { position: 'bottom' },
-                  tooltip: {
-                    callbacks: {
-                      label: (context) => `${context.label}: ${formatCurrency(context.parsed)}`
-                    }
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Quarterly Performance */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Quarterly Performance</h3>
-        <div style={{ height: '350px' }}>
-          <Bar 
-            data={{
-              labels: quarterlyData.map(q => q.quarter),
-              datasets: [
-                {
-                  label: 'Revenue',
-                  data: quarterlyData.map(q => q.revenue),
-                  backgroundColor: 'rgba(34, 197, 94, 0.8)',
-                  borderColor: 'rgb(34, 197, 94)',
-                  borderWidth: 1
                 },
-                {
-                  label: 'Profit',
-                  data: quarterlyData.map(q => q.profit),
-                  backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                  borderColor: 'rgb(59, 130, 246)',
-                  borderWidth: 1
-                }
-              ]
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'top' },
-                tooltip: {
-                  callbacks: {
-                    label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value) => formatCurrency(value)
+                    }
                   }
                 }
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: (value) => formatCurrency(value)
-                  }
-                }
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Key Performance Indicators */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-blue-600 dark:text-blue-400">Customer LTV</p>
-              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
-                ${financialData.market.customerLifetimeValue}
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-400">
-                CAC: ${financialData.market.customerAcquisitionCost}
-              </p>
-            </div>
-            <Calculator className="w-6 h-6 text-blue-500 opacity-30" />
+              }}
+            />
           </div>
         </div>
-
-        <div className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-green-600 dark:text-green-400">Conversion Rate</p>
-              <p className="text-xl font-bold text-green-900 dark:text-green-100">
-                {(financialData.operations.conversionRate * 100).toFixed(1)}%
-              </p>
-              <p className="text-xs text-green-600 dark:text-green-400">
-                AOV: ${financialData.operations.avgOrderValue}
-              </p>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Quarterly Performance</h3>
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
-            <TrendingUp className="w-6 h-6 text-green-500 opacity-30" />
+            <p className="text-gray-600 dark:text-gray-400 text-lg">No Financial Data Available</p>
+            <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">Upload and extract P&L documents to view quarterly performance</p>
           </div>
         </div>
+      )}
 
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-purple-600 dark:text-purple-400">Market Share</p>
-              <p className="text-xl font-bold text-purple-900 dark:text-purple-100">
-                {(financialData.market.marketShare * 100).toFixed(1)}%
-              </p>
-              <p className="text-xs text-purple-600 dark:text-purple-400">
-                YoY Growth: {(financialData.market.growthRate * 100).toFixed(0)}%
-              </p>
-            </div>
-            <PieChart className="w-6 h-6 text-purple-500 opacity-30" />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-orange-600 dark:text-orange-400">Inventory Turnover</p>
-              <p className="text-xl font-bold text-orange-900 dark:text-orange-100">
-                {financialData.operations.inventoryTurnover}x
-              </p>
-              <p className="text-xs text-orange-600 dark:text-orange-400">
-                Return Rate: {(financialData.operations.returnRate * 100).toFixed(1)}%
-              </p>
-            </div>
-            <TrendingUp className="w-6 h-6 text-orange-500 opacity-30" />
-          </div>
-        </div>
-      </div>
+      {/* Mock KPIs removed - only showing real deal data */}
 
 
       {/* Investment Analysis */}
@@ -871,27 +893,6 @@ function DealFinancials({ deal }) {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Market Position</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Market Share</span>
-              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                {(financialData.market.marketShare * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Growth Rate</span>
-              <span className="font-semibold text-green-600 dark:text-green-400">
-                {(financialData.market.growthRate * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 dark:text-gray-400">Competitive Advantage</span>
-              <span className="font-semibold text-blue-600 dark:text-blue-400">Strong</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Export Options */}

@@ -1,139 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Star, TrendingUp, TrendingDown, Package, Search, Filter, Download } from 'lucide-react';
 import { getProductPlaceholderImage } from '../../utils/asinImageUtils';
 import ASINImage from '../../components/ASINImage';
-
-// Mock ASIN data
-const mockASINs = [
-  {
-    id: '1',
-    asin: 'B08N5WRWNW',
-    product_name: 'Premium Dog Food Bowl Set - Stainless Steel with Non-Slip Base',
-    category: 'Pet Supplies',
-    subcategory: 'Dog Bowls',
-    brand: 'PremiumPet',
-    monthly_revenue: 45000,
-    monthly_units: 1500,
-    price: 29.99,
-    rank_current: 1250,
-    rank_average: 1180,
-    rank_change: 70,
-    reviews: 2847,
-    rating: 4.7,
-    profit_margin: 35,
-    inventory_value: 28500,
-    launch_date: '2023-03-15',
-    is_primary: true,
-    variations: 3,
-    fba: true,
-    listing_quality: 'Excellent',
-    competition_level: 'Medium',
-  },
-  {
-    id: '2',
-    asin: 'B07QXZL5PM',
-    product_name: 'Interactive Pet Toy Bundle - Mental Stimulation for Dogs',
-    category: 'Pet Supplies',
-    subcategory: 'Dog Toys',
-    brand: 'PremiumPet',
-    monthly_revenue: 32000,
-    monthly_units: 800,
-    price: 39.99,
-    rank_current: 892,
-    rank_average: 920,
-    rank_change: -28,
-    reviews: 1923,
-    rating: 4.8,
-    profit_margin: 42,
-    inventory_value: 21600,
-    launch_date: '2023-07-22',
-    is_primary: true,
-    variations: 2,
-    fba: true,
-    listing_quality: 'Excellent',
-    competition_level: 'High',
-  },
-  {
-    id: '3',
-    asin: 'B09MKJH6T2',
-    product_name: 'Organic Pet Treats Variety Pack - All Natural Ingredients',
-    category: 'Pet Supplies',
-    subcategory: 'Dog Treats',
-    brand: 'PremiumPet',
-    monthly_revenue: 28000,
-    monthly_units: 2100,
-    price: 13.33,
-    rank_current: 2341,
-    rank_average: 2280,
-    rank_change: 61,
-    reviews: 3156,
-    rating: 4.6,
-    profit_margin: 38,
-    inventory_value: 15800,
-    launch_date: '2022-11-08',
-    is_primary: false,
-    variations: 4,
-    fba: true,
-    listing_quality: 'Good',
-    competition_level: 'Low',
-  },
-  {
-    id: '4',
-    asin: 'B0B2K8FG9H',
-    product_name: 'Luxury Pet Bed - Memory Foam with Washable Cover',
-    category: 'Pet Supplies',
-    subcategory: 'Dog Beds',
-    brand: 'PremiumPet',
-    monthly_revenue: 18500,
-    monthly_units: 310,
-    price: 59.67,
-    rank_current: 4200,
-    rank_average: 3980,
-    rank_change: 220,
-    reviews: 892,
-    rating: 4.5,
-    profit_margin: 28,
-    inventory_value: 12400,
-    launch_date: '2023-01-12',
-    is_primary: false,
-    variations: 5,
-    fba: true,
-    listing_quality: 'Good',
-    competition_level: 'Medium',
-  },
-  {
-    id: '5',
-    asin: 'B0C1M7N3P5',
-    product_name: 'Smart Pet Feeder - WiFi Enabled with App Control',
-    category: 'Pet Supplies',
-    subcategory: 'Feeding & Watering',
-    brand: 'PremiumPet',
-    monthly_revenue: 15200,
-    monthly_units: 95,
-    price: 159.99,
-    rank_current: 890,
-    rank_average: 845,
-    rank_change: 45,
-    reviews: 567,
-    rating: 4.4,
-    profit_margin: 45,
-    inventory_value: 9500,
-    launch_date: '2023-09-05',
-    is_primary: false,
-    variations: 1,
-    fba: true,
-    listing_quality: 'Excellent',
-    competition_level: 'High',
-  },
-];
+import { ASINService } from '../../services/ASINService';
 
 function DealASINsTable({ dealId }) {
-  const [asins, setAsins] = useState(mockASINs);
+  const [asins, setAsins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('monthly_revenue');
   const [sortDirection, setSortDirection] = useState('desc');
   const [filterPrimary, setFilterPrimary] = useState('all'); // 'all', 'primary', 'secondary'
+
+  // Load ASINs when component mounts or dealId changes
+  useEffect(() => {
+    if (!dealId) return;
+
+    const loadASINs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const dealASINs = await ASINService.fetchDealASINs(dealId);
+        setAsins(dealASINs);
+      } catch (err) {
+        console.error('Error loading ASINs:', err);
+        setError('Failed to load ASINs. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadASINs();
+  }, [dealId]);
 
   const formatCurrency = (amount) => {
     return `$${amount.toLocaleString()}`;
@@ -197,10 +97,45 @@ function DealASINsTable({ dealId }) {
       return a[sortField].localeCompare(b[sortField]) * direction;
     });
 
-  // Calculate summary stats
-  const totalRevenue = asins.reduce((sum, asin) => sum + asin.monthly_revenue, 0);
-  const avgMargin = asins.reduce((sum, asin) => sum + asin.profit_margin, 0) / asins.length;
-  const totalInventoryValue = asins.reduce((sum, asin) => sum + asin.inventory_value, 0);
+  // Calculate summary stats using the service
+  const summary = ASINService.calculateSummary(asins);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading ASINs...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <div className="text-red-500 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+            Error Loading ASINs
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="btn bg-violet-500 hover:bg-violet-600 text-white"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -211,7 +146,7 @@ function DealASINsTable({ dealId }) {
             <Package className="w-8 h-8 text-blue-600 dark:text-blue-400 mr-3" />
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total ASINs</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{asins.length}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.totalASINs}</p>
             </div>
           </div>
         </div>
@@ -220,7 +155,7 @@ function DealASINsTable({ dealId }) {
             <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-400 mr-3" />
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Monthly Revenue</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalRevenue)}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(summary.totalRevenue)}</p>
             </div>
           </div>
         </div>
@@ -229,7 +164,7 @@ function DealASINsTable({ dealId }) {
             <Star className="w-8 h-8 text-yellow-600 dark:text-yellow-400 mr-3" />
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Margin</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{avgMargin.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.avgMargin.toFixed(1)}%</p>
             </div>
           </div>
         </div>
@@ -238,7 +173,7 @@ function DealASINsTable({ dealId }) {
             <Package className="w-8 h-8 text-purple-600 dark:text-purple-400 mr-3" />
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Inventory Value</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalInventoryValue)}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(summary.totalInventoryValue)}</p>
             </div>
           </div>
         </div>

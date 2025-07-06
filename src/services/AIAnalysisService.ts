@@ -1,6 +1,5 @@
 import { filesAdapter } from '../lib/database-adapter';
 import { supabase } from '../lib/supabase';
-import { encodeFilePath } from '../utils/fileUtils';
 import { DocumentExtractors } from './DocumentExtractors';
 import { getConfigValue } from '../config/runtime-config';
 
@@ -90,7 +89,7 @@ export class AIAnalysisService {
     this.apiUrl = 'http://localhost:3002/api/openai';
   }
 
-  private async callOpenAI(messages: any[], options: { temperature?: number; max_tokens?: number } = {}): Promise<string> {
+  private async callOpenAI(messages: any[], options: { temperature?: number; max_tokens?: number; model?: string } = {}): Promise<string> {
     try {
       const response = await fetch(`${this.apiUrl}/chat`, {
         method: 'POST',
@@ -101,7 +100,7 @@ export class AIAnalysisService {
           messages,
           temperature: options.temperature || 0.7,
           max_tokens: options.max_tokens || 2000,
-          model: 'gpt-4o-mini'
+          model: options.model || 'gpt-4o'  // Default to gpt-4o for better analysis
         }),
       });
 
@@ -251,13 +250,14 @@ export class AIAnalysisService {
 
   private async downloadAndAnalyzeDocument(file: any): Promise<string | null> {
     try {
-      // URL encode the file path to handle special characters and spaces
-      const encodedFilePath = encodeFilePath(file.file_path);
+      // Decode the file path in case it contains encoded characters like %20 for spaces
+      // This handles cases where file paths might be stored with encoded spaces
+      const filePath = decodeURIComponent(file.file_path);
       
       // Download the file from Supabase storage
       const { data, error } = await supabase.storage
         .from('deal-documents')
-        .download(encodedFilePath);
+        .download(filePath);
 
       if (error) {
         console.error('Error downloading document:', error);
@@ -325,7 +325,7 @@ export class AIAnalysisService {
       ? `\n\nAdditional insights from ${documents.length} uploaded documents:\n${documents.map(doc => doc.content).join('\n\n')}`
       : '';
 
-    const prompt = `Analyze the competitive landscape for this Amazon FBA business:
+    const prompt = `Conduct a critical competitive analysis for this Amazon FBA acquisition opportunity:
 
 Business: ${deal.business_name}
 Category: ${deal.amazon_category}
@@ -333,29 +333,69 @@ Subcategory: ${deal.amazon_subcategory || 'Not specified'}
 Annual Revenue: $${deal.annual_revenue?.toLocaleString()}
 Price: $${deal.asking_price?.toLocaleString()}
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(2) + 'x' : 'Unknown'}
 ${documentContent}
 
-Based on all available information including any P&L statements, broker teasers, or business documents provided, analyze:
-1. Key competitors in this space
-2. Market dynamics (competition level, barriers to entry)
-3. Market trends affecting this category
-4. Positioning analysis
-5. Any competitive advantages or unique selling points mentioned in the documents
+Provide a CRITICAL and HONEST assessment analyzing:
 
-Format as JSON with keys: competitors, marketDynamics, positioningAnalysis`;
+1. **Direct Competitors**: Identify 3-5 major competitors with specific analysis:
+   - Market share estimates
+   - Key differentiators and competitive advantages
+   - Price positioning and quality perception
+   - Review ratings and customer sentiment trends
+
+2. **Market Dynamics - Be brutally honest about**:
+   - Amazon's increasing competition through private label
+   - Chinese manufacturers going direct-to-consumer
+   - Category saturation and commoditization risks
+   - Actual barriers to entry (not theoretical ones)
+   - Price erosion trends in the category
+
+3. **Critical Risk Factors specific to this business**:
+   - Single product/category concentration risk
+   - Supplier dependency and sourcing vulnerabilities
+   - Brand strength vs generic product risk
+   - Platform dependency (100% Amazon = high risk)
+   - Regulatory or compliance risks in this category
+
+4. **Realistic Positioning Analysis**:
+   - Where does this business ACTUALLY sit in the market?
+   - Is it truly differentiated or just another me-too product?
+   - Sustainability of current market position
+   - Likelihood of maintaining margins over 2-3 years
+
+5. **Red Flags from documents** (if available):
+   - Declining metrics hidden in averages
+   - Suspicious revenue spikes or seasonality
+   - Missing critical information
+   - Overoptimistic projections
+
+Be skeptical and critical. Identify what could go wrong. Don't sugarcoat risks.
+
+Format as JSON with keys: competitors, marketDynamics, positioningAnalysis, criticalRisks, redFlags`;
 
     try {
       const result = await this.callOpenAI([
         {
           role: "system",
-          content: "You are an expert Amazon marketplace analyst. Provide detailed competitive analysis for FBA business acquisitions."
+          content: "You are a skeptical and experienced M&A advisor specializing in Amazon FBA acquisitions. You've seen many deals go bad and know the common pitfalls. Provide brutally honest, critical analysis that protects buyers from making costly mistakes. Focus on what could go wrong, hidden risks, and red flags. Be specific with data and examples."
         },
         { role: "user", content: prompt }
       ], { temperature: 0.3, max_tokens: 1500 });
       
       if (!result) throw new Error("No response");
       
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      // Ensure backward compatibility while adding new fields
+      return {
+        competitors: parsed.competitors || [],
+        marketDynamics: parsed.marketDynamics || {
+          competitionLevel: 'High' as const,
+          barrierToEntry: 'Low' as const,
+          marketTrends: []
+        },
+        positioningAnalysis: parsed.positioningAnalysis || "Analysis pending"
+      };
     } catch (error) {
       return {
         competitors: [
@@ -421,7 +461,7 @@ Format as JSON with keys: primaryKeywords, longTailOpportunities, seasonalTrends
       ? `\n\nDetailed financial and business information from ${documents.length} documents:\n${documents.map(doc => doc.content).join('\n\n')}`
       : '';
 
-    const prompt = `Calculate an opportunity score (0-100) for this Amazon FBA acquisition:
+    const prompt = `Calculate a REALISTIC opportunity score (0-100) for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
 Category: ${deal.amazon_category}
@@ -431,31 +471,72 @@ Annual Profit: $${deal.annual_profit?.toLocaleString()}
 Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(1) : 'Unknown'}x
 Business Age: ${deal.business_age || 'Unknown'} years
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+Profit Margin: ${deal.annual_revenue && deal.annual_profit ? ((deal.annual_profit / deal.annual_revenue) * 100).toFixed(1) : 'Unknown'}%
 ${documentContent}
 
-Using all available information including financial statements and business details:
-Score breakdown (0-100 each):
-- Financial Health (revenue trends, profit margins, cash flow stability from documents)
-- Market Opportunity (category growth, competition, market size)
-- Growth Potential (scalability, expansion opportunities mentioned in documents)
-- Risk Assessment (dependencies, market risks, any red flags in documents)
+BE CONSERVATIVE AND REALISTIC. Most businesses score 40-70. Only exceptional opportunities score above 70.
 
-Provide overall score and reasoning based on comprehensive analysis.
+Score breakdown (0-100 each) - BE CRITICAL:
 
-Format as JSON with keys: overall, breakdown, reasoning, improvements`;
+1. **Financial Health (Weight: 35%)**
+   - Profit margins vs industry average (15-25% is typical for FBA)
+   - Revenue stability/trends (penalize heavy seasonality)
+   - Working capital requirements
+   - Cash conversion cycle
+   - Hidden costs not reflected in profit
+
+2. **Market Risk (Weight: 30%)** - DEDUCT points for:
+   - Amazon private label threat in this category
+   - Chinese competition intensity
+   - Category maturity/saturation
+   - Price erosion trends
+   - Regulatory risks
+
+3. **Business Quality (Weight: 20%)**
+   - Brand strength vs generic products
+   - Customer concentration
+   - Supplier diversification
+   - IP/patents/defensibility
+   - Operational complexity
+
+4. **Growth Reality Check (Weight: 15%)** - Be skeptical of:
+   - "Easy" expansion claims
+   - International growth without infrastructure
+   - New product launches without track record
+   - Unrealistic market share capture
+
+Key Penalties to Apply:
+- Deduct 10-20 points if multiple > 4x
+- Deduct 15 points if single product > 50% revenue
+- Deduct 20 points if no brand/trademark
+- Deduct 10 points if margins declining YoY
+- Deduct 15 points if category has Amazon Basics
+
+Format as JSON with keys: overall, breakdown, reasoning, majorConcerns, dealBreakers`;
 
     try {
       const result = await this.callOpenAI([
         {
           role: "system",
-          content: "You are an expert business acquisition analyst. Score Amazon FBA businesses on acquisition attractiveness."
+          content: "You are a conservative investment analyst who has evaluated hundreds of FBA acquisitions. You've seen that 80% of buyers overpay and 50% of businesses decline post-acquisition. Be extremely critical and realistic. Most businesses are mediocre (40-60 score). Reserve high scores (70+) only for truly exceptional opportunities with strong moats. Always identify hidden costs and risks that sellers try to hide."
         },
         { role: "user", content: prompt }
       ], { temperature: 0.2, max_tokens: 1000 });
       
       if (!result) throw new Error("No response");
       
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      return {
+        overall: parsed.overall || 50,
+        breakdown: parsed.breakdown || {
+          financial: 50,
+          market: 50,
+          growth: 50,
+          risk: 50
+        },
+        reasoning: parsed.reasoning || "Analysis pending",
+        improvements: parsed.improvements || []
+      };
     } catch (error) {
       const revenue = deal.annual_revenue || 0;
       const profit = deal.annual_profit || 0;
@@ -487,7 +568,7 @@ Format as JSON with keys: overall, breakdown, reasoning, improvements`;
       ? `\n\nBusiness details and insights from documents:\n${documents.map(doc => doc.content).join('\n\n')}`
       : '';
 
-    const prompt = `Analyze risks and opportunities for this Amazon FBA acquisition:
+    const prompt = `Provide a critical risk assessment for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
 Category: ${deal.amazon_category}
@@ -495,29 +576,73 @@ Annual Revenue: $${deal.annual_revenue?.toLocaleString()}
 Annual Profit: $${deal.annual_profit?.toLocaleString()}
 Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(1) : 'Unknown'}x
 FBA %: ${deal.fba_percentage || 'Unknown'}%
+Profit Margin: ${deal.annual_revenue && deal.annual_profit ? ((deal.annual_profit / deal.annual_revenue) * 100).toFixed(1) : 'Unknown'}%
 ${documentContent}
 
-Based on all available information including documents:
-1. Key risk factors (5-7 items) - consider any red flags or concerns mentioned in documents
-2. Growth opportunities (5-7 items) - include any opportunities mentioned in broker materials
-3. Strategic recommendations (5-7 items) - based on comprehensive analysis
+CRITICAL RISK FACTORS - Be specific and data-driven:
 
-Focus on Amazon-specific risks and opportunities, and any specific details from the documents.
+1. **Immediate Risks (0-6 months)**:
+   - Account suspension risk factors
+   - Cash flow/inventory financing needs  
+   - Key supplier dependencies
+   - Listing hijacking vulnerabilities
+   - Seasonal revenue cliff risks
 
-Format as JSON with keys: riskFactors, growthOpportunities, recommendations`;
+2. **Medium-term Risks (6-24 months)**:
+   - Amazon algorithm changes impact
+   - Chinese competition timeline
+   - Patent/trademark expiration
+   - Key employee departure risk
+   - Tariff and shipping cost exposure
+
+3. **Structural Risks**:
+   - % revenue from top 3 ASINs
+   - Review velocity decline
+   - Organic ranking deterioration
+   - PPC dependency (>30% of sales = red flag)
+   - Working capital trap growth
+
+4. **Hidden Financial Risks**:
+   - Inventory obsolescence not accounted
+   - Returns/refunds trending up
+   - Storage fee increases
+   - Add-back legitimacy issues
+   - Owner salary replacement cost
+
+GROWTH OPPORTUNITIES - Be realistic about execution difficulty:
+- Rate each opportunity: Easy/Medium/Hard to execute
+- Estimate investment required
+- Timeline to results
+- Success probability %
+
+STRATEGIC RECOMMENDATIONS - Prioritized action items:
+- What to verify in due diligence
+- Deal breakers to investigate
+- Post-acquisition 90-day plan
+- Key hires needed
+- Systems to implement
+
+BE BRUTALLY HONEST. Most businesses have more risks than opportunities.
+
+Format as JSON with keys: riskFactors, growthOpportunities, recommendations, dueDiligencePriorities`;
 
     try {
       const result = await this.callOpenAI([
         {
           role: "system",
-          content: "You are an Amazon FBA business acquisition expert. Identify key risks, opportunities, and strategic recommendations."
+          content: "You are a battle-tested FBA acquisition specialist who has seen deals fail due to hidden risks. Your job is to protect buyers by uncovering every risk, questioning every assumption, and providing actionable due diligence priorities. Be specific with percentages, timelines, and dollar amounts. Assume sellers are hiding problems. Your credibility depends on finding issues others miss."
         },
         { role: "user", content: prompt }
       ], { temperature: 0.3, max_tokens: 1200 });
       
       if (!result) throw new Error("No response");
       
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      return {
+        riskFactors: parsed.riskFactors || [],
+        growthOpportunities: parsed.growthOpportunities || [],
+        recommendations: parsed.recommendations || []
+      };
     } catch (error) {
       return {
         riskFactors: [
@@ -547,33 +672,38 @@ Format as JSON with keys: riskFactors, growthOpportunities, recommendations`;
       ? `\nAnalysis based on ${documents.length} uploaded documents including: ${documents.map(d => d.file_name).join(', ')}`
       : '';
 
-    const prompt = `Create an executive summary for this Amazon FBA acquisition opportunity:
+    const prompt = `Create a CRITICAL executive summary for this Amazon FBA acquisition:
 
 Business: ${deal.business_name}
 Category: ${deal.amazon_category}
 Price: $${deal.asking_price?.toLocaleString()}
 Revenue: $${deal.annual_revenue?.toLocaleString()}
 Profit: $${deal.annual_profit?.toLocaleString()}
+Multiple: ${deal.asking_price && deal.annual_profit ? (deal.asking_price / deal.annual_profit).toFixed(1) + 'x' : 'Unknown'}
+Margin: ${deal.annual_revenue && deal.annual_profit ? ((deal.annual_profit / deal.annual_revenue) * 100).toFixed(1) + '%' : 'Unknown'}
 ${documentInfo}
 
-Key Analysis Points:
-- Opportunity Score: ${analysis.opportunityScore?.overall || 'Unknown'}/100
-- Competition Level: ${analysis.competitiveAnalysis?.marketDynamics?.competitionLevel || 'Unknown'}
-- Top Risk: ${analysis.riskFactors?.[0] || 'Risk analysis needed'}
-- Top Opportunity: ${analysis.growthOpportunities?.[0] || 'Opportunity analysis needed'}
-- Document Analysis: ${documents.length > 0 ? 'Comprehensive review of financial documents and business materials completed' : 'No supporting documents analyzed'}
+Critical Findings:
+- Opportunity Score: ${analysis.opportunityScore?.overall || 'Unknown'}/100 ${analysis.opportunityScore?.overall < 60 ? '⚠️ BELOW AVERAGE' : ''}
+- Major Concerns: ${analysis.opportunityScore?.majorConcerns?.slice(0, 2).join('; ') || 'Multiple risk factors identified'}
+- Competition: ${analysis.competitiveAnalysis?.marketDynamics?.competitionLevel || 'Unknown'} with ${analysis.competitiveAnalysis?.criticalRisks?.length || 'several'} critical risks
+- Top 3 Risks: ${analysis.riskFactors?.slice(0, 3).join('; ') || 'Risk analysis required'}
+- Deal Breakers: ${analysis.opportunityScore?.dealBreakers?.join('; ') || 'Several red flags identified'}
 
-Write a 2-3 paragraph executive summary that:
-1. Highlights the key investment thesis based on all available data
-2. Incorporates key findings from the uploaded documents
-3. Addresses main opportunities and primary concerns
-4. Mentions if critical information is missing or if documents provided additional clarity`;
+Write a 2-3 paragraph HONEST assessment that:
+1. States upfront whether this is a GOOD, MEDIOCRE, or POOR opportunity
+2. Highlights the 2-3 biggest concerns that could kill the deal
+3. Mentions what's missing or suspicious in the data
+4. Gives a clear GO/NO-GO recommendation with specific conditions
+5. If documents were analyzed, note any discrepancies or red flags found
+
+Start with the bottom line: Is this deal worth pursuing or not? Don't sugarcoat.`;
 
     try {
       const result = await this.callOpenAI([
         {
           role: "system",
-          content: "You are a business acquisition advisor. Write clear, concise executive summaries for investment opportunities."
+          content: "You are a no-nonsense M&A advisor who tells clients the truth, even when it's uncomfortable. Your reputation is built on saving clients from bad deals. Write executive summaries that cut through the BS and give clear GO/NO-GO recommendations. Start with the verdict, then explain why. Most deals are mediocre - say so when they are."
         },
         { role: "user", content: prompt }
       ], { temperature: 0.3, max_tokens: 500 });
@@ -1040,9 +1170,100 @@ Format your response as JSON with these keys:
         pdfText = pageTexts.join('\n\n');
         
       } catch (pdfError) {
-        console.warn('PDF text extraction failed, falling back to document analysis endpoint:', pdfError);
+        console.warn('PDF text extraction failed, trying OCR with vision API:', pdfError);
         
-        // Fallback: send to document analysis endpoint
+        // Try OCR with vision API for PDFs that can't be text-extracted
+        try {
+          const base64 = await DocumentAnalysisService.fileToBase64(file);
+          const visionPrompt = `Analyze this PDF business document image and extract key information:
+
+Extract the following information if available:
+1. Business name and description
+2. Asking price (look for "asking price", "listed price", "sale price", "valuation")
+3. Annual revenue/sales
+4. Annual profit/net income
+5. Monthly revenue/profit
+6. Inventory value (look for "inventory", "stock value", "assets")
+7. Key financial metrics
+8. Important business details
+
+Focus specifically on:
+- Any dollar amounts and what they represent
+- Financial performance data
+- Business valuation information
+- Inventory or asset values
+
+Format your response as JSON with these keys:
+{
+  "businessName": "...",
+  "description": "...",
+  "askingPrice": 0,
+  "annualRevenue": 0,
+  "annualProfit": 0,
+  "keyFindings": ["finding1", "finding2"],
+  "monthlyRevenue": 0,
+  "monthlyProfit": 0,
+  "inventoryValue": 0,
+  "financials": {
+    "inventoryValue": 0,
+    "profitMargin": 0
+  }
+}`;
+
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+          const visionResponse = await fetch(`${API_BASE_URL}/api/openai/vision`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              image: base64,
+              prompt: visionPrompt,
+              max_tokens: 1500
+            }),
+          });
+
+          if (visionResponse.ok) {
+            const visionData = await visionResponse.json();
+            const visionResult = visionData.response;
+            
+            try {
+              const analysis = typeof visionResult === 'string' ? JSON.parse(visionResult) : visionResult;
+              
+              return {
+                businessName: analysis.businessName || 'PDF Document',
+                description: analysis.description || 'PDF business document analysis',
+                askingPrice: analysis.askingPrice || 0,
+                annualRevenue: analysis.annualRevenue || 0,
+                annualProfit: analysis.annualProfit || 0,
+                keyFindings: analysis.keyFindings || ['PDF document analyzed with OCR'],
+                confidence: 75,
+                dataExtracted: {
+                  hasPL: analysis.annualRevenue > 0 || analysis.annualProfit !== 0,
+                  hasRevenue: !!analysis.annualRevenue,
+                  hasProfit: !!analysis.annualProfit,
+                  hasInventory: !!analysis.inventoryValue || !!analysis.financials?.inventoryValue
+                },
+                monthlyRevenue: analysis.monthlyRevenue || (analysis.annualRevenue ? Math.round(analysis.annualRevenue / 12) : 0),
+                monthlyProfit: analysis.monthlyProfit || (analysis.annualProfit ? Math.round(analysis.annualProfit / 12) : 0),
+                additionalInfo: {
+                  inventoryValue: analysis.inventoryValue || analysis.financials?.inventoryValue || 0,
+                  reasonForSelling: 'See PDF document',
+                  growthOpportunities: 'See PDF document'
+                },
+                industry: 'Unknown',
+                location: 'Unknown'
+              };
+            } catch (parseError) {
+              console.error('Error parsing vision analysis result:', parseError);
+              // Continue to fallback
+            }
+          }
+        } catch (visionError) {
+          console.error('Vision API also failed:', visionError);
+        }
+        
+        // Final fallback: send to document analysis endpoint with better prompt
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
         const response = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
           method: 'POST',
@@ -1050,7 +1271,16 @@ Format your response as JSON with these keys:
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            content: `PDF document: ${file.name}`,
+            content: `PDF business document that could not be text-extracted: ${file.name}. 
+            
+This appears to be a business summary document. Please provide a structured analysis assuming this is a business acquisition opportunity document. Look for standard elements like:
+- Business name and description
+- Asking price or valuation
+- Revenue and profit figures
+- Inventory values
+- Key business metrics
+
+Since text extraction failed, provide reasonable placeholder values and note that manual review is needed.`,
             fileName: file.name,
             fileType: file.type,
             analysisType: 'business'
@@ -1066,12 +1296,12 @@ Format your response as JSON with these keys:
         
         return {
           businessName: analysis.businessName || 'PDF Document',
-          description: analysis.description || 'PDF business document',
+          description: analysis.description || 'PDF business document - text extraction failed, manual review recommended',
           askingPrice: analysis.askingPrice || 0,
           annualRevenue: analysis.annualRevenue || 0,
           annualProfit: analysis.annualProfit || 0,
-          keyFindings: analysis.keyFindings || ['PDF document analyzed'],
-          confidence: 25,
+          keyFindings: analysis.keyFindings || ['PDF document requires manual review - text extraction failed'],
+          confidence: 15,
           dataExtracted: {
             hasPL: false,
             hasRevenue: false,
@@ -1096,16 +1326,13 @@ ${pdfText.substring(0, 4000)} // Limit content to avoid token limits
 
 Focus on finding:
 1. Business name and description
-2. Financial data (revenue, profit, income, expenses)
-3. Tax information (if it's a tax return)
-4. Key business metrics and numbers
-5. Important findings
-
-For tax documents (Schedule C, 1040, etc), extract:
-- Business income/revenue
-- Business expenses
-- Net profit/loss
-- Business name/description
+2. Asking price (look for "asking price", "listed price", "sale price", "valuation")
+3. Annual revenue/sales
+4. Annual profit/net income
+5. Monthly revenue/profit
+6. Inventory value (look for "inventory", "stock value", "assets")
+7. Key financial metrics
+8. Important business details
 
 Format your response as JSON with these keys:
 {
@@ -1116,7 +1343,12 @@ Format your response as JSON with these keys:
   "annualProfit": 0,
   "keyFindings": ["finding1", "finding2"],
   "monthlyRevenue": 0,
-  "monthlyProfit": 0
+  "monthlyProfit": 0,
+  "inventoryValue": 0,
+  "financials": {
+    "inventoryValue": 0,
+    "profitMargin": 0
+  }
 }`;
         
         const response = await fetch('http://localhost:3002/api/openai/chat', {
@@ -1126,7 +1358,7 @@ Format your response as JSON with these keys:
           },
           body: JSON.stringify({
             messages: [
-              { role: 'system', content: 'You are a business analyst expert at extracting information from financial documents.' },
+              { role: 'system', content: 'You are a business analyst expert at extracting information from financial documents. Focus on finding asking price and inventory values specifically.' },
               { role: 'user', content: prompt }
             ],
             model: 'gpt-4o-mini',
@@ -1158,10 +1390,15 @@ Format your response as JSON with these keys:
               hasPL: analysis.annualRevenue > 0 || analysis.annualProfit !== 0,
               hasRevenue: !!analysis.annualRevenue,
               hasProfit: !!analysis.annualProfit,
-              hasInventory: false
+              hasInventory: !!analysis.inventoryValue || !!analysis.financials?.inventoryValue
             },
             monthlyRevenue: analysis.monthlyRevenue || (analysis.annualRevenue ? Math.round(analysis.annualRevenue / 12) : 0),
             monthlyProfit: analysis.monthlyProfit || (analysis.annualProfit ? Math.round(analysis.annualProfit / 12) : 0),
+            additionalInfo: {
+              inventoryValue: analysis.inventoryValue || analysis.financials?.inventoryValue || 0,
+              reasonForSelling: 'See PDF document',
+              growthOpportunities: 'See PDF document'
+            },
             industry: 'Unknown',
             location: 'Unknown'
           };
@@ -1233,7 +1470,20 @@ Format your response as JSON with these keys:
     }
   }
 
+  private static async fileToBase64(file: File): Promise<string> {
+    const reader = new FileReader();
+    const promise = new Promise<string>((resolve, reject) => {
+      reader.onloadend = (event) => {
+        const base64 = event.target?.result as string;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+    });
+    reader.readAsDataURL(file);
+    return promise;
+  }
 }
+
 // Document analysis interface for Add Deal Modal
 export interface DocumentAnalysis {
   businessName?: string;

@@ -3191,9 +3191,9 @@ ${content}
 Extract the following information if available:
 1. Business name
 2. Business description/type
-3. Asking price
-4. Annual revenue
-5. Annual profit
+3. Asking price (look for "asking price", "listed price", "sale price", "valuation", "priced at", "seeking", "offered at")
+4. Annual revenue (look for "annual revenue", "yearly sales", "gross sales", "total revenue")
+5. Annual profit (look for "annual profit", "net profit", "annual earnings", "EBITDA", "cash flow")
 6. Monthly revenue
 7. Monthly profit  
 8. Key findings and important details
@@ -3204,8 +3204,17 @@ For financial documents, also extract:
 - P&L details
 - Revenue trends
 - Profit margins
-- Inventory value
+- Inventory value (look for "inventory", "stock value", "inventory worth", "stock on hand", "current inventory")
 - Expenses breakdown
+- Asset values
+- Working capital requirements
+
+Pay special attention to:
+- Dollar amounts and what they represent
+- Financial performance metrics
+- Business valuation information
+- Inventory/asset values
+- Any pricing or valuation discussions
 
 IMPORTANT: You MUST respond with valid JSON only. No other text before or after.
 
@@ -6087,8 +6096,27 @@ app.get('/api/seller-lookup/stream', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering
   res.flushHeaders();
 
+  // Keep-alive mechanism to prevent connection timeout
+  const keepAliveInterval = setInterval(() => {
+    if (!res.finished) {
+      res.write(':keepalive\n\n');
+    }
+  }, 30000); // Send keepalive every 30 seconds
+
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(keepAliveInterval);
+    console.log('🔌 [SSE SELLER LOOKUP] Client disconnected');
+  });
+
   const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (!res.finished) {
+      try {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      } catch (error) {
+        console.error('Failed to send event:', error);
+      }
+    }
   };
 
   try {
@@ -6199,6 +6227,9 @@ app.get('/api/seller-lookup/stream', async (req, res) => {
       data: { error: error.message }
     });
   } finally {
-    res.end();
+    clearInterval(keepAliveInterval);
+    if (!res.finished) {
+      res.end();
+    }
   }
 });
