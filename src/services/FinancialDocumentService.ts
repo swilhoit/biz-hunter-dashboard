@@ -123,6 +123,13 @@ export interface DetailedFinancials {
     roa?: number;
     workingCapital?: number;
   };
+  
+  // Margins (simplified structure)
+  margins?: {
+    gross: number;
+    operating: number;
+    net: number;
+  };
 }
 
 export interface PeriodInfo {
@@ -640,7 +647,8 @@ Return JSON:
       },
       equity: data.equity || { total: 0 },
       cashFlow: data.cashFlow,
-      metrics: data.metrics || this.calculateMetrics(data)
+      metrics: data.metrics || this.calculateMetrics(data),
+      margins: data.margins || this.calculateMargins(data)
     };
 
     // Calculate missing values
@@ -653,6 +661,23 @@ Return JSON:
     }
 
     return normalized;
+  }
+
+  /**
+   * Calculate margins
+   */
+  private calculateMargins(data: any): { gross: number; operating: number; net: number } {
+    const revenue = data.revenue?.total || 0;
+    const cogs = data.cogs?.total || 0;
+    const grossProfit = data.grossProfit || (revenue - cogs);
+    const operatingExpenses = data.operatingExpenses?.total || 0;
+    const netIncome = data.netIncome || 0;
+
+    return {
+      gross: revenue > 0 ? grossProfit / revenue : 0,
+      operating: revenue > 0 ? (grossProfit - operatingExpenses) / revenue : 0,
+      net: revenue > 0 ? netIncome / revenue : 0
+    };
   }
 
   /**
@@ -794,15 +819,24 @@ Return JSON:
       }
 
       // Update deal with latest financial data
+      console.log('💾 Updating deal financials:', {
+        revenue: extraction.financial_data.revenue?.total,
+        netIncome: extraction.financial_data.netIncome,
+        metrics: extraction.financial_data.metrics,
+        margins: extraction.financial_data.margins
+      });
+      
       const updates = {
-        annual_revenue: extraction.financial_data.revenue.total,
-        annual_profit: extraction.financial_data.netIncome,
-        ebitda: extraction.financial_data.ebitda,
-        gross_margin: extraction.financial_data.metrics.grossMargin,
-        operating_margin: extraction.financial_data.metrics.operatingMargin,
-        net_margin: extraction.financial_data.metrics.netMargin,
+        annual_revenue: extraction.financial_data.revenue?.total || 0,
+        annual_profit: extraction.financial_data.netIncome || 0,
+        ebitda: extraction.financial_data.ebitda || 0,
+        gross_margin: extraction.financial_data.metrics?.grossMargin || extraction.financial_data.margins?.gross || 0,
+        operating_margin: extraction.financial_data.metrics?.operatingMargin || extraction.financial_data.margins?.operating || 0,
+        net_margin: extraction.financial_data.metrics?.netMargin || extraction.financial_data.margins?.net || 0,
         financial_last_updated: new Date().toISOString()
       };
+      
+      console.log('💾 Deal updates:', updates);
 
       const { error: updateError } = await supabaseAny
         .from('deals')
@@ -811,6 +845,9 @@ Return JSON:
 
       if (updateError) {
         console.error('Failed to update deal financials:', updateError);
+        throw new Error(`Failed to update deal: ${updateError.message}`);
+      } else {
+        console.log('✅ Deal financials updated successfully for deal:', dealId);
       }
 
       // Create financial history record
