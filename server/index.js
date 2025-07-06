@@ -53,6 +53,17 @@ app.use(morgan('dev'));
 app.use('/api/seo', seoRoutes);
 app.use('/api/files', filesRoutes);
 
+// PDF OCR route (dynamic import)
+app.use('/api/pdf-ocr', async (req, res, next) => {
+  try {
+    const { default: pdfOcrRoutes } = await import('./api/pdf-ocr.js');
+    pdfOcrRoutes(req, res, next);
+  } catch (error) {
+    console.error('Failed to load PDF OCR routes:', error);
+    res.status(500).json({ error: 'PDF OCR service unavailable' });
+  }
+});
+
 // Function to find an available port
 async function findAvailablePort(startPort = 3001) {
   return new Promise((resolve) => {

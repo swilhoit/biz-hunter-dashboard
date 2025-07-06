@@ -1244,11 +1244,96 @@ Format your response as JSON with these keys:
         pdfText = pageTexts.join('\n\n');
         
       } catch (pdfError) {
-        console.warn('PDF text extraction failed, trying alternative methods:', pdfError);
-        progressCallback?.('PDF appears to be scanned, using AI to extract content...');
+        console.warn('PDF text extraction failed, attempting OCR:', pdfError);
+        progressCallback?.('PDF appears to be scanned, extracting with OCR...');
         
-        // For scanned PDFs, we need a different approach
-        // Since we can't send PDFs directly to vision API, we'll use a fallback
+        // For scanned PDFs, use the OCR endpoint
+        try {
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+          
+          // Create FormData to send the PDF file
+          const formData = new FormData();
+          formData.append('pdf', file);
+          
+          progressCallback?.('Converting PDF pages to images for OCR...');
+          
+          // Send to OCR endpoint
+          const ocrResponse = await fetch(`${API_BASE_URL}/api/pdf-ocr/extract`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (ocrResponse.ok) {
+            const ocrData = await ocrResponse.json();
+            
+            if (ocrData.success && ocrData.fullText) {
+              progressCallback?.('Analyzing OCR extracted text...');
+              
+              // Now analyze the extracted text
+              const analysisResponse = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  content: ocrData.fullText,
+                  fileName: file.name,
+                  fileType: 'pdf',
+                  analysisType: 'business'
+                }),
+              });
+
+              if (analysisResponse.ok) {
+                const analysisData = await analysisResponse.json();
+                const analysis = analysisData.analysis;
+                
+                // Use structured data from OCR if available
+                const structuredData = ocrData.structuredData || {};
+                
+                return {
+                  businessName: analysis.businessName || structuredData.businessName || file.name.replace(/\.(pdf|PDF)$/, ''),
+                  description: analysis.description || structuredData.description || 'OCR-extracted business document',
+                  askingPrice: analysis.askingPrice || structuredData.askingPrice || 0,
+                  annualRevenue: analysis.annualRevenue || structuredData.annualRevenue || 0,
+                  annualProfit: analysis.annualProfit || structuredData.annualProfit || 0,
+                  monthlyRevenue: analysis.monthlyRevenue || structuredData.monthlyRevenue || 0,
+                  monthlyProfit: analysis.monthlyProfit || structuredData.monthlyProfit || 0,
+                  keyFindings: analysis.keyFindings || structuredData.keyFindings || ['Document processed with OCR text extraction'],
+                  confidence: ocrData.confidence || 85, // Higher confidence for OCR
+                  dataExtracted: {
+                    hasPL: !!analysis.annualRevenue || !!analysis.annualProfit,
+                    hasRevenue: !!analysis.annualRevenue || !!structuredData.annualRevenue,
+                    hasProfit: !!analysis.annualProfit || !!structuredData.annualProfit,
+                    hasInventory: !!analysis.inventoryValue || !!structuredData.inventoryValue
+                  },
+                  valuationMultiple: structuredData.valuationMultiple,
+                  businessAge: analysis.businessAge || structuredData.businessAge || '',
+                  industry: analysis.industry || structuredData.industry || 'Unknown',
+                  location: analysis.location || structuredData.location || '',
+                  additionalInfo: {
+                    inventoryValue: analysis.inventoryValue || structuredData.inventoryValue || 0,
+                    reasonForSelling: analysis.reasonForSelling || structuredData.businessDetails?.reasonForSelling || 'See document',
+                    growthOpportunities: analysis.growthOpportunities || 'See document',
+                    employeeCount: structuredData.businessDetails?.employees,
+                  },
+                  amazonInfo: structuredData.amazonInfo,
+                  otherRevenue: 0,
+                  cashFlow: analysis.cashFlow || 0,
+                  seller: {
+                    name: analysis.sellerName || '',
+                    location: analysis.location || structuredData.location || ''
+                  },
+                  employees: analysis.employees || structuredData.businessDetails?.employees || '',
+                  established: analysis.established || ''
+                };
+              }
+            }
+          }
+        } catch (ocrError) {
+          console.error('OCR extraction failed:', ocrError);
+        }
+        
+        // Final fallback if vision API fails
         return {
           businessName: file.name.replace(/\.(pdf|PDF)$/, ''),
           description: 'This appears to be a scanned PDF business document that requires manual review.',
@@ -1431,6 +1516,99 @@ Since text extraction failed, provide reasonable placeholder values and note tha
           location: 'Unknown'
         };
       */
+      
+      // Check if the extracted text is too short (likely scanned PDF)
+      if (pdfText && pdfText.trim().length < 100) {
+        console.log('Extracted text too short, likely a scanned PDF. Using OCR...');
+        progressCallback?.('PDF appears to be scanned, extracting with OCR...');
+        
+        // Use the OCR endpoint for scanned PDFs
+        try {
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+          
+          // Create FormData to send the PDF file
+          const formData = new FormData();
+          formData.append('pdf', file);
+          
+          progressCallback?.('Converting PDF pages to images for OCR...');
+          
+          // Send to OCR endpoint
+          const ocrResponse = await fetch(`${API_BASE_URL}/api/pdf-ocr/extract`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (ocrResponse.ok) {
+            const ocrData = await ocrResponse.json();
+            
+            if (ocrData.success && ocrData.fullText) {
+              progressCallback?.('Analyzing OCR extracted text...');
+              
+              // Now analyze the extracted text
+              const analysisResponse = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  content: ocrData.fullText,
+                  fileName: file.name,
+                  fileType: 'pdf',
+                  analysisType: 'business'
+                }),
+              });
+
+              if (analysisResponse.ok) {
+                const analysisData = await analysisResponse.json();
+                const analysis = analysisData.analysis;
+                
+                // Use structured data from OCR if available
+                const structuredData = ocrData.structuredData || {};
+                
+                return {
+                  businessName: analysis.businessName || structuredData.businessName || file.name.replace(/\.(pdf|PDF)$/, ''),
+                  description: analysis.description || structuredData.description || 'OCR-extracted business document',
+                  askingPrice: analysis.askingPrice || structuredData.askingPrice || 0,
+                  annualRevenue: analysis.annualRevenue || structuredData.annualRevenue || 0,
+                  annualProfit: analysis.annualProfit || structuredData.annualProfit || 0,
+                  monthlyRevenue: analysis.monthlyRevenue || structuredData.monthlyRevenue || 0,
+                  monthlyProfit: analysis.monthlyProfit || structuredData.monthlyProfit || 0,
+                  keyFindings: analysis.keyFindings || structuredData.keyFindings || ['Document processed with OCR text extraction'],
+                  confidence: ocrData.confidence || 85,
+                  dataExtracted: {
+                    hasPL: !!analysis.annualRevenue || !!analysis.annualProfit,
+                    hasRevenue: !!analysis.annualRevenue || !!structuredData.annualRevenue,
+                    hasProfit: !!analysis.annualProfit || !!structuredData.annualProfit,
+                    hasInventory: !!analysis.inventoryValue || !!structuredData.inventoryValue
+                  },
+                  valuationMultiple: structuredData.valuationMultiple,
+                  businessAge: analysis.businessAge || structuredData.businessAge || '',
+                  industry: analysis.industry || structuredData.industry || 'Unknown',
+                  location: analysis.location || structuredData.location || '',
+                  additionalInfo: {
+                    inventoryValue: analysis.inventoryValue || structuredData.inventoryValue || 0,
+                    reasonForSelling: analysis.reasonForSelling || structuredData.businessDetails?.reasonForSelling || 'See document',
+                    growthOpportunities: analysis.growthOpportunities || 'See document',
+                    employeeCount: structuredData.businessDetails?.employees,
+                  },
+                  amazonInfo: structuredData.amazonInfo,
+                  otherRevenue: 0,
+                  cashFlow: analysis.cashFlow || 0,
+                  seller: {
+                    name: analysis.sellerName || '',
+                    location: analysis.location || structuredData.location || ''
+                  },
+                  employees: analysis.employees || structuredData.businessDetails?.employees || '',
+                  established: analysis.established || ''
+                };
+              }
+            }
+          }
+        } catch (ocrError) {
+          console.error('OCR extraction failed for short text PDF:', ocrError);
+          // Continue to analyze what little text we have
+        }
+      }
       
       // If we successfully extracted text, analyze it
       if (pdfText && pdfText.trim().length > 0) {
