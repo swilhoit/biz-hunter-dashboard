@@ -524,19 +524,24 @@ function DealEditModal({ deal, isOpen, onClose, onSave }: DealEditModalProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Priority
+                Opportunity Score
               </label>
               <select
                 value={editedDeal.priority || ''}
                 onChange={(e) => handleChange('priority', parseInt(e.target.value) || undefined)}
                 className="form-input w-full"
               >
-                <option value="">No Priority</option>
-                <option value="1">P1 - Low</option>
-                <option value="2">P2 - Medium</option>
-                <option value="3">P3 - High</option>
-                <option value="4">P4 - Very High</option>
-                <option value="5">P5 - Critical</option>
+                <option value="">No Score</option>
+                <option value="1">1 - Very Low</option>
+                <option value="2">2 - Low</option>
+                <option value="3">3 - Low-Medium</option>
+                <option value="4">4 - Medium</option>
+                <option value="5">5 - Medium</option>
+                <option value="6">6 - Medium-High</option>
+                <option value="7">7 - High</option>
+                <option value="8">8 - Very High</option>
+                <option value="9">9 - Exceptional</option>
+                <option value="10">10 - Outstanding</option>
               </select>
             </div>
 

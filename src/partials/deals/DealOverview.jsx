@@ -89,9 +89,9 @@ function DealOverview({ deal }) {
               <Target className="w-6 h-6 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Priority</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Opportunity Score</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {deal.priority ? `P${deal.priority}` : 'N/A'}
+                {deal.priority ? deal.priority : 'N/A'}
               </p>
             </div>
           </div>

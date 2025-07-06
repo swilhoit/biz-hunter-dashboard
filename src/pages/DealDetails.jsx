@@ -4,7 +4,7 @@ import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
 import DealOverview from '../partials/deals/DealOverview';
 import DealFinancials from '../partials/deals/DealFinancials';
-import DealAmazonMetrics from '../partials/deals/DealAmazonMetrics';
+import DealMarketAnalysis from '../partials/deals/DealMarketAnalysis';
 import DealAnalysis from '../partials/deals/DealAnalysis';
 import DealFiles from '../partials/deals/DealFiles';
 import DealASINsTable from '../partials/deals/DealASINsTable';
@@ -109,7 +109,7 @@ function DealDetails() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'financials', label: 'Financials', icon: '💰' },
-    { id: 'amazon', label: 'Amazon Metrics', icon: '📦' },
+    { id: 'market', label: 'Market Analysis', icon: '📊' },
     { id: 'analysis', label: 'Analysis', icon: '🧠' },
     { id: 'asins', label: 'ASINs', icon: '🔖' },
     { id: 'files', label: 'Files', icon: '📁' },
@@ -124,8 +124,8 @@ function DealDetails() {
         return <DealOverview deal={currentDeal} onEdit={handleEdit} />;
       case 'financials':
         return <DealFinancials deal={currentDeal} onEdit={handleEdit} />;
-      case 'amazon':
-        return <DealAmazonMetrics deal={currentDeal} onEdit={handleEdit} />;
+      case 'market':
+        return <DealMarketAnalysis deal={currentDeal} onEdit={handleEdit} />;
       case 'analysis':
         return <DealAnalysis deal={currentDeal} />;
       case 'asins':

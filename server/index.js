@@ -2465,6 +2465,204 @@ app.get('/api/portfolio/asins/:asinId/metrics', async (req, res) => {
   }
 });
 
+// Brand Management API Routes
+// Get user's brands with metrics
+app.get('/api/brands/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get brands with metrics from the view
+    const { data: brands, error } = await supabase
+      .from('brand_metrics')
+      .select('*')
+      .eq('user_id', userId)
+      .order('brand_name');
+    
+    if (error) throw error;
+    
+    res.json({ 
+      success: true, 
+      data: brands || []
+    });
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Create new brand
+app.post('/api/brands', async (req, res) => {
+  try {
+    const { userId, name, description, logo_url, website_url, amazon_store_url } = req.body;
+    
+    if (!userId || !name) {
+      return res.status(400).json({ success: false, message: 'userId and name are required' });
+    }
+    
+    const { data: brand, error } = await supabase
+      .from('brands')
+      .insert([{ 
+        user_id: userId, 
+        name, 
+        description,
+        logo_url,
+        website_url,
+        amazon_store_url
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: brand });
+  } catch (error) {
+    console.error('Error creating brand:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update brand
+app.put('/api/brands/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    const { name, description, logo_url, website_url, amazon_store_url } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'name is required' });
+    }
+    
+    const { data: brand, error } = await supabase
+      .from('brands')
+      .update({ 
+        name, 
+        description,
+        logo_url,
+        website_url,
+        amazon_store_url,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', brandId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: brand });
+  } catch (error) {
+    console.error('Error updating brand:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete brand
+app.delete('/api/brands/:brandId', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    
+    // First, unlink ASINs from this brand
+    await supabase
+      .from('user_asins')
+      .update({ brand_id: null })
+      .eq('brand_id', brandId);
+    
+    // Then delete the brand
+    const { error } = await supabase
+      .from('brands')
+      .delete()
+      .eq('id', brandId);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting brand:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get ASINs for a specific brand
+app.get('/api/brands/:brandId/asins', async (req, res) => {
+  try {
+    const { brandId } = req.params;
+    
+    const { data: asins, error } = await supabase
+      .from('user_asins')
+      .select('*')
+      .eq('brand_id', brandId)
+      .order('product_name');
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: asins || [] });
+  } catch (error) {
+    console.error('Error fetching brand ASINs:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Bulk import ASINs
+app.post('/api/asins/bulk-import', async (req, res) => {
+  try {
+    const { userId, asins } = req.body;
+    
+    if (!userId || !asins || !Array.isArray(asins)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'userId and asins array are required' 
+      });
+    }
+    
+    // Process ASINs and add user_id to each
+    const asinsToInsert = asins.map(asin => ({
+      ...asin,
+      user_id: userId,
+      asin: asin.asin.toUpperCase(),
+      created_at: new Date().toISOString()
+    }));
+    
+    const { data: insertedAsins, error } = await supabase
+      .from('user_asins')
+      .insert(asinsToInsert)
+      .select();
+    
+    if (error) throw error;
+    
+    res.json({ 
+      success: true, 
+      data: insertedAsins,
+      count: insertedAsins.length 
+    });
+  } catch (error) {
+    console.error('Error bulk importing ASINs:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update ASIN brand assignment
+app.put('/api/asins/:asinId/brand', async (req, res) => {
+  try {
+    const { asinId } = req.params;
+    const { brandId } = req.body;
+    
+    const { data: asin, error } = await supabase
+      .from('user_asins')
+      .update({ 
+        brand_id: brandId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', asinId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: asin });
+  } catch (error) {
+    console.error('Error updating ASIN brand:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // OpenAI API endpoint
 app.post('/api/openai/segment-portfolio', async (req, res) => {
   try {
