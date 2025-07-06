@@ -74,10 +74,16 @@ async function findAvailablePort(startPort = 3001) {
 
 // Supabase configuration
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ueemtnohgkovwzodzxdr.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk';
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 // Service role key for server-side operations (bypasses RLS)
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDg2NzI5NSwiZXhwIjoyMDY2NDQzMjk1fQ.4c_tF-wO4V5EFMzO8i_Ux-xH8ozvpM4kUUYA5pTyKW8';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseServiceKey) {
+  console.error('🚨 CRITICAL: SUPABASE_SERVICE_ROLE_KEY environment variable is required for server operations');
+  console.error('Please add SUPABASE_SERVICE_ROLE_KEY to your .env file');
+  process.exit(1);
+}
 
 // Regular client for frontend operations
 const supabase = createClient(supabaseUrl, supabaseKey);

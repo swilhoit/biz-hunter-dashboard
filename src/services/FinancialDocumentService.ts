@@ -182,7 +182,8 @@ export class FinancialDocumentService {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error(`OpenAI proxy call for task ${task} failed:`, response.status, errorData);
-      throw new Error(`Failed to execute AI task: ${task}`);
+      console.error('Request payload was:', JSON.stringify(payload).substring(0, 500));
+      throw new Error(`Failed to execute AI task: ${task} - ${errorData.error || response.statusText}`);
     }
 
     return response.json();
@@ -259,7 +260,15 @@ export class FinancialDocumentService {
       let documentContent = '';
       
       if (DocumentExtractors.canExtractText(file.name)) {
+        console.log('📄 Extracting text from file:', file.name);
         documentContent = await DocumentExtractors.extractTextFromFile(file);
+        console.log('📄 Extracted content length:', documentContent.length);
+        console.log('📄 Content preview:', documentContent.substring(0, 500));
+        
+        // Log specific details for Excel files
+        if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+          console.log('📊 Excel file detected. First 1000 chars:', documentContent.substring(0, 1000));
+        }
       } else if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.pdf')) {
         // Use vision API for images and PDFs
         const analysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
@@ -272,7 +281,9 @@ export class FinancialDocumentService {
 
       // Extract financial data based on document type
       progressCallback?.('Extracting financial data...');
+      console.log('💰 Extracting financial data for document type:', documentType);
       const financialData = await this.extractFinancialData(documentContent, documentType);
+      console.log('💰 Extracted financial data:', JSON.stringify(financialData, null, 2).substring(0, 500));
 
       // Extract period information
       progressCallback?.('Identifying reporting period...');
@@ -422,16 +433,22 @@ Return only the document type.`;
     };
 
     try {
+      console.log('🤖 Sending to OpenAI with prompt length:', prompt.length);
       const response = await this._callOpenAIProxy('chat.completions.create', payload);
       let content = response.choices[0]?.message?.content || '{}';
+      console.log('🤖 OpenAI response:', content.substring(0, 300));
       
       // Remove markdown code blocks if present
       content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       
       const extracted = JSON.parse(content);
-      return this.normalizeFinancialData(extracted, documentType);
+      console.log('🤖 Parsed extraction:', Object.keys(extracted));
+      const normalized = this.normalizeFinancialData(extracted, documentType);
+      console.log('🤖 Normalized data - Revenue:', normalized.revenue?.total, 'NetIncome:', normalized.netIncome);
+      return normalized;
     } catch (error) {
       console.error('Financial extraction error:', error);
+      console.error('🤖 Failed to extract financial data, returning empty financials');
       return this.getEmptyFinancials();
     }
   }
@@ -442,8 +459,11 @@ Return only the document type.`;
   private getExtractionPrompt(documentType: FinancialDocumentType, content: string): string {
     const basePrompt = `Extract all financial data from this ${documentType} document.
 
+For Excel/spreadsheet data: Look for columns with months/dates and rows with financial line items.
+Common P&L line items include: Sales, Revenue, Income, COGS, Cost of Goods Sold, Gross Profit, Operating Expenses, EBITDA, Net Income, etc.
+
 Document content:
-${content.substring(0, 10000)}
+${content.substring(0, 15000)}
 
 Return a JSON object with this exact structure:
 {
