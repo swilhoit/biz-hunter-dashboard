@@ -325,33 +325,35 @@ function SEODashboard() {
                 {/* Traffic Overview */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Traffic Overview</h3>
-                  <LineChart01
-                    data={{
-                      labels: seoData.trafficData.labels,
-                      datasets: [
-                        {
-                          label: 'Organic Traffic',
-                          data: seoData.trafficData.organic,
-                          borderColor: tailwindConfig().theme.colors.blue[500],
-                          backgroundColor: tailwindConfig().theme.colors.blue[500] + '20',
-                          borderWidth: 2,
-                          fill: true,
-                          tension: 0.4,
-                        },
-                        {
-                          label: 'Paid Traffic',
-                          data: seoData.trafficData.paid,
-                          borderColor: tailwindConfig().theme.colors.purple[500],
-                          backgroundColor: tailwindConfig().theme.colors.purple[500] + '20',
-                          borderWidth: 2,
-                          fill: true,
-                          tension: 0.4,
-                        },
-                      ],
-                    }}
-                    width={595}
-                    height={248}
-                  />
+                  <div className="relative" style={{ height: '300px' }}>
+                    <LineChart01
+                      data={{
+                        labels: seoData.trafficData.labels,
+                        datasets: [
+                          {
+                            label: 'Organic Traffic',
+                            data: seoData.trafficData.organic,
+                            borderColor: tailwindConfig().theme.colors.blue[500],
+                            backgroundColor: tailwindConfig().theme.colors.blue[500] + '20',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                          },
+                          {
+                            label: 'Paid Traffic',
+                            data: seoData.trafficData.paid,
+                            borderColor: tailwindConfig().theme.colors.purple[500],
+                            backgroundColor: tailwindConfig().theme.colors.purple[500] + '20',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                          },
+                        ],
+                      }}
+                      width={389}
+                      height={300}
+                    />
+                  </div>
                 </div>
 
                 {/* Top Keywords & Pages */}
@@ -475,7 +477,7 @@ function SEODashboard() {
                     </div>
                   </div>
                   
-                  <div className="mt-6">
+                  <div className="mt-6" style={{ height: '250px' }}>
                     <BarChart03
                       data={{
                         labels: ['Your Site', 'Competitor 1', 'Competitor 2', 'Competitor 3'],
@@ -492,8 +494,8 @@ function SEODashboard() {
                           maxBarThickness: 48,
                         }],
                       }}
-                      width={595}
-                      height={248}
+                      width={389}
+                      height={250}
                     />
                   </div>
                 </div>

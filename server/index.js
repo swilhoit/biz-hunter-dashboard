@@ -17,6 +17,7 @@ import filesRoutes from './api/files.js';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
+// Load environment variables
 dotenv.config();
 
 // Log environment variables for debugging
