@@ -315,35 +315,60 @@ export class DocumentIntelligenceService {
           console.warn('PDF may be scanned or image-based, extracting content differently...');
           progressCallback?.('PDF appears to be scanned, extracting content...');
           
-          // For scanned PDFs, we need to handle them differently
-          // Instead of relying on the generic vision API fallback, 
-          // let's create a more specific prompt for business documents
+          // For scanned PDFs, use vision API to extract content
+          progressCallback?.('PDF appears to be scanned, using AI vision to extract content...');
+          
           try {
-            // Try to get at least some basic info from the file
-            const fileName = file.name || 'business document';
-            const fileSize = file.size || 0;
-            
-            // Create a context-aware prompt
-            rawText = `Business document: ${fileName} (${Math.round(fileSize / 1024)}KB PDF)
-            
-This appears to be a business acquisition or summary document based on the filename and context. 
-The PDF could not be text-extracted, suggesting it may be a scanned document or image-based PDF.
-Key information typically found in such documents includes:
-- Business overview and history
-- Financial performance metrics
-- Market position and competitive advantages
-- Growth opportunities and risks
-- Valuation and asking price
-
-Please analyze this document thoroughly to extract all relevant business information.`;
-            
-            console.log('Using context-aware fallback for scanned PDF');
-          } catch (fallbackError) {
-            console.error('Fallback processing also failed:', fallbackError);
-            // Last resort - use the vision API
+            // Use the vision API to analyze the scanned PDF
+            console.log('Using vision API for scanned PDF analysis');
             const analysis = await DocumentAnalysisService.analyzeDocument(file, progressCallback);
-            console.log('Vision analysis result:', analysis);
+            console.log('Vision analysis completed');
+            
+            // Convert the analysis to text format
             rawText = this.analysisToText(analysis);
+            
+            // If we still have minimal content, enhance it with the analysis details
+            if (rawText.length < 500 && analysis.keyFindings && analysis.keyFindings.length > 0) {
+              const enhancedText = [
+                `Business: ${analysis.businessName || file.name}`,
+                analysis.description ? `Description: ${analysis.description}` : '',
+                '',
+                'Financial Information:',
+                analysis.annualRevenue ? `- Annual Revenue: $${analysis.annualRevenue.toLocaleString()}` : '',
+                analysis.annualProfit ? `- Annual Profit: $${analysis.annualProfit.toLocaleString()}` : '',
+                analysis.askingPrice ? `- Asking Price: $${analysis.askingPrice.toLocaleString()}` : '',
+                '',
+                'Key Findings:',
+                ...analysis.keyFindings.map(f => `- ${f}`),
+                '',
+                'Additional Details:',
+                analysis.additionalInfo ? JSON.stringify(analysis.additionalInfo, null, 2) : ''
+              ].filter(line => line.trim()).join('\n');
+              
+              rawText = enhancedText;
+            }
+            
+            console.log('Extracted text length from vision API:', rawText.length);
+            
+          } catch (visionError) {
+            console.error('Vision API extraction failed:', visionError);
+            // Final fallback - create a placeholder that indicates manual review needed
+            rawText = `Scanned PDF Document: ${file.name}
+            
+This PDF document could not be automatically processed for text extraction. 
+It appears to be a scanned or image-based PDF that requires OCR processing or manual review.
+
+File Details:
+- Name: ${file.name}
+- Size: ${Math.round(file.size / 1024)}KB
+- Type: PDF (scanned/image-based)
+
+To properly analyze this document:
+1. Download the file and review it manually
+2. Use OCR software to extract the text
+3. Re-upload a text-searchable version of the PDF
+
+The document likely contains business information that could not be automatically extracted.`;
           }
         }
       } else {
@@ -598,19 +623,28 @@ Return as JSON:
       return 'Document content could not be extracted. Manual review is recommended to access the information in this document.';
     }
     
-    // Check if this is a scanned PDF fallback
-    if (text.includes('PDF could not be text-extracted') && text.includes('scanned document')) {
+    // Check if this is a scanned PDF or failed extraction
+    if (!text || text.trim().length < 50 || 
+        (text.includes('PDF could not be text-extracted') && text.includes('scanned document')) ||
+        text.includes('Scanned PDF Document:') ||
+        text.includes('could not be automatically processed')) {
       // Generate a more helpful summary for scanned PDFs
-      return `This appears to be a scanned PDF business document that could not be automatically processed for text extraction. The document likely contains important business information such as financial statements, business overview, or acquisition details that require manual review.
+      return `This appears to be a scanned or image-based PDF document that could not be automatically processed. The document likely contains important business information that requires manual review.
 
-To properly analyze this document, please download it and review it manually, or use OCR software to extract the text content. Key information to look for includes:
-• Business financials (revenue, profit, EBITDA)
-• Valuation and asking price
-• Business operations and model
-• Market position and growth opportunities
-• Risk factors and considerations
+**Document Status**: Unable to extract text automatically
+**Document Type**: ${structuredData?.documentType || 'Business Document'} (Scanned/Image PDF)
 
-Once the document content is accessible, it can be re-processed for automated analysis.`;
+**Next Steps**:
+1. Download the document to review manually
+2. Use OCR software to extract text if needed
+3. Look for key business metrics:
+   • Financial performance (revenue, profit, EBITDA)
+   • Business valuation and asking price
+   • Operational details and business model
+   • Market position and competitive advantages
+   • Growth opportunities and risk factors
+
+**Note**: Once the document is converted to a text-searchable format, it can be re-uploaded for automated analysis and data extraction.`;
     }
     
     const prompt = `Generate a comprehensive summary of this business acquisition document that captures both the metrics AND the story.
