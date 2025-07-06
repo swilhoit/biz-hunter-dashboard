@@ -659,14 +659,14 @@ function DealFinancials({ deal }) {
                 <div className="flex items-center space-x-2">
                   <input
                     type="date"
-                    value={format(dateRange.startDate, 'yyyy-MM-dd')}
+                    value={dateRange.startDate && !isNaN(dateRange.startDate.getTime()) ? format(dateRange.startDate, 'yyyy-MM-dd') : ''}
                     onChange={(e) => setDateRange(prev => ({ ...prev, startDate: new Date(e.target.value) }))}
                     className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
                   />
                   <span className="text-gray-500">to</span>
                   <input
                     type="date"
-                    value={format(dateRange.endDate, 'yyyy-MM-dd')}
+                    value={dateRange.endDate && !isNaN(dateRange.endDate.getTime()) ? format(dateRange.endDate, 'yyyy-MM-dd') : ''}
                     onChange={(e) => setDateRange(prev => ({ ...prev, endDate: new Date(e.target.value) }))}
                     className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
                   />
@@ -898,7 +898,7 @@ function DealFinancials({ deal }) {
       {/* Export Options */}
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          Report generated on {format(new Date(), 'MMM dd, yyyy')} • Data as of {format(dateRange.endDate, 'MMM dd, yyyy')}
+          Report generated on {format(new Date(), 'MMM dd, yyyy')} • Data as of {dateRange.endDate && !isNaN(dateRange.endDate.getTime()) ? format(dateRange.endDate, 'MMM dd, yyyy') : 'N/A'}
         </div>
         <button className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300">
           <Download className="w-4 h-4 mr-2" />

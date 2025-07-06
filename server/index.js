@@ -2532,8 +2532,8 @@ app.get('/api/brands/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Get brands with metrics from the view
-    const { data: brands, error } = await supabase
+    // Get brands with metrics from the view using service role
+    const { data: brands, error } = await supabaseService
       .from('brand_metrics')
       .select('*')
       .eq('user_id', userId)
@@ -2560,8 +2560,8 @@ app.post('/api/brands', async (req, res) => {
       return res.status(400).json({ success: false, message: 'userId and name are required' });
     }
     
-    // First, check if the table exists and RLS is properly configured
-    const { data: brand, error } = await supabase
+    // Use service role key to bypass RLS for server-side operations
+    const { data: brand, error } = await supabaseService
       .from('brands')
       .insert([{ 
         user_id: userId, 
@@ -2576,16 +2576,29 @@ app.post('/api/brands', async (req, res) => {
     
     if (error) {
       console.error('Error inserting brand:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        userId: userId
+      });
       
       // If RLS policy error, provide helpful message
-      if (error.message.includes('row-level security policy')) {
+      if (error.message && error.message.includes('row-level security policy')) {
         return res.status(500).json({ 
           success: false, 
           message: 'Database permissions not configured. Please run the migration: supabase/migrations/20250107_create_brand_portfolio_system.sql',
           details: error.message
         });
       }
-      throw error;
+      
+      // Return the actual error for debugging
+      return res.status(500).json({ 
+        success: false, 
+        message: error.message || 'Failed to create brand',
+        details: error
+      });
     }
     
     res.json({ success: true, data: brand });
@@ -2605,7 +2618,7 @@ app.put('/api/brands/:brandId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'name is required' });
     }
     
-    const { data: brand, error } = await supabase
+    const { data: brand, error } = await supabaseService
       .from('brands')
       .update({ 
         name, 
@@ -2634,13 +2647,13 @@ app.delete('/api/brands/:brandId', async (req, res) => {
     const { brandId } = req.params;
     
     // First, unlink ASINs from this brand
-    await supabase
+    await supabaseService
       .from('user_asins')
       .update({ brand_id: null })
       .eq('brand_id', brandId);
     
     // Then delete the brand
-    const { error } = await supabase
+    const { error } = await supabaseService
       .from('brands')
       .delete()
       .eq('id', brandId);

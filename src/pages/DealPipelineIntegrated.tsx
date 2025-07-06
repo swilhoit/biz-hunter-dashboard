@@ -259,6 +259,7 @@ function DealPipelineIntegrated() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Asking Price</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Revenue</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date Added to Pipeline</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Source</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Opportunity Score</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
@@ -304,6 +305,9 @@ function DealPipelineIntegrated() {
                                   Profit: ${deal.annual_profit.toLocaleString()}/yr
                                 </div>
                               )}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+                              {deal.created_at ? new Date(deal.created_at).toLocaleDateString() : 'N/A'}
                             </td>
                             <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
                               {deal.source ? deal.source.replace('_', ' ') : 'N/A'}
@@ -362,7 +366,7 @@ function DealPipelineIntegrated() {
                       })}
                       {deals.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                             <div className="flex flex-col items-center">
                               <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

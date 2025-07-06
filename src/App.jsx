@@ -28,7 +28,7 @@ import DocumentManager from './pages/DocumentManager';
 import Portfolio from './pages/Portfolio';
 import BrandDetails from './pages/BrandDetails';
 import Explorer from './pages/ExplorerEnhanced';
-import SEODashboard from './pages/SEODashboard';
+
 import Fintech from './pages/Fintech';
 import Customers from './pages/ecommerce/Customers';
 import Orders from './pages/ecommerce/Orders';
@@ -110,7 +110,7 @@ function App() {
   return (
     <>
       <Routes>
-        <Route exact path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route exact path="/" element={<ProtectedRoute><DealPipeline /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/deals" element={<ProtectedRoute><DealPipeline /></ProtectedRoute>} />
         <Route path="/deals/dashboard" element={<ProtectedRoute><DealsDashboard /></ProtectedRoute>} />
@@ -129,7 +129,7 @@ function App() {
         <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
         <Route path="/brand/:id" element={<ProtectedRoute><BrandDetails /></ProtectedRoute>} />
         <Route path="/explorer" element={<ProtectedRoute><Explorer /></ProtectedRoute>} />
-        <Route path="/seo-dashboard" element={<ProtectedRoute><SEODashboard /></ProtectedRoute>} />
+
         <Route path="/dashboard/fintech" element={<ProtectedRoute><Fintech /></ProtectedRoute>} />
         <Route path="/ecommerce/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
         <Route path="/ecommerce/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />

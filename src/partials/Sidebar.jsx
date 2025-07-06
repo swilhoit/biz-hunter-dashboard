@@ -181,27 +181,7 @@ function Sidebar({
                 </NavLink>
               </li>
 
-              {/* SEO Dashboard */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
-                <NavLink
-                  end
-                  to="/seo-dashboard"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
-                >
-                  <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('seo-dashboard') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0Z"/>
-                      <path d="M8 2.5v3l2.5 2.5M5.5 8a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0Z"/>
-                      <path d="M3 3l2 2m6-2l-2 2m-6 6l2-2m6 2l-2-2"/>
-                    </svg>
-                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      SEO Dashboard
-                    </span>
-                  </div>
-                </NavLink>
-              </li>
+
             </ul>
           </div>
         </div>
