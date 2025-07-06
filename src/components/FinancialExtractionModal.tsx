@@ -20,9 +20,37 @@ function FinancialExtractionModal({
   onReject 
 }: FinancialExtractionModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedData, setEditedData] = useState(extraction?.financial_data || {});
+  const [editedData, setEditedData] = useState(extraction?.financial_data || {
+    revenue: { total: 0 },
+    cogs: { total: 0 },
+    grossProfit: 0,
+    operatingExpenses: { total: 0 },
+    ebitda: 0,
+    netIncome: 0,
+    margins: { gross: 0, operating: 0, net: 0 },
+    assets: { total: 0 },
+    liabilities: { total: 0 },
+    equity: { total: 0 }
+  });
 
   if (!isOpen || !extraction) return null;
+
+  const validationIssues = extraction.validation_status?.issues || [];
+  const hasErrors = validationIssues.some(issue => issue.severity === 'error');
+  const hasWarnings = validationIssues.some(issue => issue.severity === 'warning');
+
+  const financialData = editedData || extraction.financial_data || {
+    revenue: { total: 0 },
+    cogs: { total: 0 },
+    grossProfit: 0,
+    operatingExpenses: { total: 0 },
+    ebitda: 0,
+    netIncome: 0,
+    margins: { gross: 0, operating: 0, net: 0 },
+    assets: { total: 0 },
+    liabilities: { total: 0 },
+    equity: { total: 0 }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -104,7 +132,7 @@ function FinancialExtractionModal({
           </div>
 
           {/* Validation Issues */}
-          {extraction.validation_status?.issues && extraction.validation_status.issues.length > 0 && (
+          {(hasErrors || hasWarnings) && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
               <div className="flex items-start space-x-2">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -113,9 +141,9 @@ function FinancialExtractionModal({
                     Validation Issues Found
                   </p>
                   <ul className="mt-2 space-y-1">
-                    {extraction.validation_status.issues.map((issue, idx) => (
+                    {validationIssues.map((issue, idx) => (
                       <li key={idx} className="text-sm text-yellow-700 dark:text-yellow-300">
-                        • {issue.issue} ({issue.field})
+                        • {issue.message || issue.issue} {issue.field ? `(${issue.field})` : ''}
                       </li>
                     ))}
                   </ul>
@@ -136,69 +164,69 @@ function FinancialExtractionModal({
               <div className="space-y-3">
                 <DataRow
                   label="Revenue"
-                  value={editedData.revenue?.total || 0}
+                  value={financialData.revenue?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
-                    revenue: { ...editedData.revenue, total: val }
+                    ...financialData,
+                    revenue: { ...financialData.revenue, total: val }
                   })}
-                  confidence={extraction.confidence_scores.revenue || 0.8}
+                  confidence={extraction.confidence_scores?.revenue || 0.8}
                 />
                 
                 <DataRow
                   label="COGS"
-                  value={editedData.cogs?.total || 0}
+                  value={financialData.cogs?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
-                    cogs: { ...editedData.cogs, total: val }
+                    ...financialData,
+                    cogs: { ...financialData.cogs, total: val }
                   })}
-                  confidence={extraction.confidence_scores.expenses || 0.8}
+                  confidence={extraction.confidence_scores?.expenses || 0.8}
                 />
                 
                 <DataRow
                   label="Gross Profit"
-                  value={editedData.grossProfit || 0}
+                  value={financialData.grossProfit || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
+                    ...financialData,
                     grossProfit: val
                   })}
-                  confidence={extraction.confidence_scores.profitability || 0.8}
+                  confidence={extraction.confidence_scores?.profitability || 0.8}
                   isCalculated
                 />
                 
                 <DataRow
                   label="Operating Expenses"
-                  value={editedData.operatingExpenses?.total || 0}
+                  value={financialData.operatingExpenses?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
-                    operatingExpenses: { ...editedData.operatingExpenses, total: val }
+                    ...financialData,
+                    operatingExpenses: { ...financialData.operatingExpenses, total: val }
                   })}
-                  confidence={extraction.confidence_scores.expenses || 0.8}
+                  confidence={extraction.confidence_scores?.expenses || 0.8}
                 />
                 
                 <DataRow
                   label="EBITDA"
-                  value={editedData.ebitda || 0}
+                  value={financialData.ebitda || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
+                    ...financialData,
                     ebitda: val
                   })}
-                  confidence={extraction.confidence_scores.profitability || 0.8}
+                  confidence={extraction.confidence_scores?.profitability || 0.8}
                 />
                 
                 <DataRow
                   label="Net Income"
-                  value={editedData.netIncome || 0}
+                  value={financialData.netIncome || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
-                    ...editedData,
+                    ...financialData,
                     netIncome: val
                   })}
-                  confidence={extraction.confidence_scores.profitability || 0.8}
+                  confidence={extraction.confidence_scores?.profitability || 0.8}
                   highlight
                 />
               </div>
@@ -213,66 +241,66 @@ function FinancialExtractionModal({
               <div className="space-y-3">
                 <MetricRow
                   label="Gross Margin"
-                  value={editedData.margins?.gross}
+                  value={financialData.margins?.gross}
                   format="percent"
                 />
                 
                 <MetricRow
                   label="Operating Margin"
-                  value={editedData.margins?.operating}
+                  value={financialData.margins?.operating}
                   format="percent"
                 />
                 
                 <MetricRow
                   label="Net Margin"
-                  value={editedData.margins?.net}
+                  value={financialData.margins?.net}
                   format="percent"
                 />
                 
-                {editedData.currentRatio && (
+                {financialData.currentRatio && (
                   <MetricRow
                     label="Current Ratio"
-                    value={editedData.currentRatio}
+                    value={financialData.currentRatio}
                     format="ratio"
                   />
                 )}
                 
-                {editedData.debtToEquity && (
+                {financialData.debtToEquity && (
                   <MetricRow
                     label="Debt to Equity"
-                    value={editedData.debtToEquity}
+                    value={financialData.debtToEquity}
                     format="ratio"
                   />
                 )}
                 
-                {editedData.workingCapital && (
+                {financialData.workingCapital && (
                   <MetricRow
                     label="Working Capital"
-                    value={editedData.workingCapital}
+                    value={financialData.workingCapital}
                     format="currency"
                   />
                 )}
               </div>
 
               {/* Balance Sheet Summary */}
-              {editedData.assets?.total > 0 && (
+              {(financialData.assets?.total || 0) > 0 && (
                 <div className="mt-6 space-y-3">
                   <h4 className="text-md font-medium text-gray-800 dark:text-gray-200">
                     Balance Sheet Summary
                   </h4>
                   <MetricRow
                     label="Total Assets"
-                    value={editedData.assets?.total || 0}
+                    value={financialData.assets?.total || 0}
                     format="currency"
                   />
                   <MetricRow
                     label="Total Liabilities"
-                    value={editedData.liabilities?.total || 0}
+                    value={financialData.liabilities?.total || 0}
                     format="currency"
                   />
                   <MetricRow
                     label="Total Equity"
-                    value={editedData.equity?.total || 0}
+                    value={financialData.equity?.total || 0}
                     format="currency"
                   />
                 </div>
@@ -281,13 +309,13 @@ function FinancialExtractionModal({
           </div>
 
           {/* Revenue Breakdown if available */}
-          {editedData.revenue.breakdown && Object.keys(editedData.revenue.breakdown).length > 0 && (
+          {financialData.revenue?.breakdown && Object.keys(financialData.revenue.breakdown).length > 0 && (
             <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
               <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">
                 Revenue Breakdown
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(editedData.revenue.breakdown).map(([key, value]) => (
+                {Object.entries(financialData.revenue.breakdown).map(([key, value]) => (
                   value !== null && (
                     <div key={key}>
                       <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">

@@ -1,6 +1,13 @@
 // Load environment variables FIRST before any other imports
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from parent directory (project root)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 import express from 'express';
 import cors from 'cors';
@@ -9,8 +16,6 @@ import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import net from 'net';
 import morgan from 'morgan';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
 import multer from 'multer';
 import fs from 'fs';
@@ -25,6 +30,8 @@ console.log('🔧 Environment check:');
 console.log('VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? 'Set' : 'Missing');
 console.log('VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing');
 console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'Set' : 'Missing');
+console.log('DATAFORSEO_USERNAME:', process.env.DATAFORSEO_USERNAME ? 'Set' : 'Missing');
+console.log('DATAFORSEO_PASSWORD:', process.env.DATAFORSEO_PASSWORD ? 'Set' : 'Missing');
 
 const app = express();
 // Read port from environment or use default
