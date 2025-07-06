@@ -647,4 +647,131 @@ function SEODashboard() {
                                 </div>
                               </td>
                               <td className="py-3">
-                                <span className={`
+                                <span className={`text-sm font-medium ${kw.position <= 10 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  #{kw.position}
+                                </span>
+                              </td>
+                              <td className="py-3 text-sm text-gray-900 dark:text-gray-100">
+                                {kw.search_volume.toLocaleString()}
+                              </td>
+                              <td className="py-3">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                  kw.difficulty < 40 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                  kw.difficulty < 60 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                }`}>
+                                  {kw.difficulty}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Top Pages */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Top Pages</h3>
+                      <button className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
+                        View All
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            <th className="pb-3">Page</th>
+                            <th className="pb-3">Traffic</th>
+                            <th className="pb-3">Bounce</th>
+                            <th className="pb-3">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {seoData.topPages.map((page, index) => (
+                            <tr key={index}>
+                              <td className="py-3">
+                                <span className="text-sm text-gray-900 dark:text-gray-100 truncate block max-w-xs">
+                                  {page.url}
+                                </span>
+                              </td>
+                              <td className="py-3 text-sm text-gray-900 dark:text-gray-100">
+                                {page.traffic.toLocaleString()}
+                              </td>
+                              <td className="py-3">
+                                <span className={`text-sm ${page.bounce_rate < 35 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {page.bounce_rate}%
+                                </span>
+                              </td>
+                              <td className="py-3 text-sm text-gray-900 dark:text-gray-100">
+                                {page.avg_time_on_page}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comprehensive Score Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Visibility Score */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Visibility Score</h3>
+                      <Eye className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                        {seoData.metrics.visibility_score}/100
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        Overall SEO visibility in search results
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Content Quality Score */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Content Quality</h3>
+                      <BarChart3 className="w-6 h-6 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                        {seoData.metrics.content_quality_score}/100
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        Content performance and optimization
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Competitive Position */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Competitors</h3>
+                      <Target className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                        {seoData.metrics.organic_competitors}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        Competing domains detected
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default SEODashboard;

@@ -20,9 +20,9 @@ function FinancialExtractionModal({
   onReject 
 }: FinancialExtractionModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedData, setEditedData] = useState(extraction.financial_data);
+  const [editedData, setEditedData] = useState(extraction?.financial_data || {});
 
-  if (!isOpen) return null;
+  if (!isOpen || !extraction) return null;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -89,22 +89,22 @@ function FinancialExtractionModal({
               <div className="flex items-center space-x-2">
                 <FileText className="w-5 h-5 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Document Type: {extraction.document_type.replace(/_/g, ' ').toUpperCase()}
+                  Document Type: {extraction.document_type?.replace(/_/g, ' ').toUpperCase() || 'P&L'}
                 </span>
               </div>
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Period: {new Date(extraction.period_covered.startDate).toLocaleDateString()} - {new Date(extraction.period_covered.endDate).toLocaleDateString()}
+                  Period: {extraction.period_covered?.startDate ? new Date(extraction.period_covered.startDate).toLocaleDateString() : 'N/A'} - {extraction.period_covered?.endDate ? new Date(extraction.period_covered.endDate).toLocaleDateString() : 'N/A'}
                 </span>
-                <span className={`text-sm font-medium ${confidenceColor(extraction.confidence_scores.overall)}`}>
-                  Confidence: {formatPercent(extraction.confidence_scores.overall)}
+                <span className={`text-sm font-medium ${confidenceColor(extraction.confidence_scores?.overall || 0.8)}`}>
+                  Confidence: {formatPercent(extraction.confidence_scores?.overall || 0.8)}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Validation Issues */}
-          {extraction.validation_status.issues && extraction.validation_status.issues.length > 0 && (
+          {extraction.validation_status?.issues && extraction.validation_status.issues.length > 0 && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
               <div className="flex items-start space-x-2">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -307,15 +307,25 @@ function FinancialExtractionModal({
         {/* Footer */}
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              {isEditing ? 'Done Editing' : 'Edit Values'}
-            </button>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {extraction.validation_status?.isValidated ? (
+                <span className="flex items-center text-green-600 dark:text-green-400">
+                  <Check className="w-4 h-4 mr-1" />
+                  Data validated
+                </span>
+              ) : (
+                <span>Please review the extracted data</span>
+              )}
+            </div>
             
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                {isEditing ? 'Done Editing' : 'Edit Values'}
+              </button>
               <button
                 onClick={onReject}
                 className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-red-600"
