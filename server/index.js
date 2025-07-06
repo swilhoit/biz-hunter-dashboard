@@ -35,7 +35,7 @@ console.log('DATAFORSEO_PASSWORD:', process.env.DATAFORSEO_PASSWORD ? 'Set' : 'M
 
 const app = express();
 // Read port from environment or use default
-const PORT = process.env.SERVER_PORT || process.env.PORT || 3002;
+const PORT = parseInt(process.env.SERVER_PORT || process.env.PORT || 3002);
 
 // CORS configuration
 const corsOptions = {
@@ -57,15 +57,16 @@ app.use('/api/files', filesRoutes);
 async function findAvailablePort(startPort = 3001) {
   return new Promise((resolve) => {
     const server = net.createServer();
+    const portNumber = parseInt(startPort);
     
-    server.listen(startPort, () => {
+    server.listen(portNumber, () => {
       const { port } = server.address();
       server.close(() => resolve(port));
     });
     
     server.on('error', () => {
       // Port is in use, try the next one
-      resolve(findAvailablePort(startPort + 1));
+      resolve(findAvailablePort(portNumber + 1));
     });
   });
 }

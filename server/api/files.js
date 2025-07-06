@@ -222,34 +222,75 @@ router.get('/download/:fileId', async (req, res) => {
     } else {
       // This is a Supabase Storage file
       console.log('Attempting to download from Supabase Storage...');
+      console.log('Storage path from DB:', fileInfo.file_path);
       
       try {
         // Use file_path since storage_path column doesn't exist
-        const storagePath = fileInfo.file_path;
+        let storagePath = fileInfo.file_path;
         
+        // Check if the path is already URL encoded (contains %20)
+        const isAlreadyEncoded = storagePath.includes('%20');
+        console.log('Path appears to be already encoded:', isAlreadyEncoded);
+        
+        // If the path is already encoded, decode it first
+        if (isAlreadyEncoded) {
+          storagePath = decodeURIComponent(storagePath);
+          console.log('Decoded storage path:', storagePath);
+        }
+        
+        // Try downloading with the raw path first
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('deal-documents')
           .download(storagePath);
         
         if (downloadError || !fileData) {
-          console.error('Supabase Storage download error:', downloadError);
-          // Try with encoded path
-          const encodedPath = encodeURIComponent(storagePath);
+          console.error('Supabase Storage download error with raw path:', downloadError);
+          console.log('Trying with encoded path...');
+          
+          // Try with properly encoded path (encode each segment separately)
+          const pathSegments = storagePath.split('/');
+          const encodedPath = pathSegments.map(segment => encodeURIComponent(segment)).join('/');
+          console.log('Encoded path:', encodedPath);
+          
           const { data: fileDataEncoded, error: downloadErrorEncoded } = await supabase.storage
             .from('deal-documents')
             .download(encodedPath);
             
           if (downloadErrorEncoded || !fileDataEncoded) {
             console.error('Encoded path also failed:', downloadErrorEncoded);
-            return res.status(404).json({ error: 'File not found in storage' });
+            
+            // Last attempt - try the original path from DB without any modification
+            console.log('Last attempt with original DB path:', fileInfo.file_path);
+            const { data: fileDataOriginal, error: downloadErrorOriginal } = await supabase.storage
+              .from('deal-documents')
+              .download(fileInfo.file_path);
+              
+            if (downloadErrorOriginal || !fileDataOriginal) {
+              console.error('All download attempts failed');
+              console.error('Original path error:', downloadErrorOriginal);
+              return res.status(404).json({ 
+                error: 'File not found in storage',
+                details: {
+                  attempted_paths: [storagePath, encodedPath, fileInfo.file_path],
+                  errors: [downloadError?.message, downloadErrorEncoded?.message, downloadErrorOriginal?.message]
+                }
+              });
+            }
+            
+            // Use original path result
+            const buffer = Buffer.from(await fileDataOriginal.arrayBuffer());
+            res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
+            res.setHeader('Content-Length', buffer.length);
+            res.send(buffer);
+          } else {
+            // Use encoded result
+            const buffer = Buffer.from(await fileDataEncoded.arrayBuffer());
+            res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
+            res.setHeader('Content-Length', buffer.length);
+            res.send(buffer);
           }
-          
-          // Use encoded result
-          const buffer = Buffer.from(await fileDataEncoded.arrayBuffer());
-          res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
-          res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
-          res.setHeader('Content-Length', buffer.length);
-          res.send(buffer);
         } else {
           // Convert blob to buffer and send
           const buffer = Buffer.from(await fileData.arrayBuffer());
@@ -335,6 +376,121 @@ router.delete('/:fileId', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Diagnostic endpoint to check file paths
+router.get('/diagnostics/paths', async (req, res) => {
+  try {
+    // First get all recent files to understand the pattern
+    const { data: allFiles, error: allError } = await supabase
+      .from('deal_documents')
+      .select('id, file_name, file_path, uploaded_at')
+      .order('uploaded_at', { ascending: false })
+      .limit(20);
+      
+    if (allError) {
+      return res.status(500).json({ error: allError.message });
+    }
+    
+    // Also get files with encoded spaces in their paths
+    const { data: problemFiles, error } = await supabase
+      .from('deal_documents')
+      .select('id, file_name, file_path')
+      .or('file_path.like.%\\%20%,file_path.like.%\\%25%,file_name.like.%\\%20%');
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    const diagnostics = {
+      totalProblemFiles: problemFiles?.length || 0,
+      recentFiles: allFiles?.map(file => ({
+        id: file.id,
+        file_name: file.file_name,
+        file_path: file.file_path,
+        uploaded_at: file.uploaded_at,
+        name_has_encoding: file.file_name?.includes('%20') || file.file_name?.includes('%25'),
+        path_has_encoding: file.file_path?.includes('%20') || file.file_path?.includes('%25')
+      })),
+      problemFiles: problemFiles?.map(file => ({
+        id: file.id,
+        file_name: file.file_name,
+        file_path: file.file_path,
+        decoded_name: file.file_name ? decodeURIComponent(file.file_name) : null,
+        decoded_path: file.file_path ? decodeURIComponent(file.file_path) : null,
+        appears_encoded: file.file_path?.includes('%20') || file.file_path?.includes('%25'),
+        double_encoded: file.file_path?.includes('%2520')
+      }))
+    };
+
+    res.json(diagnostics);
+  } catch (error) {
+    console.error('Diagnostics error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fix file paths endpoint
+router.post('/fix-paths', async (req, res) => {
+  try {
+    // Get all files with encoded paths
+    const { data: problemFiles, error: fetchError } = await supabase
+      .from('deal_documents')
+      .select('id, file_path')
+      .or('file_path.like.%\\%20%,file_path.like.%\\%25%');
+
+    if (fetchError) {
+      return res.status(500).json({ error: fetchError.message });
+    }
+
+    let fixed = 0;
+    let failed = 0;
+    const results = [];
+
+    for (const file of problemFiles || []) {
+      try {
+        // Decode the path if it's encoded
+        let fixedPath = file.file_path;
+        
+        // Handle double encoding
+        while (fixedPath.includes('%25')) {
+          fixedPath = decodeURIComponent(fixedPath);
+        }
+        
+        // Single decode for normal encoding
+        if (fixedPath.includes('%20')) {
+          fixedPath = decodeURIComponent(fixedPath);
+        }
+
+        // Update the database
+        const { error: updateError } = await supabase
+          .from('deal_documents')
+          .update({ file_path: fixedPath })
+          .eq('id', file.id);
+
+        if (updateError) {
+          failed++;
+          results.push({ id: file.id, success: false, error: updateError.message });
+        } else {
+          fixed++;
+          results.push({ id: file.id, success: true, original: file.file_path, fixed: fixedPath });
+        }
+      } catch (err) {
+        failed++;
+        results.push({ id: file.id, success: false, error: err.message });
+      }
+    }
+
+    res.json({
+      totalFiles: problemFiles?.length || 0,
+      fixed,
+      failed,
+      results
+    });
+  } catch (error) {
+    console.error('Fix paths error:', error);
     res.status(500).json({ error: error.message });
   }
 });
