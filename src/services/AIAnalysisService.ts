@@ -784,6 +784,21 @@ export class DocumentAnalysisService {
           throw new Error(`Unsupported file type: ${file.name}`);
         }
         
+        // Truncate content if it's too large (roughly 100k characters should be safe for 128k token limit)
+        const MAX_CONTENT_LENGTH = 100000;
+        let contentToAnalyze = documentContent;
+        if (documentContent.length > MAX_CONTENT_LENGTH) {
+          console.warn(`Document content too large (${documentContent.length} chars), truncating to ${MAX_CONTENT_LENGTH} chars`);
+          // Try to truncate at a reasonable boundary (paragraph or sentence)
+          contentToAnalyze = documentContent.substring(0, MAX_CONTENT_LENGTH);
+          const lastPeriod = contentToAnalyze.lastIndexOf('.');
+          const lastNewline = contentToAnalyze.lastIndexOf('\n');
+          const cutPoint = Math.max(lastPeriod, lastNewline);
+          if (cutPoint > MAX_CONTENT_LENGTH * 0.8) {
+            contentToAnalyze = contentToAnalyze.substring(0, cutPoint + 1);
+          }
+        }
+        
         // Send text content to server for analysis
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
         const response = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
@@ -792,7 +807,7 @@ export class DocumentAnalysisService {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            content: documentContent,
+            content: contentToAnalyze,
             fileName: file.name,
             fileType: file.type,
             analysisType: 'business'

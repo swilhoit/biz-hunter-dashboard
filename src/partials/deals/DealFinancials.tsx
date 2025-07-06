@@ -68,7 +68,13 @@ function DealFinancials({ deal }: DealFinancialsProps) {
         })
         .eq('id', extraction.id);
 
-      if (error) throw error;
+      if (error) {
+        // If table doesn't exist, show a helpful message
+        if (error.code === '42P01' || error.message?.includes('not exist') || error.code === '406') {
+          throw new Error('Financial extractions table not found. Please contact support to run database migrations.');
+        }
+        throw error;
+      }
 
       showToast('Financial data validated and applied!', 'success');
       setShowExtractionModal(false);

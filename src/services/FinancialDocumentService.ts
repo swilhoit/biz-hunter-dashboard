@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { DocumentExtractors } from './DocumentExtractors';
 import { DocumentAnalysisService } from './AIAnalysisService';
-import { encodeFilePath } from '../utils/fileUtils';
 
 /**
  * Financial Document Processing Service
@@ -224,29 +223,24 @@ export class FinancialDocumentService {
       let file: File;
       
       try {
-        // Try direct Supabase Storage download first
-        console.log('📁 Original file path:', document.file_path);
+        // Use server endpoint for reliable file downloads
+        console.log('📁 Downloading document via server:', documentId);
         
-        // Check if the path is already encoded
-        const isAlreadyEncoded = document.file_path.includes('%');
-        const filePath = isAlreadyEncoded ? document.file_path : encodeFilePath(document.file_path);
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+        const response = await fetch(`${API_BASE_URL}/api/files/download/${documentId}`);
         
-        console.log('📁 File path for download:', filePath);
-        
-        const { data: fileData, error: downloadError } = await supabaseAny.storage
-          .from('deal-documents')
-          .download(filePath);
-
-        if (downloadError || !fileData) {
-          throw new Error(`Direct download failed: ${downloadError?.message || 'Unknown error'}`);
+        if (!response.ok) {
+          throw new Error(`Server download failed: ${response.status} ${response.statusText}`);
         }
 
+        const fileData = await response.blob();
+        
         // Convert to File object
         file = new File([fileData], document.file_name || 'document', {
           type: document.mime_type || 'application/octet-stream'
         });
         
-        console.log('✅ Direct Supabase download successful');
+        console.log('✅ Server download successful');
         
       } catch (directDownloadError) {
         console.warn('⚠️ Direct download failed, trying server endpoint:', directDownloadError);
@@ -1220,19 +1214,29 @@ Return the financial data in the standard JSON format with revenue, expenses, et
    * Get latest validated financials for a deal
    */
   async getLatestValidatedFinancials(dealId: string): Promise<FinancialExtraction | null> {
-    const { data, error } = await supabaseAny
-      .from('financial_extractions')
-      .select('*')
-      .eq('deal_id', dealId)
-      .eq('validation_status->isValidated', true)
-      .order('extraction_date', { ascending: false })
-      .limit(1)
-      .single();
+    try {
+      const { data, error } = await supabaseAny
+        .from('financial_extractions')
+        .select('*')
+        .eq('deal_id', dealId)
+        .eq('validation_status->isValidated', true)
+        .order('extraction_date', { ascending: false })
+        .limit(1)
+        .single();
 
-    if (error || !data) {
+      if (error) {
+        // If table doesn't exist (406 error), return null gracefully
+        if (error.code === '42P01' || error.message?.includes('not exist') || error.code === '406') {
+          console.warn('financial_extractions table does not exist. Please run the migration.');
+          return null;
+        }
+        throw error;
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('Error fetching validated financials:', error);
       return null;
     }
-
-    return data;
   }
 }
