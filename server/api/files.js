@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import supabase from '../supabaseClient.js';
@@ -10,6 +11,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = express.Router();
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    message: 'File API is running',
+    uploads_dir_exists: fsSync.existsSync(path.join(__dirname, '..', 'uploads')),
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -181,7 +192,7 @@ router.get('/info/:fileId', async (req, res) => {
   try {
     const { data: fileInfo, error } = await supabase
       .from('deal_documents')
-      .select('id, file_name, mime_type, file_size, uploaded_at')
+      .select('*')
       .eq('id', req.params.fileId)
       .single();
 
@@ -189,7 +200,16 @@ router.get('/info/:fileId', async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    res.json(fileInfo);
+    // Add diagnostic information
+    const isLocalFile = fileInfo.file_path && !fileInfo.file_path.includes('/');
+    const diagnostics = {
+      ...fileInfo,
+      is_local_file: isLocalFile,
+      storage_type: isLocalFile ? 'local' : 'supabase',
+      server_has_uploads_dir: fsSync.existsSync(path.join(__dirname, '..', 'uploads')),
+    };
+
+    res.json(diagnostics);
   } catch (error) {
     console.error('Info error:', error);
     res.status(500).json({ error: error.message });
