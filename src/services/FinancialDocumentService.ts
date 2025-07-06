@@ -322,6 +322,12 @@ export class FinancialDocumentService {
       };
 
       progressCallback?.('Financial extraction complete!');
+      console.log('✨ Returning extraction for modal:', {
+        dealId: extraction.deal_id,
+        hasFinancialData: !!extraction.financial_data,
+        revenue: extraction.financial_data?.revenue?.total,
+        netIncome: extraction.financial_data?.netIncome
+      });
       return extraction;
 
     } catch (error) {
@@ -338,6 +344,11 @@ export class FinancialDocumentService {
     progressCallback?: (stage: string) => void
   ): Promise<FinancialExtraction> {
     try {
+      console.log('💾 saveFinancialExtraction called with:', {
+        dealId: extraction.deal_id,
+        hasData: !!extraction.financial_data,
+        revenue: extraction.financial_data?.revenue?.total
+      });
       progressCallback?.('Saving extraction results...');
       
       const { data: saved, error: saveError } = await supabaseAny

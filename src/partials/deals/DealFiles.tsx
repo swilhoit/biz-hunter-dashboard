@@ -720,6 +720,7 @@ function DealFiles({ dealId }: DealFilesProps) {
                               );
                               
                               // Show modal for review
+                              console.log('📊 Setting extraction for modal:', extraction);
                               setPendingExtraction(extraction);
                               setShowFinancialModal(true);
                               
@@ -906,6 +907,7 @@ function DealFiles({ dealId }: DealFilesProps) {
           extraction={pendingExtraction}
           fileName={extractingFileName}
           onConfirm={async (updatedExtraction) => {
+            console.log('✅ Modal confirmed, saving extraction:', updatedExtraction);
             try {
               const financialService = new FinancialDocumentService();
               setAnalysisProgress('Saving financial data...');
