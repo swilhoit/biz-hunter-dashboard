@@ -1,7 +1,5 @@
 import { filesAdapter } from '../lib/database-adapter';
-import { supabase } from '../lib/supabase';
 import { DocumentExtractors } from './DocumentExtractors';
-import { getConfigValue } from '../config/runtime-config';
 
 interface DealData {
   id: string;
@@ -250,22 +248,19 @@ export class AIAnalysisService {
 
   private async downloadAndAnalyzeDocument(file: any): Promise<string | null> {
     try {
-      // Decode the file path in case it contains encoded characters like %20 for spaces
-      // This handles cases where file paths might be stored with encoded spaces
-      const filePath = decodeURIComponent(file.file_path);
+      // Use server endpoint to download file to handle path encoding properly
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${file.id}`);
       
-      // Download the file from Supabase storage
-      const { data, error } = await supabase.storage
-        .from('deal-documents')
-        .download(filePath);
-
-      if (error) {
-        console.error('Error downloading document:', error);
+      if (!response.ok) {
+        console.error('Error downloading document from server:', response.status, response.statusText);
         return null;
       }
 
+      // Get the blob from the response
+      const blob = await response.blob();
+      
       // Convert to File object for analysis
-      const blob = new Blob([data], { type: file.file_type || 'application/octet-stream' });
       const fileObj = new File([blob], file.file_name, { type: file.file_type || 'application/octet-stream' });
 
       // Use DocumentAnalysisService to analyze the document
