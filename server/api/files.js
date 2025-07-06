@@ -95,23 +95,81 @@ router.get('/download/:fileId', async (req, res) => {
       console.error('File not found in database:', error);
       return res.status(404).json({ error: 'File not found' });
     }
-
-    const filePath = path.join(__dirname, '..', 'uploads', fileInfo.file_path);
     
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
-      console.error('File not found on disk:', filePath);
-      return res.status(404).json({ error: 'File not found on server' });
+    console.log('File info from database:', {
+      id: fileInfo.id,
+      file_name: fileInfo.file_name,
+      file_path: fileInfo.file_path,
+      storage_path: fileInfo.storage_path,
+      mime_type: fileInfo.mime_type
+    });
+
+    // Determine if this is a local file or Supabase Storage file
+    // New files have just a filename, old files have a full path
+    const isLocalFile = fileInfo.file_path && !fileInfo.file_path.includes('/');
+    
+    if (isLocalFile) {
+      // Try local file system
+      const localFilePath = path.join(__dirname, '..', 'uploads', fileInfo.file_path);
+      
+      try {
+        await fs.access(localFilePath);
+        // Set appropriate headers
+        res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
+        
+        // Send file
+        res.sendFile(localFilePath);
+      } catch {
+        console.error('Local file not found:', localFilePath);
+        return res.status(404).json({ error: 'File not found on server' });
+      }
+    } else {
+      // This is a Supabase Storage file
+      console.log('Attempting to download from Supabase Storage...');
+      
+      try {
+        // Use storage_path if available, otherwise use file_path
+        const storagePath = fileInfo.storage_path || fileInfo.file_path;
+        
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from('deal-documents')
+          .download(storagePath);
+        
+        if (downloadError || !fileData) {
+          console.error('Supabase Storage download error:', downloadError);
+          // Try with encoded path
+          const encodedPath = encodeURIComponent(storagePath);
+          const { data: fileDataEncoded, error: downloadErrorEncoded } = await supabase.storage
+            .from('deal-documents')
+            .download(encodedPath);
+            
+          if (downloadErrorEncoded || !fileDataEncoded) {
+            console.error('Encoded path also failed:', downloadErrorEncoded);
+            return res.status(404).json({ error: 'File not found in storage' });
+          }
+          
+          // Use encoded result
+          const buffer = Buffer.from(await fileDataEncoded.arrayBuffer());
+          res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+          res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
+          res.setHeader('Content-Length', buffer.length);
+          res.send(buffer);
+        } else {
+          // Convert blob to buffer and send
+          const buffer = Buffer.from(await fileData.arrayBuffer());
+          
+          res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+          res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
+          res.setHeader('Content-Length', buffer.length);
+          
+          res.send(buffer);
+        }
+      } catch (storageError) {
+        console.error('Storage download error:', storageError);
+        return res.status(404).json({ error: 'File download failed' });
+      }
     }
-
-    // Set appropriate headers
-    res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
-    
-    // Send file
-    res.sendFile(filePath);
   } catch (error) {
     console.error('Download error:', error);
     res.status(500).json({ error: error.message });
