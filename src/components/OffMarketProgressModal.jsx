@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, CheckCircle, AlertCircle, Clock, Database, Zap, TrendingUp, Loader2, AlertTriangle, Activity, Copy, Check } from 'lucide-react';
 
-const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
+const OffMarketProgressModal = ({ isOpen, onClose, onComplete, defaultSelectedSteps = ['products', 'sellers', 'storefronts'] }) => {
   const [progress, setProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState('Ready to start...');
   const [logs, setLogs] = useState([]);
@@ -16,7 +16,7 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showPipelineSetup, setShowPipelineSetup] = useState(true);
   const [keyword, setKeyword] = useState('');
-  const [selectedSteps, setSelectedSteps] = useState(['products', 'sellers', 'storefronts']);
+  const [selectedSteps, setSelectedSteps] = useState(defaultSelectedSteps);
   const [copiedLogs, setCopiedLogs] = useState(false);
   const logContainerRef = useRef(null);
   
@@ -124,7 +124,7 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
         setErrors([]);
         setShowPipelineSetup(true);
         setKeyword('');
-        setSelectedSteps(['products', 'sellers', 'storefronts']);
+        setSelectedSteps(defaultSelectedSteps);
       }
     }
   }, [isOpen, running]);
@@ -261,10 +261,15 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
   };
 
   const executeStep = async (stepId, keyword) => {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+    // For seller lookup, use real-time SSE connection
+    if (stepId === 'sellers') {
+      return await executeSellerLookupWithSSE();
+    }
+    
+    // For other steps, use regular API calls
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
     const endpoints = {
       products: `${API_BASE_URL}/api/crawl/products`,
-      sellers: `${API_BASE_URL}/api/crawl/sellers`, 
       storefronts: `${API_BASE_URL}/api/crawl/storefronts`,
       domains: `${API_BASE_URL}/api/crawl/enrich-domains`,
       contacts: `${API_BASE_URL}/api/crawl/enrich-contacts`
@@ -272,7 +277,6 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
     
     const payloads = {
       products: { keyword },
-      sellers: { batchSize: 100 },
       storefronts: { batchSize: 50 },
       domains: { maxDomains: 100 },
       contacts: { maxSellers: 50, minRevenue: 50000 }
@@ -298,10 +302,9 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
     
     const result = await response.json();
     
-    // Simulate some processing results for demo
+    // Simulate some processing results for demo (except sellers which is now real)
     const mockResults = {
       products: { processed: 1000, found: 850, cost: 4.0, message: '850 products discovered' },
-      sellers: { processed: 850, found: 425, cost: 8.5, message: '425 sellers found for top 20% ASINs' },
       storefronts: { processed: 425, found: 280, cost: 2.1, message: '280 seller contacts extracted' },
       domains: { processed: 120, found: 85, cost: 8.5, message: '85 domains enriched with WHOIS data' },
       contacts: { processed: 50, found: 35, cost: 3.5, message: '35 high-value sellers enriched with deep contacts' }
@@ -312,6 +315,83 @@ const OffMarketProgressModal = ({ isOpen, onClose, onComplete }) => {
       ...mockResults[stepId],
       message: result.message || mockResults[stepId].message
     };
+  };
+
+  const executeSellerLookupWithSSE = async () => {
+    return new Promise((resolve, reject) => {
+      addLog('info', '🔌 Connecting to seller lookup stream...');
+      
+      // Determine API URL
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 
+                     (window.location.hostname === 'localhost' ? 'http://localhost:3002' : window.location.origin);
+      const eventSourceUrl = `${apiUrl}/api/seller-lookup/stream?batchSize=100`;
+      
+      console.log('🔌 [SSE SELLER LOOKUP] Connecting to:', eventSourceUrl);
+      
+      const eventSource = new EventSource(eventSourceUrl);
+      let sellersFound = 0;
+      let asinProcessed = 0;
+      
+      eventSource.onopen = () => {
+        addLog('success', '✅ Connected to seller lookup stream');
+      };
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Add log with appropriate level
+          addLog(data.level.toLowerCase(), data.message);
+          
+          // Track progress
+          if (data.data?.type === 'seller_found') {
+            sellersFound++;
+          } else if (data.data?.type === 'asin_processing') {
+            asinProcessed++;
+            // Update progress based on estimated ASINs (assume ~45 top 20% ASINs)
+            const estimatedProgress = Math.min(90, (asinProcessed / 45) * 100);
+            setProgress(estimatedProgress);
+          }
+          
+          // Handle completion
+          if (data.level === 'COMPLETE') {
+            addLog('success', '🎉 Seller lookup completed!');
+            eventSource.close();
+            resolve({
+              success: true,
+              processed: data.data.processingTime || asinProcessed,
+              found: data.data.sellersFound || sellersFound,
+              cost: 0.001 * asinProcessed, // Estimate cost
+              message: data.data.message || `Found ${sellersFound} sellers from ${asinProcessed} ASINs`
+            });
+          } else if (data.level === 'ERROR') {
+            addLog('error', `❌ Seller lookup failed: ${data.message}`);
+            eventSource.close();
+            reject(new Error(data.message));
+          }
+          
+        } catch (error) {
+          console.error('Error parsing SSE data:', error);
+          addLog('error', 'Error parsing progress data');
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('EventSource failed:', error);
+        addLog('error', '❌ Connection to seller lookup service lost');
+        eventSource.close();
+        reject(new Error('Connection failed'));
+      };
+      
+      // Set timeout for safety
+      setTimeout(() => {
+        if (eventSource.readyState !== EventSource.CLOSED) {
+          addLog('warning', '⚠️ Operation timeout - closing connection');
+          eventSource.close();
+          reject(new Error('Operation timeout'));
+        }
+      }, 300000); // 5 minute timeout
+    });
   };
 
   const handleClose = () => {

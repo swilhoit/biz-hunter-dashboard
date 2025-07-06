@@ -6064,3 +6064,128 @@ app.get('/api/scrape/stream', async (req, res) => {
     res.end();
   }
 });
+
+// Add real-time seller lookup progress stream endpoint (Server-Sent Events)
+app.get('/api/seller-lookup/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering
+  res.flushHeaders();
+
+  const sendEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    console.log('🔌 [SSE SELLER LOOKUP] Client connected for real-time updates');
+    sendEvent({ level: 'INFO', message: '🚀 Starting seller lookup process...' });
+
+    // Import the seller lookup execution function
+    const { executeSellerLookup } = await import('./execute-seller-lookup.js');
+    
+    const batchSize = parseInt(req.query.batchSize) || 100;
+    
+    sendEvent({ level: 'INFO', message: `📊 Processing up to ${batchSize} ASINs for seller discovery` });
+    
+    // Create a modified version that emits progress
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    
+    // Intercept console.error outputs from the seller lookup script
+    console.error = (...args) => {
+      const message = args.join(' ');
+      originalConsoleError(...args);
+      
+      // Emit specific progress events based on log patterns
+      if (message.includes('Found seller:')) {
+        const sellerName = message.match(/Found seller: (.+)/)?.[1];
+        sendEvent({ 
+          level: 'SUCCESS', 
+          message: `✅ Discovered seller: ${sellerName}`,
+          data: { type: 'seller_found', seller: sellerName }
+        });
+      } else if (message.includes('Looking up sellers for ASIN:')) {
+        const asin = message.match(/ASIN: (\w+)/)?.[1];
+        sendEvent({ 
+          level: 'INFO', 
+          message: `🔍 Processing ASIN: ${asin}`,
+          data: { type: 'asin_processing', asin }
+        });
+      } else if (message.includes('Failed to store in database:')) {
+        sendEvent({ 
+          level: 'WARNING', 
+          message: '⚠️ Database storage issue detected - will be fixed after migration',
+          data: { type: 'storage_warning' }
+        });
+      } else if (message.includes('Saved fallback seller:')) {
+        const sellerName = message.match(/Saved fallback seller: (.+)/)?.[1];
+        sendEvent({ 
+          level: 'SUCCESS', 
+          message: `💾 Saved seller: ${sellerName}`,
+          data: { type: 'seller_saved', seller: sellerName }
+        });
+      } else if (message.includes('sellers discovered and saved')) {
+        const count = message.match(/(\d+) sellers/)?.[1];
+        sendEvent({ 
+          level: 'SUCCESS', 
+          message: `🎉 Batch complete: ${count} sellers processed`,
+          data: { type: 'batch_complete', count: parseInt(count) }
+        });
+      }
+    };
+    
+    console.log = (...args) => {
+      const message = args.join(' ');
+      originalConsoleLog(...args);
+      
+      // Emit progress for console.log outputs too
+      if (message.includes('🚀 [execute-seller-lookup.js]')) {
+        sendEvent({ level: 'INFO', message: `📱 ${message}` });
+      }
+    };
+    
+    try {
+      // Execute the seller lookup with progress monitoring
+      const startTime = Date.now();
+      const result = await executeSellerLookup(batchSize);
+      const endTime = Date.now();
+      
+      const processingTime = Math.round((endTime - startTime) / 1000);
+      
+      // Send completion event
+      sendEvent({ 
+        level: 'COMPLETE', 
+        message: `🎉 Seller lookup completed successfully!`,
+        data: {
+          ...result,
+          processingTime,
+          message: `Found ${result.sellersFound} sellers (${result.newSellers} new) in ${processingTime}s`
+        }
+      });
+      
+    } catch (error) {
+      console.error('Seller lookup execution error:', error);
+      sendEvent({ 
+        level: 'ERROR', 
+        message: `❌ Seller lookup failed: ${error.message}`,
+        data: { error: error.message }
+      });
+    } finally {
+      // Restore original console methods
+      console.log = originalConsoleLog;
+      console.error = originalConsoleError;
+    }
+    
+  } catch (error) {
+    console.error('❌ [SSE SELLER LOOKUP] Failed:', error);
+    sendEvent({ 
+      level: 'ERROR', 
+      message: `Seller lookup failed: ${error.message}`,
+      data: { error: error.message }
+    });
+  } finally {
+    res.end();
+  }
+});

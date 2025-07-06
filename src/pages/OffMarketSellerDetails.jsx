@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
@@ -19,41 +19,7 @@ import {
   User
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-
-// Mock data - in production this would come from the database
-const mockSellerData = {
-  '1': {
-    id: '1',
-    seller_name: 'Premium Beauty Brands LLC',
-    category: 'Beauty & Personal Care',
-    monthly_revenue: 450000,
-    monthly_profit: 112500,
-    annual_revenue: 5400000,
-    annual_profit: 1350000,
-    business_age_months: 48,
-    top_asins: [
-      { asin: 'B09XYZ123', name: 'Vitamin C Serum', monthly_revenue: 85000 },
-      { asin: 'B09XYZ124', name: 'Retinol Cream', monthly_revenue: 72000 },
-      { asin: 'B09XYZ125', name: 'Hyaluronic Acid', monthly_revenue: 68000 }
-    ],
-    all_asins: Array(23).fill(null).map((_, i) => ({
-      asin: `B09XYZ${(126 + i).toString().padStart(3, '0')}`,
-      name: `Product ${i + 4}`,
-      monthly_revenue: Math.floor(Math.random() * 50000) + 10000
-    })),
-    revenue_trend: 'increasing',
-    profit_margin: 25,
-    headquarters: 'Los Angeles, CA',
-    established_year: 2021,
-    description: 'Premium Beauty Brands is a leading seller of high-quality skincare products on Amazon, specializing in science-backed formulations.',
-    highlights: [
-      'Top 1% seller in Beauty category',
-      'Average 4.5+ star ratings across all products',
-      'Strong brand loyalty with 40% repeat purchase rate',
-      'Proprietary formulations with patent pending'
-    ]
-  }
-};
+import { supabase } from '../lib/supabase';
 
 function OffMarketSellerDetails() {
   const { id } = useParams();
@@ -62,8 +28,63 @@ function OffMarketSellerDetails() {
   const [showContactSearch, setShowContactSearch] = useState(false);
   const [searchingContact, setSearchingContact] = useState(false);
   const [contactInfo, setContactInfo] = useState(null);
+  const [seller, setSeller] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [asins, setAsins] = useState([]);
 
-  const seller = mockSellerData[id] || mockSellerData['1'];
+  useEffect(() => {
+    loadSellerData();
+  }, [id]);
+
+  const loadSellerData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Load seller details
+      const { data: sellerData, error: sellerError } = await supabase
+        .from('sellers')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (sellerError) {
+        setError('Seller not found');
+        return;
+      }
+
+      // Load seller contacts
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('seller_contacts')
+        .select('*')
+        .eq('seller_id', id);
+
+      // Load seller ASINs
+      const { data: asinsData, error: asinsError } = await supabase
+        .from('asin_sellers')
+        .select(`
+          asins (
+            asin,
+            category,
+            price,
+            est_rev
+          )
+        `)
+        .eq('seller_id', id);
+
+      setSeller(sellerData);
+      setContacts(contactsData || []);
+      setAsins(asinsData?.map(item => item.asins) || []);
+
+    } catch (error) {
+      console.error('Error loading seller data:', error);
+      setError('Failed to load seller data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
@@ -75,6 +96,7 @@ function OffMarketSellerDetails() {
   };
 
   const formatAge = (months) => {
+    if (!months) return 'Unknown';
     const years = Math.floor(months / 12);
     const remainingMonths = months % 12;
     if (years > 0) {
@@ -82,6 +104,68 @@ function OffMarketSellerDetails() {
     }
     return `${months} months`;
   };
+
+  const calculateMetrics = (seller) => {
+    if (!seller) return { monthly_revenue: 0, monthly_profit: 0, annual_revenue: 0 };
+    
+    const annual_revenue = seller.total_est_revenue || 0;
+    const monthly_revenue = Math.round(annual_revenue / 12);
+    const profit_margin = 0.25; // Assume 25% profit margin
+    const monthly_profit = Math.round(monthly_revenue * profit_margin);
+    
+    return {
+      monthly_revenue,
+      monthly_profit,
+      annual_revenue,
+      profit_margin: Math.round(profit_margin * 100)
+    };
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[100dvh] overflow-hidden">
+        <Sidebar />
+        <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+          <Header />
+          <main className="grow">
+            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">Loading seller details...</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !seller) {
+    return (
+      <div className="flex h-[100dvh] overflow-hidden">
+        <Sidebar />
+        <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+          <Header />
+          <main className="grow">
+            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
+              <button
+                onClick={() => navigate('/listings')}
+                className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mb-6"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Feed
+              </button>
+              <div className="text-center">
+                <p className="text-red-600 dark:text-red-400">{error || 'Seller not found'}</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  const metrics = calculateMetrics(seller);
 
   const searchRocketReach = async () => {
     setSearchingContact(true);
@@ -122,16 +206,28 @@ function OffMarketSellerDetails() {
             {/* Header */}
             <div className="mb-8">
               <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold mb-2">
-                {seller.seller_name}
+                {seller.seller_name || 'Unknown Seller'}
               </h1>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                  {seller.category}
+                  Amazon Seller
                 </span>
-                <span className="text-gray-600 dark:text-gray-400">
-                  <MapPin className="w-4 h-4 inline mr-1" />
-                  {seller.headquarters}
-                </span>
+                {seller.is_whale && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                    🐋 Whale Seller
+                  </span>
+                )}
+                {seller.seller_url && (
+                  <a
+                    href={seller.seller_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800 hover:bg-orange-200 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3 mr-1" />
+                    Visit Amazon Store
+                  </a>
+                )}
               </div>
             </div>
 
@@ -147,37 +243,37 @@ function OffMarketSellerDetails() {
                     <div>
                       <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-1">
                         <DollarSign className="w-4 h-4 mr-1" />
-                        Monthly Revenue
+                        Monthly Revenue (Est.)
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(seller.monthly_revenue)}
+                        {formatCurrency(metrics.monthly_revenue)}
                       </p>
                     </div>
                     <div>
                       <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-1">
                         <TrendingUp className="w-4 h-4 mr-1" />
-                        Monthly Profit
+                        Monthly Profit (Est.)
                       </div>
                       <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(seller.monthly_profit)}
+                        {formatCurrency(metrics.monthly_profit)}
                       </p>
                     </div>
                     <div>
                       <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-1">
                         <DollarSign className="w-4 h-4 mr-1" />
-                        Annual Revenue
+                        Annual Revenue (Est.)
                       </div>
                       <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                        {formatCurrency(seller.annual_revenue)}
+                        {formatCurrency(metrics.annual_revenue)}
                       </p>
                     </div>
                     <div>
                       <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        <TrendingUp className="w-4 h-4 mr-1" />
-                        Profit Margin
+                        <Package className="w-4 h-4 mr-1" />
+                        Total Listings
                       </div>
                       <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                        {seller.profit_margin}%
+                        {seller.listings_count || 0}
                       </p>
                     </div>
                   </div>
@@ -188,71 +284,133 @@ function OffMarketSellerDetails() {
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                     Business Details
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    {seller.description}
-                  </p>
                   <div className="space-y-3">
                     <div className="flex items-center">
-                      <Calendar className="w-5 h-5 mr-3 text-gray-400" />
-                      <span className="text-gray-700 dark:text-gray-300">
-                        Established: {seller.established_year} ({formatAge(seller.business_age_months)})
-                      </span>
+                      <Globe className="w-5 h-5 mr-3 text-gray-400" />
+                      <div>
+                        <span className="text-gray-700 dark:text-gray-300">Amazon Store: </span>
+                        {seller.seller_url ? (
+                          <a 
+                            href={seller.seller_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            View Store
+                          </a>
+                        ) : (
+                          <span className="text-gray-500">Not available</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center">
                       <Package className="w-5 h-5 mr-3 text-gray-400" />
                       <span className="text-gray-700 dark:text-gray-300">
-                        Total ASINs: {seller.all_asins.length}
+                        Total ASINs: {asins.length}
                       </span>
                     </div>
                     <div className="flex items-center">
-                      <Building className="w-5 h-5 mr-3 text-gray-400" />
+                      <TrendingUp className="w-5 h-5 mr-3 text-gray-400" />
                       <span className="text-gray-700 dark:text-gray-300">
-                        Headquarters: {seller.headquarters}
+                        Average Rating: {seller.avg_rating ? `${seller.avg_rating}/5 ⭐` : 'Not available'}
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="w-5 h-5 mr-3 text-gray-400" />
+                      <span className="text-gray-700 dark:text-gray-300">
+                        Last Updated: {new Date(seller.updated_at).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Key Highlights */}
+                {/* Contact Information */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                    Key Highlights
+                    Contact Information
                   </h2>
-                  <ul className="space-y-2">
-                    {seller.highlights.map((highlight, idx) => (
-                      <li key={idx} className="flex items-start">
-                        <span className="text-green-500 mr-2">✓</span>
-                        <span className="text-gray-700 dark:text-gray-300">{highlight}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {contacts.length > 0 ? (
+                    <div className="space-y-3">
+                      {contacts.map((contact, index) => (
+                        <div key={index} className="flex items-center">
+                          {contact.contact_type === 'email' && <Mail className="w-4 h-4 mr-3 text-gray-400" />}
+                          {contact.contact_type === 'phone' && <Phone className="w-4 h-4 mr-3 text-gray-400" />}
+                          {contact.contact_type === 'linkedin' && <Linkedin className="w-4 h-4 mr-3 text-gray-400" />}
+                          {contact.contact_type === 'website' && <Globe className="w-4 h-4 mr-3 text-gray-400" />}
+                          <div>
+                            <span className="text-sm text-gray-500 capitalize">{contact.contact_type}: </span>
+                            {contact.contact_type === 'email' || contact.contact_type === 'phone' ? (
+                              <span className="text-gray-700 dark:text-gray-300">{contact.contact_value}</span>
+                            ) : (
+                              <a 
+                                href={contact.contact_value} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {contact.contact_value}
+                              </a>
+                            )}
+                            {contact.verified && (
+                              <span className="ml-2 text-xs text-green-600">✓ Verified</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400">No contact information available</p>
+                  )}
                 </div>
 
                 {/* Top Products */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                    Top Products
+                    Products (ASINs)
                   </h2>
-                  <div className="space-y-3">
-                    {seller.top_asins.map((product, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">
-                            {product.name}
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {product.asin}
-                          </p>
+                  {asins.length > 0 ? (
+                    <div className="space-y-3">
+                      {asins.slice(0, 5).map((product, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">
+                              {product.asin}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Category: {product.category || 'Unknown'}
+                            </p>
+                            {product.price && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Price: {formatCurrency(product.price)}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {product.est_rev && (
+                              <p className="font-semibold text-gray-900 dark:text-gray-100">
+                                {formatCurrency(product.est_rev)}
+                              </p>
+                            )}
+                            <a
+                              href={`https://www.amazon.com/dp/${product.asin}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              View on Amazon
+                            </a>
+                          </div>
                         </div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">
-                          {formatCurrency(product.monthly_revenue)}/mo
+                      ))}
+                      {asins.length > 5 && (
+                        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-3">
+                          Showing 5 of {asins.length} total products
                         </p>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="mt-4 text-indigo-600 dark:text-indigo-400 hover:underline text-sm">
-                    View all {seller.all_asins.length} products →
-                  </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400">No products found</p>
+                  )}
                 </div>
               </div>
 

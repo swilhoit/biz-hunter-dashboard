@@ -13,6 +13,8 @@ export interface FinancialExtraction {
   id?: string;
   deal_id: string;
   document_id: string;
+  extraction_type: string;
+  extracted_data?: any;
   extraction_date: string;
   financial_data: DetailedFinancials;
   period_covered: PeriodInfo;
@@ -290,6 +292,8 @@ export class FinancialDocumentService {
       const extraction: FinancialExtraction = {
         deal_id: dealId,
         document_id: documentId,
+        extraction_type: 'financial',
+        extracted_data: financialData, // Store the same data in extracted_data for compatibility
         extraction_date: new Date().toISOString(),
         financial_data: financialData,
         period_covered: periodInfo,

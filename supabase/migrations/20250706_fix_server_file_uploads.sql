@@ -297,22 +297,8 @@ CREATE INDEX IF NOT EXISTS idx_crawl_jobs_type ON crawl_jobs(job_type);
 -- =============================================================================
 
 -- Insert sample sellers from the terminal logs
-INSERT INTO sellers (seller_name, seller_url, listings_count, total_est_revenue, is_whale) VALUES
-('Visit the Retrospec Store', 'https://amazon.com/stores/Retrospec', 45, 1390000, true),
-('Visit the Gaiam Store', 'https://amazon.com/stores/Gaiam', 38, 1250000, true),
-('Visit the Manduka Store', 'https://amazon.com/stores/Manduka', 32, 980000, false),
-('Visit the Gruper Store', 'https://amazon.com/stores/Gruper', 28, 2085975, true),
-('Visit the Furrnook Store', 'https://amazon.com/stores/Furrnook', 22, 750000, false),
-('Visit the CAP Barbell Store', 'https://amazon.com/stores/CAPBarbell', 67, 1580000, true),
-('Visit the BalanceFrom Store', 'https://amazon.com/stores/BalanceFrom', 41, 920000, false),
-('Visit the Fitvids Store', 'https://amazon.com/stores/Fitvids', 18, 407876, false),
-('Visit the PAIDU Store', 'https://amazon.com/stores/PAIDU', 15, 380000, false)
-ON CONFLICT (seller_url) DO UPDATE SET
-    seller_name = EXCLUDED.seller_name,
-    listings_count = EXCLUDED.listings_count,
-    total_est_revenue = EXCLUDED.total_est_revenue,
-    is_whale = EXCLUDED.is_whale,
-    updated_at = NOW();
+-- Real seller data will be inserted by the seller lookup process
+-- No mock data needed here
 
 -- Mark whales (>= $1M revenue)
 UPDATE sellers SET is_whale = true WHERE total_est_revenue >= 1000000;

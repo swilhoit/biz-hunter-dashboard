@@ -6,10 +6,15 @@ function PipelineControlsCard() {
   const [lastRun, setLastRun] = useState(null);
   const [keyword, setKeyword] = useState('');
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [selectedSteps, setSelectedSteps] = useState(['products', 'sellers', 'storefronts']);
 
   const runProductCrawl = () => setShowProgressModal(true);
 
-  const runSellerLookup = () => setShowProgressModal(true);
+  const runSellerLookup = () => {
+    // Pre-configure the modal to only run seller lookup step
+    setSelectedSteps(['sellers']);
+    setShowProgressModal(true);
+  };
 
   const runStorefrontParsing = () => setShowProgressModal(true);
 
@@ -155,6 +160,7 @@ function PipelineControlsCard() {
         isOpen={showProgressModal}
         onClose={() => setShowProgressModal(false)}
         onComplete={handleProgressComplete}
+        defaultSelectedSteps={selectedSteps}
       />
     </div>
   );
