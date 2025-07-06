@@ -77,6 +77,8 @@ export const dealsAdapter = {
       monthly_profit: deal.custom_fields?.monthly_profit || (deal.annual_profit ? deal.annual_profit / 12 : null),
       // Extract custom fields
       ...deal.custom_fields,
+      // Map opportunity_score to priority for frontend compatibility
+      priority: deal.opportunity_score || deal.priority,
       // Ensure specific fields are available
       seller_name: deal.seller_name || 'Unknown',
       seller_email: deal.seller_email || '',
@@ -122,6 +124,8 @@ export const dealsAdapter = {
       monthly_profit: data.custom_fields?.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
       // Extract custom fields
       ...data.custom_fields,
+      // Map opportunity_score to priority for frontend compatibility
+      priority: data.opportunity_score || data.priority,
       // Ensure specific fields are available
       seller_name: data.seller_name || 'Unknown',
       seller_email: data.seller_email || '',
@@ -171,7 +175,8 @@ export const dealsAdapter = {
       'seller_email',
       'seller_location',
       'seller_name',
-      'seller_phone'
+      'seller_phone',
+      'opportunity_score'
     ];
 
     // Fields that need to go into custom_fields
@@ -213,6 +218,9 @@ export const dealsAdapter = {
         mappedData.stage = mapDealStatus(dealData.status);
       } else if (key === 'valuation_multiple') {
         mappedData.multiple = value;
+      } else if (key === 'priority') {
+        // Map priority to opportunity_score
+        mappedData.opportunity_score = value;
       } else if (key === 'description') {
         mappedData.business_description = value;
       } else if (directMappedFields.includes(key)) {
@@ -296,7 +304,7 @@ export const dealsAdapter = {
       'seller_location',
       'seller_name',
       'seller_phone',
-      'priority'
+      'opportunity_score'
     ];
 
     // Fields that need to go into custom_fields
@@ -332,6 +340,9 @@ export const dealsAdapter = {
         mappedUpdates.stage = mapDealStatus(value);
       } else if (key === 'valuation_multiple') {
         mappedUpdates.multiple = value;
+      } else if (key === 'priority') {
+        // Map priority to opportunity_score
+        mappedUpdates.opportunity_score = value;
       } else if (key === 'description') {
         mappedUpdates.business_description = value;
       } else if (directMappedFields.includes(key)) {

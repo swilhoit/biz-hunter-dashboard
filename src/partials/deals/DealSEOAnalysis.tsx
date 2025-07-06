@@ -1,6 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Deal } from '../../types/deal';
-import { Search, Globe, TrendingUp, Target, Link, FileText, Users, BarChart3 } from 'lucide-react';
+import { SEOCompetitor } from '../../types/market-analysis';
+import { Search, Globe, TrendingUp, Target, Link, FileText, Users, BarChart3, Eye, AlertCircle } from 'lucide-react';
+import LineChart01 from '../../charts/LineChart01';
+import BarChart03 from '../../charts/BarChart03';
 import { Chart, LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import { tailwindConfig } from '../../utils/Utils';
 
@@ -13,6 +16,41 @@ interface DealSEOAnalysisProps {
 function DealSEOAnalysis({ deal }: DealSEOAnalysisProps) {
   const trafficChartRef = useRef<HTMLCanvasElement>(null);
   const trafficChartInstance = useRef<Chart | null>(null);
+  const [showCompetitors, setShowCompetitors] = useState(false);
+  
+  // Mock SEO competitors data
+  const seoCompetitors: SEOCompetitor[] = [
+    {
+      id: '1',
+      deal_id: deal.id,
+      competitor_domain: 'petcarepro.com',
+      domain_authority: 65,
+      organic_traffic: 125000,
+      keyword_overlap_count: 234,
+      keyword_overlap_percentage: 35,
+      competing_pages: 45,
+      visibility_score: 78,
+      content_gap_opportunities: 89,
+      backlink_gap_opportunities: 156,
+      strengths: ['Strong content library', 'High domain authority', 'Featured snippets'],
+      weaknesses: ['Slow page speed', 'Poor mobile experience'],
+    },
+    {
+      id: '2',
+      deal_id: deal.id,
+      competitor_domain: 'naturalpetsupplies.org',
+      domain_authority: 52,
+      organic_traffic: 89000,
+      keyword_overlap_count: 189,
+      keyword_overlap_percentage: 28,
+      competing_pages: 32,
+      visibility_score: 65,
+      content_gap_opportunities: 67,
+      backlink_gap_opportunities: 234,
+      strengths: ['Educational content', 'Strong local SEO', 'Good user engagement'],
+      weaknesses: ['Limited product pages', 'Few backlinks'],
+    },
+  ];
 
   // Mock SEO data
   const seoMetrics = [
@@ -315,6 +353,159 @@ function DealSEOAnalysis({ deal }: DealSEOAnalysisProps) {
             <li>• Image optimization can reduce load time by 1.5s</li>
           </ul>
         </div>
+      </div>
+
+      {/* SEO Competitive Analysis */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">SEO Competitive Analysis</h3>
+          <button 
+            onClick={() => setShowCompetitors(!showCompetitors)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showCompetitors ? 'Hide' : 'Show'} Competitors
+          </button>
+        </div>
+        
+        {showCompetitors && (
+          <div className="space-y-4">
+            {/* Competitive Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Eye className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">68/100</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Visibility Score</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Target className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">12.5%</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Share of Search</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <BarChart3 className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">#4</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Competitive Rank</p>
+              </div>
+            </div>
+
+            {/* Visibility Comparison */}
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Visibility Score Comparison</h4>
+              <BarChart03
+                data={{
+                  labels: [deal.business_name || 'Your Site', ...seoCompetitors.map(c => c.competitor_domain.split('.')[0])],
+                  datasets: [{
+                    label: 'Visibility Score',
+                    data: [
+                      68, // Your site score
+                      ...seoCompetitors.map(c => c.visibility_score || 0)
+                    ],
+                    backgroundColor: [
+                      tailwindConfig().theme.colors.green[500],
+                      tailwindConfig().theme.colors.red[500],
+                      tailwindConfig().theme.colors.orange[500],
+                    ],
+                    hoverBackgroundColor: [
+                      tailwindConfig().theme.colors.green[600],
+                      tailwindConfig().theme.colors.red[600],
+                      tailwindConfig().theme.colors.orange[600],
+                    ],
+                    borderRadius: 4,
+                    maxBarThickness: 48,
+                  }],
+                }}
+                width={595}
+                height={248}
+              />
+            </div>
+
+            {/* Competitor Details */}
+            <div className="space-y-4">
+              {seoCompetitors.map((competitor) => (
+                <div key={competitor.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{competitor.competitor_domain}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        DA: {competitor.domain_authority} • {competitor.keyword_overlap_percentage}% keyword overlap
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {(competitor.organic_traffic || 0).toLocaleString()} visits/mo
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Organic traffic</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Visibility</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.visibility_score}/100
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Keywords</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.keyword_overlap_count}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Content Gaps</p>
+                      <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                        {competitor.content_gap_opportunities}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Link Gaps</p>
+                      <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {competitor.backlink_gap_opportunities}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Strengths</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.strengths?.map((strength, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-green-500 mr-1">+</span> {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Weaknesses</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.weaknesses?.map((weakness, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-red-500 mr-1">-</span> {weakness}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Gap Analysis Summary */}
+            <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <h4 className="font-medium text-green-900 dark:text-green-100 mb-2 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Gap Analysis Opportunities
+              </h4>
+              <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
+                <li>• 156 total content gap opportunities identified</li>
+                <li>• 390 backlink opportunities from competitor domains</li>
+                <li>• 45 keywords where competitors rank but you don't</li>
+                <li>• 23 featured snippet opportunities to capture</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

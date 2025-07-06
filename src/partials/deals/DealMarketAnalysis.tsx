@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Deal } from '../../types/deal';
-import DealAmazonMetricsEnhanced from './DealAmazonMetricsEnhanced';
-import DealSEOAnalysisEnhanced from './DealSEOAnalysisEnhanced';
-import DealSocialAnalysisEnhanced from './DealSocialAnalysisEnhanced';
+import DealAmazonMetrics from './DealAmazonMetrics';
+import DealSEOAnalysis from './DealSEOAnalysis';
+import DealSocialAnalysis from './DealSocialAnalysis';
 import DealMarketOverview from './DealMarketOverview';
 
 interface DealMarketAnalysisProps {
@@ -25,11 +25,11 @@ function DealMarketAnalysis({ deal, onEdit }: DealMarketAnalysisProps) {
       case 'overview':
         return <DealMarketOverview deal={deal} />;
       case 'amazon':
-        return <DealAmazonMetricsEnhanced deal={deal} />;
+        return <DealAmazonMetrics deal={deal} />;
       case 'seo':
-        return <DealSEOAnalysisEnhanced deal={deal} />;
+        return <DealSEOAnalysis deal={deal} />;
       case 'social':
-        return <DealSocialAnalysisEnhanced deal={deal} />;
+        return <DealSocialAnalysis deal={deal} />;
       default:
         return <DealMarketOverview deal={deal} />;
     }

@@ -3,32 +3,34 @@ import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import Header from '../partials/Header';
 import Sidebar from '../partials/Sidebar';
+import BrandCard from '../components/portfolio/BrandCard';
+import AddBrandModal from '../components/portfolio/AddBrandModal';
+import BulkImportModal from '../components/portfolio/BulkImportModal';
 import { formatDistanceToNow } from 'date-fns';
-import { DollarSign, TrendingUp, Package, Calendar, FileText, AlertCircle, Plus, Edit2, Trash2, Settings, Search, Filter, X } from 'lucide-react';
+import { 
+  DollarSign, TrendingUp, Package, Calendar, FileText, AlertCircle, 
+  Plus, Edit2, Trash2, Settings, Search, Filter, X, Building2,
+  Upload, ChevronDown, BarChart3, Download, Grid3X3
+} from 'lucide-react';
 
 function Portfolio() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [ownedBusinesses, setOwnedBusinesses] = useState([]);
-  const [portfolios, setPortfolios] = useState([]);
-  const [portfolioSummary, setPortfolioSummary] = useState({});
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [totalMetrics, setTotalMetrics] = useState({
-    totalRevenue: 0,
-    totalProfit: 0,
-    totalBusinesses: 0,
-    avgGrowthRate: 0
-  });
   
-  // ASIN Management State
-  const [activeTab, setActiveTab] = useState('businesses'); // 'businesses' or 'asins'
-  const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
+  // Portfolio state
+  const [brands, setBrands] = useState([]);
+  const [selectedBrand, setSelectedBrand] = useState(null);
+  const [brandAsins, setBrandAsins] = useState([]);
+  
+  // Modal states
+  const [showAddBrand, setShowAddBrand] = useState(false);
   const [showAddAsin, setShowAddAsin] = useState(false);
-  const [selectedPortfolio, setSelectedPortfolio] = useState(null);
-  const [portfolioAsins, setPortfolioAsins] = useState([]);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(null);
   
-  // Form states
-  const [portfolioForm, setPortfolioForm] = useState({ name: '', description: '' });
+  // Form state for adding individual ASINs
   const [asinForm, setAsinForm] = useState({
     asin: '',
     productName: '',
@@ -40,17 +42,23 @@ function Portfolio() {
     monthlyUnitsSold: '',
     profitMargin: ''
   });
-
-  // Get current user
-  const [user, setUser] = useState(null);
   
+  // Summary metrics
+  const [summary, setSummary] = useState({
+    totalBrands: 0,
+    totalASINs: 0,
+    totalRevenue: 0,
+    totalProfit: 0,
+    avgProfitMargin: 0
+  });
+
   useEffect(() => {
     getCurrentUser();
   }, []);
   
   useEffect(() => {
     if (user) {
-      fetchData();
+      fetchBrands();
     }
   }, [user]);
 
@@ -59,104 +67,141 @@ function Portfolio() {
     setUser(user);
   };
 
-  const fetchData = async () => {
+  const fetchBrands = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
-      await Promise.all([
-        fetchOwnedBusinesses(),
-        fetchPortfolios()
-      ]);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(err.message);
+      const response = await fetch(`http://localhost:3001/api/brands/${user.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setBrands(data.data);
+        
+        // Calculate summary metrics
+        const summary = data.data.reduce((acc, brand) => {
+          acc.totalBrands += 1;
+          acc.totalASINs += brand.total_asins || 0;
+          acc.totalRevenue += parseFloat(brand.total_monthly_revenue) || 0;
+          acc.totalProfit += parseFloat(brand.total_monthly_profit) || 0;
+          return acc;
+        }, { totalBrands: 0, totalASINs: 0, totalRevenue: 0, totalProfit: 0 });
+        
+        summary.avgProfitMargin = summary.totalRevenue > 0 
+          ? (summary.totalProfit / summary.totalRevenue) * 100 
+          : 0;
+        
+        setSummary(summary);
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchOwnedBusinesses = async () => {
-    const { data: deals, error } = await supabase
-      .from('deals')
-      .select('*')
-      .eq('stage', 'closed_won')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    const metrics = deals.reduce((acc, deal) => {
-      acc.totalRevenue += deal.annual_revenue || 0;
-      acc.totalProfit += deal.annual_profit || 0;
-      acc.totalBusinesses += 1;
-      return acc;
-    }, { totalRevenue: 0, totalProfit: 0, totalBusinesses: 0, avgGrowthRate: 0 });
-
-    setTotalMetrics(metrics);
-    setOwnedBusinesses(deals);
-  };
-
-  const fetchPortfolios = async () => {
-    if (!user) return;
-    
-    const response = await fetch(`http://localhost:3001/api/portfolio/${user.id}`);
-    const data = await response.json();
-    
-    if (data.success) {
-      setPortfolios(data.data.portfolios);
-      setPortfolioSummary(data.data.summary);
-    } else {
-      throw new Error(data.message);
-    }
-  };
-
-  const fetchPortfolioAsins = async (portfolioId) => {
-    const response = await fetch(`http://localhost:3001/api/portfolio/${portfolioId}/asins`);
-    const data = await response.json();
-    
-    if (data.success) {
-      setPortfolioAsins(data.data);
-    } else {
-      throw new Error(data.message);
-    }
-  };
-
-  const handleCreatePortfolio = async (e) => {
-    e.preventDefault();
-    
+  const fetchBrandAsins = async (brandId) => {
     try {
-      const response = await fetch('http://localhost:3001/api/portfolio', {
-        method: 'POST',
+      const response = await fetch(`http://localhost:3001/api/brands/${brandId}/asins`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setBrandAsins(data.data);
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching brand ASINs:', error);
+      setError(error.message);
+    }
+  };
+
+  const handleCreateBrand = async (brandData) => {
+    try {
+      const url = editingBrand 
+        ? `http://localhost:3001/api/brands/${editingBrand.id}`
+        : 'http://localhost:3001/api/brands';
+        
+      const response = await fetch(url, {
+        method: editingBrand ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
-          name: portfolioForm.name,
-          description: portfolioForm.description
+          ...brandData,
+          userId: user.id
         })
       });
       
       const data = await response.json();
       
       if (data.success) {
-        setShowCreatePortfolio(false);
-        setPortfolioForm({ name: '', description: '' });
-        fetchPortfolios();
+        setShowAddBrand(false);
+        setEditingBrand(null);
+        fetchBrands();
       } else {
         throw new Error(data.message);
       }
     } catch (error) {
-      console.error('Error creating portfolio:', error);
+      console.error('Error saving brand:', error);
       setError(error.message);
     }
+  };
+
+  const handleEditBrand = (brand) => {
+    setEditingBrand({
+      id: brand.id,
+      name: brand.name,
+      description: brand.description,
+      logo_url: brand.logo_url,
+      website_url: brand.website_url,
+      amazon_store_url: brand.amazon_store_url
+    });
+    setShowAddBrand(true);
+  };
+
+  const handleDeleteBrand = async (brandId) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/brands/${brandId}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchBrands();
+        if (selectedBrand === brandId) {
+          setSelectedBrand(null);
+          setBrandAsins([]);
+        }
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error('Error deleting brand:', error);
+      setError(error.message);
+    }
+  };
+
+  const handleBrandClick = (brandId) => {
+    setSelectedBrand(brandId);
+    fetchBrandAsins(brandId);
   };
 
   const handleAddAsin = async (e) => {
     e.preventDefault();
     
+    if (!selectedBrand) {
+      setError('Please select a brand first');
+      return;
+    }
+    
     try {
-      const response = await fetch(`http://localhost:3001/api/portfolio/${selectedPortfolio}/asins`, {
+      const response = await fetch(`http://localhost:3001/api/portfolio/0/asins`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
+          brand_id: selectedBrand,
           asin: asinForm.asin,
           productName: asinForm.productName,
           brand: asinForm.brand,
@@ -184,16 +229,44 @@ function Portfolio() {
           monthlyUnitsSold: '',
           profitMargin: ''
         });
-        fetchPortfolios();
-        if (selectedPortfolio) {
-          fetchPortfolioAsins(selectedPortfolio);
-        }
+        fetchBrands();
+        fetchBrandAsins(selectedBrand);
       } else {
         throw new Error(data.message);
       }
     } catch (error) {
       console.error('Error adding ASIN:', error);
       setError(error.message);
+    }
+  };
+
+  const handleBulkImport = async (asins) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/asins/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          asins: asins.map(asin => ({
+            ...asin,
+            brand_id: selectedBrand
+          }))
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchBrands();
+        if (selectedBrand) {
+          fetchBrandAsins(selectedBrand);
+        }
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error('Error bulk importing ASINs:', error);
+      throw error;
     }
   };
 
@@ -208,10 +281,8 @@ function Portfolio() {
       const data = await response.json();
       
       if (data.success) {
-        fetchPortfolios();
-        if (selectedPortfolio) {
-          fetchPortfolioAsins(selectedPortfolio);
-        }
+        fetchBrands();
+        fetchBrandAsins(selectedBrand);
       } else {
         throw new Error(data.message);
       }
@@ -221,9 +292,11 @@ function Portfolio() {
     }
   };
 
-  const handlePortfolioClick = (portfolioId) => {
-    setSelectedPortfolio(portfolioId);
-    fetchPortfolioAsins(portfolioId);
+  const formatCurrency = (amount) => {
+    if (!amount) return '$0';
+    if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+    return `$${amount.toLocaleString()}`;
   };
 
   if (loading) {
@@ -249,308 +322,157 @@ function Portfolio() {
         
         <main className="grow">
           <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+            {/* Header */}
             <div className="mb-8">
-              <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">Portfolio</h1>
-              <p className="text-gray-600 dark:text-gray-400">Track and manage your owned FBA businesses and ASINs</p>
+              <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">Brand Portfolio</h1>
+              <p className="text-gray-600 dark:text-gray-400">Organize and track your products by brand</p>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-              <nav className="-mb-px flex space-x-8">
-                <button
-                  onClick={() => setActiveTab('businesses')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'businesses'
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  Owned Businesses
-                </button>
-                <button
-                  onClick={() => setActiveTab('asins')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'asins'
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  ASIN Portfolio
-                </button>
-              </nav>
+            {/* Summary Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Total Brands</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                      {summary.totalBrands}
+                    </p>
+                  </div>
+                  <Building2 className="w-8 h-8 text-purple-500" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Total ASINs</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                      {summary.totalASINs}
+                    </p>
+                  </div>
+                  <Package className="w-8 h-8 text-orange-500" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Monthly Revenue</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                      {formatCurrency(summary.totalRevenue)}
+                    </p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-green-500" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Monthly Profit</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                      {formatCurrency(summary.totalProfit)}
+                    </p>
+                  </div>
+                  <TrendingUp className="w-8 h-8 text-blue-500" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Avg Margin</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                      {summary.avgProfitMargin.toFixed(1)}%
+                    </p>
+                  </div>
+                  <BarChart3 className="w-8 h-8 text-indigo-500" />
+                </div>
+              </div>
             </div>
 
-            {activeTab === 'businesses' && (
+            {/* Actions Bar */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Your Brands</h2>
+              <button
+                onClick={() => setShowAddBrand(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Brand
+              </button>
+            </div>
+
+            {/* Brands Grid */}
+            {brands.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+                <Building2 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No brands yet</h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">Create your first brand to start organizing your product portfolio</p>
+                <button
+                  onClick={() => setShowAddBrand(true)}
+                  className="bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 inline-flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Your First Brand
+                </button>
+              </div>
+            ) : (
               <>
-                {/* Business Metrics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Revenue</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          ${totalMetrics.totalRevenue.toLocaleString()}
-                        </p>
-                      </div>
-                      <DollarSign className="w-8 h-8 text-green-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Profit</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          ${totalMetrics.totalProfit.toLocaleString()}
-                        </p>
-                      </div>
-                      <TrendingUp className="w-8 h-8 text-blue-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Businesses</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          {totalMetrics.totalBusinesses}
-                        </p>
-                      </div>
-                      <Package className="w-8 h-8 text-purple-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Avg Profit Margin</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          {totalMetrics.totalRevenue > 0 
-                            ? ((totalMetrics.totalProfit / totalMetrics.totalRevenue) * 100).toFixed(1) 
-                            : 0}%
-                        </p>
-                      </div>
-                      <AlertCircle className="w-8 h-8 text-orange-500" />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  {brands.map((brand) => (
+                    <BrandCard
+                      key={brand.brand_id}
+                      brand={{
+                        id: brand.brand_id,
+                        name: brand.brand_name,
+                        logo_url: brand.logo_url,
+                        description: brand.description,
+                        website_url: brand.website_url,
+                        amazon_store_url: brand.amazon_store_url,
+                        total_asins: brand.total_asins,
+                        total_monthly_revenue: brand.total_monthly_revenue,
+                        total_monthly_profit: brand.total_monthly_profit,
+                        avg_profit_margin: brand.avg_profit_margin
+                      }}
+                      onEdit={handleEditBrand}
+                      onDelete={handleDeleteBrand}
+                      onClick={handleBrandClick}
+                      isSelected={selectedBrand === brand.brand_id}
+                    />
+                  ))}
                 </div>
 
-                {/* Owned Businesses List */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Owned Businesses</h2>
-                  </div>
-                  
-                  {error ? (
-                    <div className="p-8 text-center text-red-500">
-                      Error: {error}
-                    </div>
-                  ) : ownedBusinesses.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                      <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                      <p>No owned businesses yet.</p>
-                      <p className="text-sm mt-2">Closed deals will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Business Name
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Revenue
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Profit
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Purchase Date
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Status
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                          {ownedBusinesses.map((business) => (
-                            <tr key={business.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {business.business_name || 'Untitled Business'}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {business.amazon_category || 'Unknown Category'}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900 dark:text-gray-100">
-                                  ${(business.annual_revenue || 0).toLocaleString()}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900 dark:text-gray-100">
-                                  ${(business.annual_profit || 0).toLocaleString()}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900 dark:text-gray-100">
-                                  {business.closed_at 
-                                    ? new Date(business.closed_at).toLocaleDateString()
-                                    : formatDistanceToNow(new Date(business.created_at), { addSuffix: true })
-                                  }
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 px-2 py-1">
-                                  Active
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <Link
-                                  to={`/deal/${business.id}`}
-                                  className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                >
-                                  View Details
-                                </Link>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {activeTab === 'asins' && (
-              <>
-                {/* ASIN Portfolio Metrics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Monthly Revenue</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          ${(portfolioSummary.total_monthly_revenue || 0).toLocaleString()}
-                        </p>
-                      </div>
-                      <DollarSign className="w-8 h-8 text-green-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total Monthly Profit</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          ${(portfolioSummary.total_monthly_profit || 0).toLocaleString()}
-                        </p>
-                      </div>
-                      <TrendingUp className="w-8 h-8 text-blue-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Total ASINs</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          {portfolioSummary.total_asins || 0}
-                        </p>
-                      </div>
-                      <Package className="w-8 h-8 text-purple-500" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">Avg Profit Margin</p>
-                        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-                          {(portfolioSummary.avg_profit_margin || 0).toFixed(1)}%
-                        </p>
-                      </div>
-                      <AlertCircle className="w-8 h-8 text-orange-500" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Portfolio Management */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
-                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">ASIN Portfolios</h2>
-                    <button
-                      onClick={() => setShowCreatePortfolio(true)}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create Portfolio
-                    </button>
-                  </div>
-                  
-                  {portfolios.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                      <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                      <p>No portfolios created yet.</p>
-                      <p className="text-sm mt-2">Create your first portfolio to start tracking ASINs.</p>
-                    </div>
-                  ) : (
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {portfolios.map((portfolio) => (
-                          <div 
-                            key={portfolio.portfolio_id} 
-                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                              selectedPortfolio === portfolio.portfolio_id
-                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                            }`}
-                            onClick={() => handlePortfolioClick(portfolio.portfolio_id)}
-                          >
-                            <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                              {portfolio.portfolio_name}
-                            </h3>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                              <p>{portfolio.total_asins || 0} ASINs</p>
-                              <p>${(portfolio.total_monthly_revenue || 0).toLocaleString()} monthly revenue</p>
-                              <p>${(portfolio.total_monthly_profit || 0).toLocaleString()} monthly profit</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Selected Portfolio ASINs */}
-                {selectedPortfolio && (
+                {/* Selected Brand ASINs */}
+                {selectedBrand && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
                     <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                       <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                        Portfolio ASINs
+                        {brands.find(b => b.brand_id === selectedBrand)?.brand_name} Products
                       </h3>
-                      <button
-                        onClick={() => setShowAddAsin(true)}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add ASIN
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowBulkImport(true)}
+                          className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"
+                        >
+                          <Upload className="w-4 h-4" />
+                          Bulk Import
+                        </button>
+                        <button
+                          onClick={() => setShowAddAsin(true)}
+                          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Product
+                        </button>
+                      </div>
                     </div>
                     
-                    {portfolioAsins.length === 0 ? (
+                    {brandAsins.length === 0 ? (
                       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                         <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                        <p>No ASINs in this portfolio yet.</p>
-                        <p className="text-sm mt-2">Add ASINs to start tracking performance.</p>
+                        <p>No products in this brand yet.</p>
+                        <p className="text-sm mt-2">Add products to start tracking performance.</p>
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -561,7 +483,13 @@ function Portfolio() {
                                 ASIN
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Product
+                                Product Name
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Category
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Price
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Monthly Revenue
@@ -570,7 +498,7 @@ function Portfolio() {
                                 Monthly Profit
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Profit Margin
+                                Margin
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Actions
@@ -578,7 +506,7 @@ function Portfolio() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {portfolioAsins.map((asin) => (
+                            {brandAsins.map((asin) => (
                               <tr key={asin.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -586,23 +514,28 @@ function Portfolio() {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {asin.product_name || 'Unnamed Product'}
-                                    </div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      {asin.brand} • {asin.category}
-                                    </div>
+                                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                                    {asin.product_name || 'Unnamed Product'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {asin.category || 'Uncategorized'}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm text-gray-900 dark:text-gray-100">
-                                    ${(asin.monthly_revenue || 0).toLocaleString()}
+                                    ${asin.current_price || 0}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm text-gray-900 dark:text-gray-100">
-                                    ${(asin.monthly_profit || 0).toLocaleString()}
+                                    {formatCurrency(asin.monthly_revenue)}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                                    {formatCurrency(asin.monthly_profit)}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -632,72 +565,30 @@ function Portfolio() {
         </main>
       </div>
 
-      {/* Create Portfolio Modal */}
-      {showCreatePortfolio && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Create New Portfolio</h3>
-              <button
-                onClick={() => setShowCreatePortfolio(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleCreatePortfolio} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Portfolio Name
-                </label>
-                <input
-                  type="text"
-                  value={portfolioForm.name}
-                  onChange={(e) => setPortfolioForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={portfolioForm.description}
-                  onChange={(e) => setPortfolioForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                  rows="3"
-                />
-              </div>
-              
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreatePortfolio(false)}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                >
-                  Create Portfolio
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      <AddBrandModal
+        isOpen={showAddBrand}
+        onClose={() => {
+          setShowAddBrand(false);
+          setEditingBrand(null);
+        }}
+        onSave={handleCreateBrand}
+        brand={editingBrand}
+      />
+
+      <BulkImportModal
+        isOpen={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onImport={handleBulkImport}
+        brandId={selectedBrand}
+      />
 
       {/* Add ASIN Modal */}
       {showAddAsin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Add ASIN to Portfolio</h3>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Add Product to Brand</h3>
               <button
                 onClick={() => setShowAddAsin(false)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -710,7 +601,7 @@ function Portfolio() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    ASIN
+                    ASIN *
                   </label>
                   <input
                     type="text"
@@ -729,18 +620,6 @@ function Portfolio() {
                     type="text"
                     value={asinForm.productName}
                     onChange={(e) => setAsinForm(prev => ({ ...prev, productName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Brand
-                  </label>
-                  <input
-                    type="text"
-                    value={asinForm.brand}
-                    onChange={(e) => setAsinForm(prev => ({ ...prev, brand: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
                   />
                 </div>
@@ -834,7 +713,7 @@ function Portfolio() {
                   type="submit"
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
-                  Add ASIN
+                  Add Product
                 </button>
               </div>
             </form>

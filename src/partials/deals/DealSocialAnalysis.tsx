@@ -1,6 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Deal } from '../../types/deal';
-import { MessageCircle, Heart, Share2, Users, TrendingUp, Instagram, Youtube, Facebook } from 'lucide-react';
+import { SocialCompetitor } from '../../types/market-analysis';
+import { MessageCircle, Heart, Share2, Users, TrendingUp, Instagram, Youtube, Facebook, Target, AlertCircle } from 'lucide-react';
+import BarChart04 from '../../charts/BarChart04';
+import PolarChart from '../../charts/PolarChart';
 import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
 import { tailwindConfig } from '../../utils/Utils';
 
@@ -22,6 +25,48 @@ function TwitterIcon({ className }: { className?: string }) {
 function DealSocialAnalysis({ deal }: DealSocialAnalysisProps) {
   const engagementChartRef = useRef<HTMLCanvasElement>(null);
   const engagementChartInstance = useRef<Chart | null>(null);
+  const [showCompetitors, setShowCompetitors] = useState(false);
+  
+  // Mock social competitors data
+  const socialCompetitors: SocialCompetitor[] = [
+    {
+      id: '1',
+      deal_id: deal.id,
+      competitor_name: 'PetLovers Hub',
+      platform_presence: {
+        instagram: { followers: 125000, engagement: 6.8 },
+        facebook: { followers: 89000, engagement: 4.2 },
+        youtube: { subscribers: 45000, views: 2500000 },
+        twitter: { followers: 32000, engagement: 2.8 },
+      },
+      total_reach: 291000,
+      engagement_rate_avg: 5.1,
+      post_frequency_weekly: 28,
+      content_strategy: 'User-generated content focus with daily posts',
+      strengths: ['High engagement', 'Diverse content', 'Strong community'],
+      weaknesses: ['Inconsistent branding', 'Limited educational content'],
+      audience_overlap_percentage: 35,
+      share_of_voice: 22,
+    },
+    {
+      id: '2',
+      deal_id: deal.id,
+      competitor_name: 'Natural Pet Co',
+      platform_presence: {
+        instagram: { followers: 67000, engagement: 8.2 },
+        facebook: { followers: 45000, engagement: 3.8 },
+        youtube: { subscribers: 12000, views: 450000 },
+      },
+      total_reach: 124000,
+      engagement_rate_avg: 6.0,
+      post_frequency_weekly: 21,
+      content_strategy: 'Educational content with product highlights',
+      strengths: ['High quality content', 'Expert positioning', 'Loyal audience'],
+      weaknesses: ['Limited reach', 'Slow growth'],
+      audience_overlap_percentage: 28,
+      share_of_voice: 15,
+    },
+  ];
 
   // Mock social media data
   const socialMetrics = [
@@ -378,6 +423,149 @@ function DealSocialAnalysis({ deal }: DealSocialAnalysisProps) {
             <li>• Create brand hashtag campaign for UGC collection</li>
           </ul>
         </div>
+      </div>
+
+      {/* Social Media Competitive Analysis */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Social Media Competitive Analysis</h3>
+          <button 
+            onClick={() => setShowCompetitors(!showCompetitors)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showCompetitors ? 'Hide' : 'Show'} Competitors
+          </button>
+        </div>
+        
+        {showCompetitors && (
+          <div className="space-y-4">
+            {/* Competitive Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <MessageCircle className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">14%</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Share of Voice</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Heart className="w-8 h-8 text-red-600 dark:text-red-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">4.2%</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Avg Engagement</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Target className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">#4</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Market Position</p>
+              </div>
+            </div>
+
+            {/* Engagement Comparison Chart */}
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Engagement Rate Comparison</h4>
+              <BarChart04
+                data={{
+                  labels: ['Instagram', 'Facebook', 'YouTube', 'Twitter/X'],
+                  datasets: [
+                    {
+                      label: 'Your Brand',
+                      data: [4.8, 3.2, 6.5, 2.1],
+                      backgroundColor: tailwindConfig().theme.colors.blue[500],
+                      borderRadius: 4,
+                    },
+                    {
+                      label: 'Competitor Average',
+                      data: [6.5, 3.6, 8.2, 2.5],
+                      backgroundColor: tailwindConfig().theme.colors.gray[400],
+                      borderRadius: 4,
+                    },
+                  ],
+                }}
+                width={595}
+                height={248}
+              />
+            </div>
+
+            {/* Competitor Details */}
+            <div className="space-y-4">
+              {socialCompetitors.map((competitor) => (
+                <div key={competitor.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{competitor.competitor_name}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {(competitor.total_reach || 0).toLocaleString()} total reach • {competitor.share_of_voice}% share of voice
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.engagement_rate_avg}% avg engagement
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {competitor.post_frequency_weekly} posts/week
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Platform Breakdown */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                    {Object.entries(competitor.platform_presence || {}).map(([platform, data]) => (
+                      <div key={platform} className="text-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">{platform}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {((data as any).followers / 1000).toFixed(0)}K
+                        </p>
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          {(data as any).engagement}%
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Content Strategy</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{competitor.content_strategy}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Strengths</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.strengths?.map((strength, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-green-500 mr-1">+</span> {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Weaknesses</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.weaknesses?.map((weakness, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-red-500 mr-1">-</span> {weakness}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Social Opportunities */}
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Competitive Opportunities
+              </h4>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <li>• TikTok market untapped - competitors absent</li>
+                <li>• Instagram Reels underutilized by competition</li>
+                <li>• Community building opportunity on Facebook</li>
+                <li>• Influencer partnerships gap in market</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

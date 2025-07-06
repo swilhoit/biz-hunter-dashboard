@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Deal } from '../../types/deal';
-import { Package, Star, TrendingUp, BarChart3, ShoppingCart, Award } from 'lucide-react';
+import { AmazonCompetitor } from '../../types/market-analysis';
+import { Package, Star, TrendingUp, BarChart3, ShoppingCart, Award, Target, Users, AlertCircle } from 'lucide-react';
 import DoughnutChart from '../../charts/DoughnutChart';
+import BarChart02 from '../../charts/BarChart02';
 import { tailwindConfig } from '../../utils/Utils';
 import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
 
@@ -14,6 +16,43 @@ interface DealAmazonMetricsProps {
 function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
   const barChartRef = useRef<HTMLCanvasElement>(null);
   const barChartInstance = useRef<Chart | null>(null);
+  const [showCompetitors, setShowCompetitors] = useState(false);
+  
+  // Mock competitor data for demonstration
+  const amazonCompetitors: AmazonCompetitor[] = [
+    {
+      id: '1',
+      deal_id: deal.id,
+      competitor_name: 'PetLife Essentials',
+      store_url: 'https://amazon.com/stores/petlife',
+      estimated_revenue: 3200000,
+      product_count: 87,
+      avg_rating: 4.6,
+      review_count: 15420,
+      price_range_low: 12.99,
+      price_range_high: 89.99,
+      market_share_percentage: 18,
+      strengths: ['Brand recognition', 'Product variety', 'Prime shipping'],
+      weaknesses: ['Higher prices', 'Limited customer service'],
+      threat_level: 'high',
+    },
+    {
+      id: '2',
+      deal_id: deal.id,
+      competitor_name: 'NaturePaws',
+      store_url: 'https://amazon.com/stores/naturepaws',
+      estimated_revenue: 2100000,
+      product_count: 54,
+      avg_rating: 4.8,
+      review_count: 8932,
+      price_range_low: 15.99,
+      price_range_high: 125.00,
+      market_share_percentage: 12,
+      strengths: ['Premium quality', 'Organic focus', 'High ratings'],
+      weaknesses: ['Limited product range', 'Premium pricing'],
+      threat_level: 'medium',
+    },
+  ];
   // Mock ASIN data - in real app this would come from API
   const topASINs = [
     {
@@ -396,6 +435,161 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
             <li>• Opportunity to expand into related categories</li>
           </ul>
         </div>
+      </div>
+
+      {/* Competitive Analysis Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Amazon Competitive Analysis</h3>
+          <button 
+            onClick={() => setShowCompetitors(!showCompetitors)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showCompetitors ? 'Hide' : 'Show'} Competitors
+          </button>
+        </div>
+        
+        {showCompetitors && (
+          <div className="space-y-4">
+            {/* Competitive Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Target className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">#8</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Market Position</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Users className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">12</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Direct Competitors</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">72%</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Competitive Score</p>
+              </div>
+            </div>
+
+            {/* Competitor Comparison */}
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Revenue Comparison</h4>
+              <BarChart02
+                data={{
+                  labels: [deal.business_name || 'Your Business', ...amazonCompetitors.map(c => c.competitor_name)],
+                  datasets: [{
+                    label: 'Annual Revenue',
+                    data: [
+                      deal.annual_revenue || 2500000,
+                      ...amazonCompetitors.map(c => c.estimated_revenue || 0)
+                    ],
+                    backgroundColor: [
+                      tailwindConfig().theme.colors.green[500],
+                      tailwindConfig().theme.colors.red[500],
+                      tailwindConfig().theme.colors.orange[500],
+                    ],
+                    hoverBackgroundColor: [
+                      tailwindConfig().theme.colors.green[600],
+                      tailwindConfig().theme.colors.red[600],
+                      tailwindConfig().theme.colors.orange[600],
+                    ],
+                    borderRadius: 4,
+                  }],
+                }}
+                width={595}
+                height={248}
+              />
+            </div>
+
+            {/* Competitor Details */}
+            <div className="space-y-4">
+              {amazonCompetitors.map((competitor) => (
+                <div key={competitor.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{competitor.competitor_name}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {competitor.product_count} products • {competitor.market_share_percentage}% market share
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      competitor.threat_level === 'high' 
+                        ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' 
+                        : competitor.threat_level === 'medium'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                    }`}>
+                      {competitor.threat_level?.toUpperCase()} THREAT
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Est. Revenue</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        ${(competitor.estimated_revenue || 0).toLocaleString()}/yr
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.avg_rating} ({competitor.review_count?.toLocaleString()} reviews)
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Price Range</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        ${competitor.price_range_low} - ${competitor.price_range_high}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Products</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.product_count}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Strengths</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.strengths?.map((strength, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-green-500 mr-1">+</span> {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Weaknesses</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.weaknesses?.map((weakness, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-red-500 mr-1">-</span> {weakness}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Competitive Opportunities */}
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Competitive Opportunities
+              </h4>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <li>• 23 high-volume keywords with no competition</li>
+                <li>• Price gap opportunity in mid-range products</li>
+                <li>• Underserved premium segment identified</li>
+                <li>• Bundle opportunities with complementary products</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
