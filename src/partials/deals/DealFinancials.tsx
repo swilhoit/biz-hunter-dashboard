@@ -1,17 +1,95 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Deal } from '../../types/deal';
-import { DollarSign, TrendingUp, TrendingDown, Calculator, PieChart } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Calculator, PieChart, FileText, Brain, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import LineChart01 from '../../charts/LineChart01';
 import BarChart01 from '../../charts/BarChart01';
 import DoughnutChart from '../../charts/DoughnutChart';
 import { chartColors } from '../../charts/ChartjsConfig';
 import { tailwindConfig, hexToRGB } from '../../utils/Utils';
+import { FinancialDocumentService, FinancialExtraction } from '../../services/FinancialDocumentService';
+import FinancialExtractionModal from '../../components/FinancialExtractionModal';
+import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 
 interface DealFinancialsProps {
   deal: Deal;
 }
 
 function DealFinancials({ deal }: DealFinancialsProps) {
+  const [financialExtractions, setFinancialExtractions] = useState<FinancialExtraction[]>([]);
+  const [latestExtraction, setLatestExtraction] = useState<FinancialExtraction | null>(null);
+  const [showExtractionModal, setShowExtractionModal] = useState(false);
+  const [pendingExtraction, setPendingExtraction] = useState<FinancialExtraction | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { showToast } = useToast();
+  const financialService = new FinancialDocumentService();
+
+  useEffect(() => {
+    loadFinancialExtractions();
+    
+    // Listen for navigate-to-finance event from DealFiles
+    const handleNavigateToFinance = (event: CustomEvent) => {
+      if (event.detail.dealId === deal.id && event.detail.extraction) {
+        setPendingExtraction(event.detail.extraction);
+        setShowExtractionModal(true);
+      }
+    };
+    
+    window.addEventListener('navigate-to-finance', handleNavigateToFinance as EventListener);
+    return () => {
+      window.removeEventListener('navigate-to-finance', handleNavigateToFinance as EventListener);
+    };
+  }, [deal.id]);
+
+  const loadFinancialExtractions = async () => {
+    try {
+      setIsLoading(true);
+      const extractions = await financialService.getDealFinancialExtractions(deal.id);
+      setFinancialExtractions(extractions);
+      
+      const validated = await financialService.getLatestValidatedFinancials(deal.id);
+      setLatestExtraction(validated);
+    } catch (error) {
+      console.error('Error loading financial extractions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmExtraction = async (extraction: FinancialExtraction) => {
+    try {
+      // Update the extraction with validation status
+      const supabaseAny: any = supabase;
+      const { error } = await supabaseAny
+        .from('financial_extractions')
+        .update({
+          validation_status: extraction.validation_status,
+          financial_data: extraction.financial_data
+        })
+        .eq('id', extraction.id);
+
+      if (error) throw error;
+
+      showToast('Financial data validated and applied!', 'success');
+      setShowExtractionModal(false);
+      setPendingExtraction(null);
+      
+      // Reload extractions
+      await loadFinancialExtractions();
+      
+      // Reload deal data to get updated financials
+      window.location.reload();
+    } catch (error: any) {
+      showToast(`Failed to save validation: ${error.message}`, 'error');
+    }
+  };
+
+  const handleRejectExtraction = () => {
+    setShowExtractionModal(false);
+    setPendingExtraction(null);
+    showToast('Financial extraction rejected', 'info');
+  };
+
   const formatCurrency = (amount?: number) => {
     if (!amount) return 'N/A';
     return `$${amount.toLocaleString()}`;
@@ -25,6 +103,18 @@ function DealFinancials({ deal }: DealFinancialsProps) {
   const calculateROI = () => {
     if (!deal.asking_price || !deal.annual_profit) return 0;
     return ((deal.annual_profit / deal.asking_price) * 100);
+  };
+
+  // Use AI-extracted data if available
+  const financialData = latestExtraction?.financial_data || {
+    revenue: { total: deal.annual_revenue || 0 },
+    netIncome: deal.annual_profit || 0,
+    ebitda: deal.ebitda || 0,
+    metrics: {
+      grossMargin: deal.gross_margin || calculateProfitMargin() / 100,
+      operatingMargin: deal.operating_margin || 0,
+      netMargin: deal.net_margin || calculateProfitMargin() / 100
+    }
   };
 
   // Mock historical data - in real app this would come from API
@@ -123,24 +213,27 @@ function DealFinancials({ deal }: DealFinancialsProps) {
   const keyMetrics = [
     {
       title: 'Annual Revenue',
-      value: formatCurrency(deal.annual_revenue),
+      value: formatCurrency(financialData.revenue.total || deal.annual_revenue),
       icon: DollarSign,
       color: 'text-green-600 dark:text-green-400',
       bgColor: 'bg-green-50 dark:bg-green-900/20',
+      isAIExtracted: latestExtraction && financialData.revenue.total ? true : false,
     },
     {
       title: 'Annual Profit',
-      value: formatCurrency(deal.annual_profit),
+      value: formatCurrency(financialData.netIncome || deal.annual_profit),
       icon: TrendingUp,
       color: 'text-blue-600 dark:text-blue-400',
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      isAIExtracted: latestExtraction && financialData.netIncome ? true : false,
     },
     {
       title: 'EBITDA',
-      value: formatCurrency(deal.ebitda),
+      value: formatCurrency(financialData.ebitda || deal.ebitda),
       icon: TrendingUp,
       color: 'text-indigo-600 dark:text-indigo-400',
       bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+      isAIExtracted: latestExtraction && financialData.ebitda ? true : false,
     },
     {
       title: 'SDE',
@@ -158,34 +251,209 @@ function DealFinancials({ deal }: DealFinancialsProps) {
     },
     {
       title: 'Profit Margin',
-      value: `${calculateProfitMargin().toFixed(1)}%`,
+      value: `${(financialData.metrics.netMargin * 100).toFixed(1)}%`,
       icon: PieChart,
       color: 'text-orange-600 dark:text-orange-400',
       bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      isAIExtracted: latestExtraction && financialData.metrics.netMargin ? true : false,
     },
   ];
 
   return (
     <div className="space-y-6">
+      {/* AI Extraction Status */}
+      {latestExtraction && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Brain className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <div>
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  AI-Extracted Financial Data Active
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                  Last updated: {new Date(latestExtraction.extraction_date).toLocaleDateString()} • 
+                  Period: {new Date(latestExtraction.period_covered.startDate).toLocaleDateString()} - {new Date(latestExtraction.period_covered.endDate).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-green-700 dark:text-green-300">
+                Confidence: {(latestExtraction.confidence_scores.overall * 100).toFixed(0)}%
+              </span>
+              <button
+                onClick={() => loadFinancialExtractions()}
+                className="p-2 hover:bg-green-100 dark:hover:bg-green-800 rounded transition-colors"
+                title="Refresh extractions"
+              >
+                <RefreshCw className="w-4 h-4 text-green-600 dark:text-green-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No AI Extraction Alert */}
+      {!latestExtraction && financialExtractions.length === 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                No AI-Extracted Financial Data
+              </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                Upload financial documents in the Files tab and click the dollar sign icon to extract financial data automatically.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Extractions */}
+      {financialExtractions.filter(e => !e.validation_status.isValidated).length > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                {financialExtractions.filter(e => !e.validation_status.isValidated).length} Pending Financial Extraction(s)
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const pending = financialExtractions.find(e => !e.validation_status.isValidated);
+                if (pending) {
+                  setPendingExtraction(pending);
+                  setShowExtractionModal(true);
+                }
+              }}
+              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Review
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Key Financial Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {keyMetrics.map((metric, index) => {
           const Icon = metric.icon;
           return (
             <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex items-center">
-                <div className={`p-2 rounded-lg ${metric.bgColor}`}>
-                  <Icon className={`w-6 h-6 ${metric.color}`} />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className={`p-2 rounded-lg ${metric.bgColor}`}>
+                    <Icon className={`w-6 h-6 ${metric.color}`} />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{metric.title}</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{metric.value}</p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{metric.title}</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{metric.value}</p>
-                </div>
+                {metric.isAIExtracted && (
+                  <div className="flex items-center" title="AI-extracted data">
+                    <Brain className="w-4 h-4 text-purple-500" />
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* AI-Extracted Detailed Financials */}
+      {latestExtraction && latestExtraction.financial_data && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+              <Brain className="w-5 h-5 mr-2 text-purple-500" />
+              AI-Extracted Financial Details
+            </h3>
+            <span className="text-sm text-gray-500">
+              {latestExtraction.document_type.replace(/_/g, ' ').toUpperCase()}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Revenue Breakdown */}
+            {latestExtraction.financial_data.revenue.breakdown && 
+             Object.entries(latestExtraction.financial_data.revenue.breakdown).filter(([_, v]) => v !== null).length > 0 && (
+              <div className="col-span-full">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Revenue Breakdown</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(latestExtraction.financial_data.revenue.breakdown)
+                    .filter(([_, value]) => value !== null)
+                    .map(([key, value]) => (
+                      <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">
+                          {key.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(value as number)}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Expense Breakdown */}
+            {latestExtraction.financial_data.operatingExpenses.breakdown && 
+             Object.entries(latestExtraction.financial_data.operatingExpenses.breakdown).filter(([_, v]) => v !== null).length > 0 && (
+              <div className="col-span-full">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Operating Expenses Breakdown</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(latestExtraction.financial_data.operatingExpenses.breakdown)
+                    .filter(([_, value]) => value !== null)
+                    .map(([key, value]) => (
+                      <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">
+                          {key.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {formatCurrency(value as number)}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Additional Metrics */}
+            <div className="col-span-full">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional Metrics</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {latestExtraction.financial_data.cogs.total > 0 && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">COGS</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(latestExtraction.financial_data.cogs.total)}
+                    </p>
+                  </div>
+                )}
+                {latestExtraction.financial_data.grossProfit > 0 && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Gross Profit</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {formatCurrency(latestExtraction.financial_data.grossProfit)}
+                    </p>
+                  </div>
+                )}
+                {latestExtraction.financial_data.metrics.grossMargin > 0 && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Gross Margin</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {(latestExtraction.financial_data.metrics.grossMargin * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Financial Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -320,6 +588,17 @@ function DealFinancials({ deal }: DealFinancialsProps) {
           </div>
         </div>
       </div>
+
+      {/* Financial Extraction Modal */}
+      {pendingExtraction && (
+        <FinancialExtractionModal
+          isOpen={showExtractionModal}
+          onClose={() => setShowExtractionModal(false)}
+          extraction={pendingExtraction}
+          onConfirm={handleConfirmExtraction}
+          onReject={handleRejectExtraction}
+        />
+      )}
     </div>
   );
 }

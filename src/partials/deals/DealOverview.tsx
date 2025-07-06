@@ -13,6 +13,7 @@ import {
   Clock,
   Target
 } from 'lucide-react';
+import BusinessValuation from '../../components/BusinessValuation';
 
 interface DealOverviewProps {
   deal: Deal;
@@ -102,6 +103,9 @@ function DealOverview({ deal }: DealOverviewProps) {
           </div>
         </div>
       </div>
+
+      {/* Business Valuation */}
+      <BusinessValuation deal={deal} />
 
       {/* Business Information */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

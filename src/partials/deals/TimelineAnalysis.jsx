@@ -4,6 +4,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Respons
 function TimelineAnalysis() {
   const timelineData = [
     { stage: 'Prospecting', avgDays: 14, success: 62, volume: 45 },
+    { stage: 'Analysis', avgDays: 6, success: 65, volume: 32 },
     { stage: 'Initial Contact', avgDays: 8, success: 64, volume: 28 },
     { stage: 'LOI Submitted', avgDays: 12, success: 67, volume: 18 },
     { stage: 'Due Diligence', avgDays: 21, success: 67, volume: 12 },

@@ -169,7 +169,7 @@ export async function fetchGoogleAdsKeywordData(
 ): Promise<GoogleAdsKeywordData[]> {
   try {
     // First try the ADC endpoint (using gcloud credentials)
-    const adcResponse = await fetch('/api/google-ads-adc/keywords/ideas', {
+          const adcResponse = await fetch('http://localhost:3002/api/google-ads-adc/keywords/ideas', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -183,7 +183,7 @@ export async function fetchGoogleAdsKeywordData(
     }
     
     // Fallback to regular endpoint if ADC fails
-    const response = await fetch('/api/google-ads/keywords/ideas', {
+          const response = await fetch('http://localhost:3002/api/google-ads/keywords/ideas', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -211,7 +211,7 @@ export async function fetchGoogleAdsSearchVolume(
   keywords: string[]
 ): Promise<Map<string, number>> {
   try {
-    const response = await fetch('/api/google-ads/keywords/search-volume', {
+    const response = await fetch('http://localhost:3002/api/google-ads/keywords/search-volume', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

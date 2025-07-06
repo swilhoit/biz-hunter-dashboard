@@ -1,8 +1,10 @@
 import React from 'react';
 import { Deal } from '../../types/deal';
-import { TrendingUp, Globe, Package, MessageCircle, Search, DollarSign, Users, BarChart3 } from 'lucide-react';
+import { TrendingUp, Globe, Package, MessageCircle, Search, DollarSign, Users, BarChart3, Mic, ShoppingCart, Store, Monitor } from 'lucide-react';
 import { tailwindConfig } from '../../utils/Utils';
 import DoughnutChart from '../../charts/DoughnutChart';
+import LineChart01 from '../../charts/LineChart01';
+import BarChart03 from '../../charts/BarChart03';
 
 interface DealMarketOverviewProps {
   deal: Deal;
@@ -38,6 +40,98 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
   ];
 
   const totalRevenue = deal.annual_revenue || 0;
+
+  // Share of Voice data
+  const shareOfVoiceData = {
+    labels: ['Your Brand', 'Competitor A', 'Competitor B', 'Competitor C', 'Others'],
+    datasets: [{
+      label: 'Share of Voice %',
+      data: [22, 28, 18, 15, 17],
+      backgroundColor: [
+        tailwindConfig().theme.colors.green[500],
+        tailwindConfig().theme.colors.red[500],
+        tailwindConfig().theme.colors.blue[500],
+        tailwindConfig().theme.colors.purple[500],
+        tailwindConfig().theme.colors.gray[400],
+      ],
+      borderWidth: 0,
+      borderRadius: 4,
+    }]
+  };
+
+  // Market Size Trend data (monthly)
+  const marketSizeTrendData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    datasets: [
+      {
+        label: 'TAM',
+        data: [240, 242, 245, 248, 250, 253, 255, 258, 260, 263, 265, 268],
+        borderColor: tailwindConfig().theme.colors.blue[500],
+        backgroundColor: tailwindConfig().theme.colors.blue[500] + '20',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: 'SAM',
+        data: [45, 46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 58],
+        borderColor: tailwindConfig().theme.colors.purple[500],
+        backgroundColor: tailwindConfig().theme.colors.purple[500] + '20',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: 'SOM',
+        data: [8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 14],
+        borderColor: tailwindConfig().theme.colors.green[500],
+        backgroundColor: tailwindConfig().theme.colors.green[500] + '20',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+      }
+    ]
+  };
+
+  // Demand per Channel breakdown
+  const demandChannelData = [
+    {
+      channel: 'Amazon Marketplace',
+      icon: Package,
+      color: 'bg-orange-500',
+      demand: 185000,
+      percentage: 42,
+      trend: '+18%',
+      avgOrderValue: 45,
+    },
+    {
+      channel: 'Direct Website',
+      icon: Monitor,
+      color: 'bg-blue-500',
+      demand: 125000,
+      percentage: 28,
+      trend: '+25%',
+      avgOrderValue: 65,
+    },
+    {
+      channel: 'Retail Partners',
+      icon: Store,
+      color: 'bg-green-500',
+      demand: 75000,
+      percentage: 17,
+      trend: '+12%',
+      avgOrderValue: 38,
+    },
+    {
+      channel: 'Social Commerce',
+      icon: MessageCircle,
+      color: 'bg-purple-500',
+      demand: 58000,
+      percentage: 13,
+      trend: '+45%',
+      avgOrderValue: 52,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -87,12 +181,12 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center">
             <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
-              <Globe className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              <Mic className="w-6 h-6 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Channels</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">3</p>
-              <p className="text-xs text-orange-600 dark:text-orange-400">Multi-channel</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Share of Voice</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">22%</p>
+              <p className="text-xs text-orange-600 dark:text-orange-400">+3% vs last month</p>
             </div>
           </div>
         </div>
@@ -153,6 +247,139 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </div>
+
+      {/* Share of Voice Analysis & Market Size Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Share of Voice Breakdown */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Share of Voice Breakdown</h3>
+          <div className="mb-4">
+            <BarChart03
+              data={shareOfVoiceData}
+              width={400}
+              height={300}
+            />
+          </div>
+          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-sm text-blue-900 dark:text-blue-100 font-medium mb-2">Key Insights:</p>
+            <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
+              <li>• Currently #2 in market share of voice</li>
+              <li>• 6% gap from market leader</li>
+              <li>• Strongest presence on social media channels</li>
+              <li>• Opportunity to increase paid search presence</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Market Size Trend */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Market Size Trend (12 Months)</h3>
+          <div className="mb-4">
+            <LineChart01
+              data={marketSizeTrendData}
+              width={400}
+              height={300}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+              <p className="text-xs text-gray-600 dark:text-gray-400">TAM Growth</p>
+              <p className="text-sm font-bold text-blue-600 dark:text-blue-400">+11.7%</p>
+            </div>
+            <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
+              <p className="text-xs text-gray-600 dark:text-gray-400">SAM Growth</p>
+              <p className="text-sm font-bold text-purple-600 dark:text-purple-400">+28.9%</p>
+            </div>
+            <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
+              <p className="text-xs text-gray-600 dark:text-gray-400">SOM Growth</p>
+              <p className="text-sm font-bold text-green-600 dark:text-green-400">+75%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Demand per Channel Breakdown */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Demand Breakdown by Channel</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {demandChannelData.map((channel, index) => {
+            const Icon = channel.icon;
+            return (
+              <div key={index} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`p-2 rounded-lg ${channel.color} bg-opacity-20`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <span className={`text-xs font-medium ${
+                    channel.trend.startsWith('+') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                  }`}>
+                    {channel.trend}
+                  </span>
+                </div>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm mb-2">{channel.channel}</h4>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Monthly Demand</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                      {(channel.demand / 1000).toFixed(0)}K units
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Share</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{channel.percentage}%</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-600 dark:text-gray-400">AOV</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">${channel.avgOrderValue}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div className="mt-3">
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                    <div 
+                      className={`${channel.color} h-2 rounded-full`} 
+                      style={{ width: `${channel.percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Channel Insights */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg">
+            <h4 className="font-medium text-orange-900 dark:text-orange-100 mb-2 flex items-center">
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Highest Volume
+            </h4>
+            <p className="text-sm text-orange-800 dark:text-orange-200">
+              Amazon drives 42% of total demand with strong Prime member conversion
+            </p>
+          </div>
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg">
+            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Fastest Growing
+            </h4>
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Social commerce shows 45% YoY growth, driven by TikTok Shop integration
+            </p>
+          </div>
+          <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg">
+            <h4 className="font-medium text-green-900 dark:text-green-100 mb-2 flex items-center">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Highest Value
+            </h4>
+            <p className="text-sm text-green-800 dark:text-green-200">
+              Direct website has highest AOV at $65, indicating premium customer base
+            </p>
           </div>
         </div>
       </div>

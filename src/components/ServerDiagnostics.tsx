@@ -33,7 +33,7 @@ export default function ServerDiagnostics() {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:3001/api/server-status');
+      const response = await fetch('http://localhost:3002/api/server-status');
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}`);
       }

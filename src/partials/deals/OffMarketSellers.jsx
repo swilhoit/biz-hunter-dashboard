@@ -140,6 +140,14 @@ function OffMarketSellers({ onAddToPipeline }) {
 
           {/* Controls */}
           <div className="flex items-center gap-2">
+            {/* Get Listings Button */}
+            <button
+              onClick={() => navigate('/off-market-deals')}
+              className="btn bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium"
+            >
+              Get Listings
+            </button>
+            
             {/* Category Filter */}
             <select
               value={selectedCategory}

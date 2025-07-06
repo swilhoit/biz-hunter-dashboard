@@ -128,7 +128,7 @@ export class DocumentIntelligenceService {
   }
 
   private async _callOpenAIProxy(task: string, payload: any) {
-    const response = await fetch('/api/ai/openai-proxy', {
+          const response = await fetch('http://localhost:3002/api/ai/openai-proxy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -174,15 +174,16 @@ export class DocumentIntelligenceService {
         throw new Error('Document not found');
       }
 
-      // Download document content
+      // Download document content from server
       progressCallback?.('Downloading document...');
-      const { data: fileData, error: downloadError } = await supabaseAny.storage
-        .from('deal-documents')
-        .download(document.file_path);
-
-      if (downloadError || !fileData) {
-        throw new Error('Failed to download document');
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${documentId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download document: ${response.status} ${response.statusText}`);
       }
+
+      const fileData = await response.blob();
 
       // Calculate file hash using Web Crypto API
       const fileBuffer = await fileData.arrayBuffer();

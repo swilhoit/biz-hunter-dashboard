@@ -1,6 +1,6 @@
 export async function generateKeywords(productTitles: string[], seedKeyword: string): Promise<string[]> {
   try {
-    const response = await fetch('/api/ai/generate-keywords', {
+    const response = await fetch('http://localhost:3002/api/ai/generate-keywords', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

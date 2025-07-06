@@ -10,7 +10,6 @@ interface DealEditModalProps {
 }
 
 function DealEditModal({ deal, isOpen, onClose, onSave }: DealEditModalProps) {
-  console.log('DealEditModal rendered, isOpen:', isOpen, 'deal:', deal);
   
   // Early return if no deal
   if (!deal) {
@@ -96,11 +95,8 @@ function DealEditModal({ deal, isOpen, onClose, onSave }: DealEditModalProps) {
   }, [deal, isOpen]);
 
   if (!isOpen) {
-    console.log('Modal not open, returning null');
     return null;
   }
-
-  console.log('Modal is open, rendering content');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

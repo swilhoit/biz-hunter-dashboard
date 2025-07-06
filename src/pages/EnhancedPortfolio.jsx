@@ -120,7 +120,7 @@ function EnhancedPortfolio() {
   const fetchPortfolios = async () => {
     if (!user) return;
     
-    const response = await fetch(`http://localhost:3001/api/portfolio/${user.id}`);
+    const response = await fetch(`http://localhost:3002/api/portfolio/${user.id}`);
     const data = await response.json();
     
     if (data.success) {
@@ -135,7 +135,7 @@ function EnhancedPortfolio() {
     if (!user) return;
     
     try {
-      const response = await fetch(`http://localhost:3001/api/brands/${user.id}`);
+      const response = await fetch(`http://localhost:3002/api/brands/${user.id}`);
       const data = await response.json();
       
       if (data.success) {
@@ -163,7 +163,7 @@ function EnhancedPortfolio() {
   };
 
   const fetchBrandAsins = async (brandId) => {
-    const response = await fetch(`http://localhost:3001/api/brands/${brandId}/asins`);
+    const response = await fetch(`http://localhost:3002/api/brands/${brandId}/asins`);
     const data = await response.json();
     
     if (data.success) {
@@ -174,7 +174,7 @@ function EnhancedPortfolio() {
   };
 
   const fetchPortfolioAsins = async (portfolioId) => {
-    const response = await fetch(`http://localhost:3001/api/portfolio/${portfolioId}/asins`);
+    const response = await fetch(`http://localhost:3002/api/portfolio/${portfolioId}/asins`);
     const data = await response.json();
     
     if (data.success) {
@@ -186,7 +186,7 @@ function EnhancedPortfolio() {
 
   const handleCreateBrand = async (brandData) => {
     try {
-      const response = await fetch('http://localhost:3001/api/brands', {
+      const response = await fetch('http://localhost:3002/api/brands', {
         method: editingBrand ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +217,7 @@ function EnhancedPortfolio() {
 
   const handleDeleteBrand = async (brandId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/brands/${brandId}`, {
+      const response = await fetch(`http://localhost:3002/api/brands/${brandId}`, {
         method: 'DELETE'
       });
       
@@ -245,7 +245,7 @@ function EnhancedPortfolio() {
 
   const handleBulkImport = async (asins) => {
     try {
-      const response = await fetch('http://localhost:3001/api/asins/bulk-import', {
+      const response = await fetch('http://localhost:3002/api/asins/bulk-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -282,7 +282,7 @@ function EnhancedPortfolio() {
     if (!confirm('Are you sure you want to delete this ASIN?')) return;
     
     try {
-      const response = await fetch(`http://localhost:3001/api/portfolio/asins/${asinId}`, {
+      const response = await fetch(`http://localhost:3002/api/portfolio/asins/${asinId}`, {
         method: 'DELETE'
       });
       

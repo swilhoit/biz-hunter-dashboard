@@ -23,6 +23,7 @@ export class DocumentExtractors {
       
       const text = result.value;
       console.log(`Extracted ${text.length} characters from .docx`);
+      console.log('Content preview:', text.substring(0, 200));
       
       if (!text || text.trim().length === 0) {
         throw new Error('No text content found in the document');
@@ -103,6 +104,7 @@ export class DocumentExtractors {
       
       const combinedText = textParts.join('\n\n');
       console.log(`Extracted ${combinedText.length} characters from Excel file`);
+      console.log('Content preview:', combinedText.substring(0, 300));
       
       if (!combinedText || combinedText.trim().length === 0) {
         throw new Error('No data found in the spreadsheet');

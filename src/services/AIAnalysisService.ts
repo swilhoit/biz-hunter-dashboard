@@ -1,5 +1,6 @@
 import { filesAdapter } from '../lib/database-adapter';
 import { supabase } from '../lib/supabase';
+import { encodeFilePath } from '../utils/fileUtils';
 import { DocumentExtractors } from './DocumentExtractors';
 import { getConfigValue } from '../config/runtime-config';
 
@@ -86,7 +87,7 @@ export class AIAnalysisService {
 
   constructor() {
     // Use server endpoints instead of direct OpenAI calls
-    this.apiUrl = '/api/openai';
+    this.apiUrl = 'http://localhost:3002/api/openai';
   }
 
   private async callOpenAI(messages: any[], options: { temperature?: number; max_tokens?: number } = {}): Promise<string> {
@@ -105,11 +106,30 @@ export class AIAnalysisService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to call OpenAI');
+        let errorMessage = 'Failed to call OpenAI';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, try to get text
+          try {
+            errorMessage = await response.text() || errorMessage;
+          } catch (textError) {
+            // If text parsing also fails, use the status
+            errorMessage = `${errorMessage} (Status: ${response.status})`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('Failed to parse OpenAI response as JSON:', e);
+        throw new Error('Invalid JSON response from OpenAI');
+      }
+      
       return data.response;
     } catch (error) {
       console.error('Error calling OpenAI:', error);
@@ -231,10 +251,13 @@ export class AIAnalysisService {
 
   private async downloadAndAnalyzeDocument(file: any): Promise<string | null> {
     try {
+      // URL encode the file path to handle special characters and spaces
+      const encodedFilePath = encodeFilePath(file.file_path);
+      
       // Download the file from Supabase storage
       const { data, error } = await supabase.storage
         .from('deal-documents')
-        .download(file.file_path);
+        .download(encodedFilePath);
 
       if (error) {
         console.error('Error downloading document:', error);
@@ -637,7 +660,8 @@ export class DocumentAnalysisService {
         }
         
         // Send text content to server for analysis
-        const response = await fetch('/api/openai/analyze-document', {
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+        const response = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -651,12 +675,37 @@ export class DocumentAnalysisService {
         });
         
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to analyze document');
+          let errorMessage = 'Failed to analyze document';
+          try {
+            const error = await response.json();
+            errorMessage = error.error || errorMessage;
+          } catch (e) {
+            // If JSON parsing fails, try to get text
+            errorMessage = await response.text() || errorMessage;
+          }
+          throw new Error(errorMessage);
         }
         
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.error('Failed to parse response as JSON:', e);
+          throw new Error('Invalid JSON response from server');
+        }
+        
         const analysis = data.analysis;
+        
+        // Calculate confidence based on extracted data
+        const confidence = this.calculateDocumentConfidence(analysis);
+        
+        console.log('Document analysis result:', {
+          businessName: analysis.businessName,
+          hasRevenue: !!analysis.annualRevenue,
+          hasProfit: !!analysis.annualProfit,
+          keyFindingsCount: analysis.keyFindings?.length || 0,
+          confidence: confidence
+        });
         
         return {
           businessName: analysis.businessName || 'Unknown Business',
@@ -667,7 +716,7 @@ export class DocumentAnalysisService {
           monthlyRevenue: analysis.monthlyRevenue || 0,
           monthlyProfit: analysis.monthlyProfit || 0,
           keyFindings: analysis.keyFindings || [],
-          confidence: 85,
+          confidence: confidence,
           dataExtracted: {
             hasPL: analysis.financials?.hasDetailedPL || false,
             hasRevenue: !!analysis.annualRevenue,
@@ -675,20 +724,111 @@ export class DocumentAnalysisService {
             hasInventory: !!analysis.financials?.inventoryValue
           },
           additionalInfo: {
-            redFlags: analysis.redFlags,
-            opportunities: analysis.opportunities,
-            profitMargin: analysis.financials?.profitMargin,
-            revenueGrowth: analysis.financials?.revenueGrowth
+            inventoryValue: analysis.financials?.inventoryValue,
+            reasonForSelling: analysis.redFlags?.join(', '),
+            growthOpportunities: analysis.opportunities?.join(', ')
           }
         };
       } catch (error) {
         console.error('Error in document analysis:', error);
-        throw error;
+        // Return a fallback analysis if parsing fails
+        return {
+          businessName: 'Document Analysis',
+          description: 'Could not extract detailed information from document',
+          askingPrice: 0,
+          annualRevenue: 0,
+          annualProfit: 0,
+          keyFindings: [`Analysis parsing failed: ${error.message}`],
+          confidence: 0,
+          dataExtracted: {
+            hasPL: false,
+            hasRevenue: false,
+            hasProfit: false,
+            hasInventory: false
+          },
+          monthlyRevenue: 0,
+          monthlyProfit: 0,
+          industry: 'Unknown',
+          location: 'Unknown'
+        };
       }
     } catch (error) {
       console.error('Error analyzing document:', error);
-      throw new Error(`Failed to analyze document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Return a fallback analysis instead of throwing
+      return {
+        businessName: 'Document',
+        description: 'Failed to analyze document',
+        askingPrice: 0,
+        annualRevenue: 0,
+        annualProfit: 0,
+        keyFindings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        confidence: 0,
+        dataExtracted: {
+          hasPL: false,
+          hasRevenue: false,
+          hasProfit: false,
+          hasInventory: false
+        },
+        monthlyRevenue: 0,
+        monthlyProfit: 0,
+        industry: 'Unknown',
+        location: 'Unknown'
+      };
     }
+  }
+
+  private static calculateDocumentConfidence(analysis: any): number {
+    let confidence = 0;
+    let totalChecks = 0;
+
+    // Business name check (20 points)
+    totalChecks += 20;
+    if (analysis.businessName && analysis.businessName !== 'Unknown Business' && analysis.businessName.length > 2) {
+      confidence += 20;
+    }
+
+    // Financial data checks (60 points total)
+    totalChecks += 20;
+    if (analysis.annualRevenue && analysis.annualRevenue > 0) {
+      confidence += 20;
+    }
+
+    totalChecks += 20;
+    if (analysis.annualProfit && analysis.annualProfit > 0) {
+      confidence += 20;
+    }
+
+    totalChecks += 20;
+    if (analysis.askingPrice && analysis.askingPrice > 0) {
+      confidence += 20;
+    }
+
+    // Content quality checks (20 points total)
+    totalChecks += 10;
+    if (analysis.keyFindings && analysis.keyFindings.length > 0) {
+      confidence += 10;
+    }
+
+    totalChecks += 10;
+    if (analysis.description && analysis.description.length > 10) {
+      confidence += 10;
+    }
+
+    // Calculate percentage
+    const confidencePercentage = Math.round((confidence / totalChecks) * 100);
+    
+    console.log('Confidence calculation:', {
+      totalChecks,
+      actualScore: confidence,
+      percentage: confidencePercentage,
+      hasBusinessName: !!analysis.businessName,
+      hasRevenue: !!analysis.annualRevenue,
+      hasProfit: !!analysis.annualProfit,
+      hasPrice: !!analysis.askingPrice,
+      keyFindingsCount: analysis.keyFindings?.length || 0
+    });
+
+    return confidencePercentage;
   }
 
   private static async analyzeImageDocument(file: File, progressCallback?: (stage: string) => void): Promise<DocumentAnalysis> {
@@ -728,7 +868,7 @@ Format your response as JSON with these keys:
   "metrics": {}
 }`;
 
-      const response = await fetch('/api/openai/vision', {
+      const response = await fetch('http://localhost:3002/api/openai/vision', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -741,15 +881,67 @@ Format your response as JSON with these keys:
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to analyze image');
+        let errorMessage = `Failed to analyze image (Status: ${response.status})`;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            try {
+              const error = JSON.parse(responseText);
+              // Check for specific vision API errors
+              if (error.error?.includes('Invalid MIME type')) {
+                errorMessage = 'Vision API error: File format not supported for image analysis';
+              } else {
+                errorMessage = error.error || error.message || errorMessage;
+              }
+            } catch (e) {
+              // Not JSON, use as text
+              errorMessage = responseText;
+            }
+          }
+        } catch (e) {
+          // If text parsing fails, use the status
+          console.error('Failed to read error response:', e);
+        }
+        
+        // Make vision API errors non-fatal - return a basic analysis instead of throwing
+        if (errorMessage.includes('Invalid MIME type') || errorMessage.includes('Vision API')) {
+          console.warn('Vision API failed for image analysis, returning basic analysis:', errorMessage);
+          return {
+            businessName: 'Image Document',
+            description: 'Image uploaded but AI analysis unavailable',
+            askingPrice: 0,
+            annualRevenue: 0,
+            annualProfit: 0,
+            keyFindings: ['Image uploaded successfully - AI analysis temporarily unavailable'],
+            confidence: 10,
+            dataExtracted: {
+              hasPL: false,
+              hasRevenue: false,
+              hasProfit: false,
+              hasInventory: false
+            },
+            monthlyRevenue: 0,
+            monthlyProfit: 0
+          };
+        }
+        
+        throw new Error(errorMessage);
       }
       
-      const data = await response.json();
+      let data;
+      const responseText = await response.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', e);
+        console.error('Response text:', responseText);
+        throw new Error('Invalid JSON response from server');
+      }
+      
       const result = data.response;
       
       try {
-        const analysis = JSON.parse(result);
+        const analysis = typeof result === 'string' ? JSON.parse(result) : result;
         return {
           businessName: analysis.businessName || 'Image Analysis',
           description: analysis.description || '',
@@ -786,8 +978,27 @@ Format your response as JSON with these keys:
         };
       }
     } catch (error) {
-      console.error('Error analyzing image:', error);
-      throw error;
+      console.error('Error analyzing image document:', error);
+      // Return a fallback analysis instead of throwing to prevent breaking the workflow
+      return {
+        businessName: 'Image Document',
+        description: 'Failed to analyze image document',
+        askingPrice: 0,
+        annualRevenue: 0,
+        annualProfit: 0,
+        keyFindings: [`Analysis failed: ${error.message}`],
+        confidence: 0,
+        dataExtracted: {
+          hasPL: false,
+          hasRevenue: false,
+          hasProfit: false,
+          hasInventory: false
+        },
+        monthlyRevenue: 0,
+        monthlyProfit: 0,
+        industry: 'Unknown',
+        location: 'Unknown'
+      };
     }
   }
   
@@ -795,26 +1006,230 @@ Format your response as JSON with these keys:
     try {
       progressCallback?.('Processing PDF document...');
       
-      // For now, we'll inform the user that PDF analysis requires conversion
-      // In a full implementation, you would use pdf.js to convert pages to images
+      // First try to extract text from the PDF
+      let pdfText = '';
+      try {
+        // Use PDF.js to extract text
+        const pdfjs = await import('pdfjs-dist');
+        
+        // Set worker source with proper error handling
+        if (pdfjs.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+        } else {
+          console.warn('PDF.js GlobalWorkerOptions not available, PDF processing may be limited');
+        }
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        
+        progressCallback?.('Extracting text from PDF...');
+        
+        // Extract text from all pages
+        const textPromises = [];
+        for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) { // Limit to first 10 pages
+          textPromises.push(
+            pdf.getPage(i).then(page => 
+              page.getTextContent().then(textContent => 
+                textContent.items.map((item: any) => item.str).join(' ')
+              )
+            )
+          );
+        }
+        
+        const pageTexts = await Promise.all(textPromises);
+        pdfText = pageTexts.join('\n\n');
+        
+      } catch (pdfError) {
+        console.warn('PDF text extraction failed, falling back to document analysis endpoint:', pdfError);
+        
+        // Fallback: send to document analysis endpoint
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+        const response = await fetch(`${API_BASE_URL}/api/openai/analyze-document`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: `PDF document: ${file.name}`,
+            fileName: file.name,
+            fileType: file.type,
+            analysisType: 'business'
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Document analysis failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const analysis = data.analysis;
+        
+        return {
+          businessName: analysis.businessName || 'PDF Document',
+          description: analysis.description || 'PDF business document',
+          askingPrice: analysis.askingPrice || 0,
+          annualRevenue: analysis.annualRevenue || 0,
+          annualProfit: analysis.annualProfit || 0,
+          keyFindings: analysis.keyFindings || ['PDF document analyzed'],
+          confidence: 25,
+          dataExtracted: {
+            hasPL: false,
+            hasRevenue: false,
+            hasProfit: false,
+            hasInventory: false
+          },
+          monthlyRevenue: 0,
+          monthlyProfit: 0,
+          industry: 'Unknown',
+          location: 'Unknown'
+        };
+      }
+      
+      // If we successfully extracted text, analyze it
+      if (pdfText && pdfText.trim().length > 0) {
+        progressCallback?.('Analyzing PDF content with AI...');
+        
+        const prompt = `Analyze this PDF business document content and extract key information:
+
+PDF Content:
+${pdfText.substring(0, 4000)} // Limit content to avoid token limits
+
+Focus on finding:
+1. Business name and description
+2. Financial data (revenue, profit, income, expenses)
+3. Tax information (if it's a tax return)
+4. Key business metrics and numbers
+5. Important findings
+
+For tax documents (Schedule C, 1040, etc), extract:
+- Business income/revenue
+- Business expenses
+- Net profit/loss
+- Business name/description
+
+Format your response as JSON with these keys:
+{
+  "businessName": "...",
+  "description": "...",
+  "askingPrice": 0,
+  "annualRevenue": 0,
+  "annualProfit": 0,
+  "keyFindings": ["finding1", "finding2"],
+  "monthlyRevenue": 0,
+  "monthlyProfit": 0
+}`;
+        
+        const response = await fetch('http://localhost:3002/api/openai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: 'You are a business analyst expert at extracting information from financial documents.' },
+              { role: 'user', content: prompt }
+            ],
+            model: 'gpt-4o-mini',
+            max_tokens: 1500
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Chat API failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const result = data.response;
+        
+        try {
+          const analysis = typeof result === 'string' ? JSON.parse(result) : result;
+          
+          const confidence = this.calculateDocumentConfidence(analysis);
+          
+          return {
+            businessName: analysis.businessName || 'PDF Document',
+            description: analysis.description || 'PDF business document analysis',
+            askingPrice: analysis.askingPrice || 0,
+            annualRevenue: analysis.annualRevenue || 0,
+            annualProfit: analysis.annualProfit || 0,
+            keyFindings: analysis.keyFindings || ['PDF document analyzed with text extraction'],
+            confidence: confidence,
+            dataExtracted: {
+              hasPL: analysis.annualRevenue > 0 || analysis.annualProfit !== 0,
+              hasRevenue: !!analysis.annualRevenue,
+              hasProfit: !!analysis.annualProfit,
+              hasInventory: false
+            },
+            monthlyRevenue: analysis.monthlyRevenue || (analysis.annualRevenue ? Math.round(analysis.annualRevenue / 12) : 0),
+            monthlyProfit: analysis.monthlyProfit || (analysis.annualProfit ? Math.round(analysis.annualProfit / 12) : 0),
+            industry: 'Unknown',
+            location: 'Unknown'
+          };
+        } catch (error) {
+          console.error('Error parsing PDF analysis result:', error);
+          return {
+            businessName: 'PDF Document',
+            description: 'PDF analysis completed but could not parse detailed results',
+            askingPrice: 0,
+            annualRevenue: 0,
+            annualProfit: 0,
+            keyFindings: ['PDF document processed with text extraction'],
+            confidence: 25,
+            dataExtracted: {
+              hasPL: false,
+              hasRevenue: false,
+              hasProfit: false,
+              hasInventory: false
+            },
+            monthlyRevenue: 0,
+            monthlyProfit: 0,
+            industry: 'Unknown',
+            location: 'Unknown'
+          };
+        }
+      } else {
+        // No text extracted, return basic analysis
+        return {
+          businessName: 'PDF Document',
+          description: 'PDF document uploaded but no text could be extracted',
+          askingPrice: 0,
+          annualRevenue: 0,
+          annualProfit: 0,
+          keyFindings: ['PDF document uploaded but content could not be extracted'],
+          confidence: 10,
+          dataExtracted: {
+            hasPL: false,
+            hasRevenue: false,
+            hasProfit: false,
+            hasInventory: false
+          },
+          monthlyRevenue: 0,
+          monthlyProfit: 0,
+          industry: 'Unknown',
+          location: 'Unknown'
+        };
+      }
+    } catch (error) {
+      console.error('Error analyzing PDF:', error);
       return {
-        businessName: 'PDF Analysis',
-        description: 'PDF analysis requires conversion to images. Please convert your PDF to images or text format for analysis.',
+        businessName: 'PDF Document',
+        description: 'PDF analysis failed',
         askingPrice: 0,
         annualRevenue: 0,
         annualProfit: 0,
-        keyFindings: ['PDF documents need to be converted to images or text for analysis'],
+        keyFindings: [`PDF analysis failed: ${error.message}`],
         confidence: 0,
         dataExtracted: {
           hasPL: false,
           hasRevenue: false,
           hasProfit: false,
           hasInventory: false
-        }
+        },
+        monthlyRevenue: 0,
+        monthlyProfit: 0,
+        industry: 'Unknown',
+        location: 'Unknown'
       };
-    } catch (error) {
-      console.error('Error analyzing PDF:', error);
-      throw error;
     }
   }
 

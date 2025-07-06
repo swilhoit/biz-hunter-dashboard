@@ -8,7 +8,6 @@ import DealMarketAnalysis from '../partials/deals/DealMarketAnalysis';
 import DealAnalysis from '../partials/deals/DealAnalysis';
 import DealFiles from '../partials/deals/DealFiles';
 import DealASINsTable from '../partials/deals/DealASINsTable';
-import DealCommunications from '../partials/deals/DealCommunications';
 import DealTasks from '../partials/deals/DealTasks';
 import DealNotes from '../partials/deals/DealNotes';
 import DealEditModal from '../components/DealEditModal';
@@ -41,10 +40,28 @@ function DealDetails() {
       }
     };
 
+    // Listen for deal updates to refresh data after auto-fill
+    const handleDealUpdated = (event) => {
+      if (event.detail && event.detail.dealId === id) {
+        loadDeal(id); // Refresh the deal data
+      }
+    };
+
+    // Listen for navigation to overview tab
+    const handleNavigateToOverview = (event) => {
+      if (event.detail && event.detail.dealId === id) {
+        setActiveTab('overview');
+      }
+    };
+
     window.addEventListener('navigate-to-analysis', handleNavigateToAnalysis);
+    window.addEventListener('deal-updated', handleDealUpdated);
+    window.addEventListener('navigate-to-overview', handleNavigateToOverview);
     
     return () => {
       window.removeEventListener('navigate-to-analysis', handleNavigateToAnalysis);
+      window.removeEventListener('deal-updated', handleDealUpdated);
+      window.removeEventListener('navigate-to-overview', handleNavigateToOverview);
     };
   }, [id]);
 
@@ -113,7 +130,6 @@ function DealDetails() {
     { id: 'analysis', label: 'Analysis', icon: '🧠' },
     { id: 'asins', label: 'ASINs', icon: '🔖' },
     { id: 'files', label: 'Files', icon: '📁' },
-    { id: 'communications', label: 'Communications', icon: '💬' },
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'notes', label: 'Notes', icon: '📝' },
   ];
@@ -132,8 +148,6 @@ function DealDetails() {
         return <DealASINsTable dealId={currentDeal.id} />;
       case 'files':
         return <DealFiles dealId={currentDeal.id} />;
-      case 'communications':
-        return <DealCommunications dealId={currentDeal.id} />;
       case 'tasks':
         return <DealTasks dealId={currentDeal.id} />;
       case 'notes':

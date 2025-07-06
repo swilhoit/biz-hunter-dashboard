@@ -4,8 +4,8 @@
  */
 
 import { supabase } from './supabase';
+import { encodeFilePath } from '../utils/fileUtils';
 import { getBusinessImage } from '../utils/imageUtils';
-import { ensureStorageBucketExists } from './storage-setup';
 
 // Map deal status values
 export const mapDealStatus = (status: string): string => {
@@ -68,7 +68,7 @@ export const dealsAdapter = {
     if (error) throw error;
 
     // Map the data to match mosaic-react expectations
-    return data?.map(deal => ({
+    return data?.map((deal: any) => ({
       ...deal,
       status: mapDealStatus(deal.stage || 'prospecting'),
       // Add any other field mappings needed
@@ -115,31 +115,32 @@ export const dealsAdapter = {
     if (!data) return null;
 
     // Map the data to match mosaic-react expectations
+    const dealData = data as any;
     const mappedDeal = {
-      ...data,
-      status: mapDealStatus(data.stage || 'prospecting'),
+      ...dealData,
+      status: mapDealStatus(dealData.stage || 'prospecting'),
       // Add any other field mappings needed
-      valuation_multiple: data.multiple,
-      monthly_revenue: data.custom_fields?.monthly_revenue || (data.annual_revenue ? data.annual_revenue / 12 : null),
-      monthly_profit: data.custom_fields?.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
+      valuation_multiple: dealData.multiple,
+      monthly_revenue: dealData.custom_fields?.monthly_revenue || (dealData.annual_revenue ? dealData.annual_revenue / 12 : null),
+      monthly_profit: dealData.custom_fields?.monthly_profit || (dealData.annual_profit ? dealData.annual_profit / 12 : null),
       // Extract custom fields
-      ...data.custom_fields,
+      ...dealData.custom_fields,
       // Map opportunity_score to priority for frontend compatibility
-      priority: data.opportunity_score || data.priority,
+      priority: dealData.opportunity_score || dealData.priority,
       // Ensure specific fields are available
-      seller_name: data.seller_name || 'Unknown',
-      seller_email: data.seller_email || '',
-      seller_phone: data.seller_phone || '',
-      fba_percentage: data.fba_percentage || 0,
-      first_contact_date: data.created_at,
-      due_diligence_start_date: data.stage === 'due_diligence' ? data.stage_updated_at : null,
-      expected_close_date: data.next_action_date,
-      notes: data.custom_fields?.notes || '',
+      seller_name: dealData.seller_name || 'Unknown',
+      seller_email: dealData.seller_email || '',
+      seller_phone: dealData.seller_phone || '',
+      fba_percentage: dealData.fba_percentage || 0,
+      first_contact_date: dealData.created_at,
+      due_diligence_start_date: dealData.stage === 'due_diligence' ? dealData.stage_updated_at : null,
+      expected_close_date: dealData.next_action_date,
+      notes: dealData.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: data.custom_fields?.image_url || getBusinessImage(data.business_name),
+      image_url: dealData.custom_fields?.image_url || getBusinessImage(dealData.business_name),
       // Add listing information
-      listing_url: data.custom_fields?.listing_url || data.listing?.original_url || '',
-      listing_source: data.listing?.source || data.source || 'Unknown'
+      listing_url: dealData.custom_fields?.listing_url || dealData.listing?.original_url || '',
+      listing_source: dealData.listing?.source || dealData.source || 'Unknown'
     };
 
     return mappedDeal;
@@ -176,7 +177,6 @@ export const dealsAdapter = {
       'seller_location',
       'seller_name',
       'seller_phone',
-      'opportunity_score'
     ];
 
     // Fields that need to go into custom_fields
@@ -259,7 +259,7 @@ export const dealsAdapter = {
 
     const { data, error } = await supabase
       .from('deals')
-      .insert(mappedData)
+      .insert(mappedData as any)
       .select()
       .single();
 
@@ -304,7 +304,6 @@ export const dealsAdapter = {
       'seller_location',
       'seller_name',
       'seller_phone',
-      'opportunity_score'
     ];
 
     // Fields that need to go into custom_fields
@@ -328,7 +327,8 @@ export const dealsAdapter = {
       'brand_names',
       'tags',
       'monthly_sessions',
-      'conversion_rate'
+      'conversion_rate',
+      'opportunity_score'
     ];
     
     // Map frontend fields to database fields
@@ -341,8 +341,9 @@ export const dealsAdapter = {
       } else if (key === 'valuation_multiple') {
         mappedUpdates.multiple = value;
       } else if (key === 'priority') {
-        // Map priority to opportunity_score
-        mappedUpdates.opportunity_score = value;
+        // Map priority to opportunity_score in custom_fields for now
+        customFieldsUpdates.opportunity_score = value;
+        needsCustomFieldsUpdate = true;
       } else if (key === 'description') {
         mappedUpdates.business_description = value;
       } else if (directMappedFields.includes(key)) {
@@ -359,8 +360,8 @@ export const dealsAdapter = {
 
     // Handle custom_fields update if needed
     if (needsCustomFieldsUpdate) {
-      const { data: existingDeal } = await supabase.from('deals').select('custom_fields').eq('id', dealId).single();
-      const existingCustomFields = existingDeal?.custom_fields || {};
+      const { data: existingDeal } = await supabase.from('deals').select('*').eq('id', dealId).single();
+      const existingCustomFields = (existingDeal as any)?.custom_fields || {};
       mappedUpdates.custom_fields = { ...existingCustomFields, ...customFieldsUpdates };
     }
 
@@ -424,7 +425,7 @@ export const filesAdapter = {
     if (error) throw error;
 
     // Map the results to expected format
-    const allFiles = (data || []).map(doc => ({
+    const allFiles = (data || []).map((doc: any) => ({
       id: doc.id,
       file_name: doc.file_name || doc.document_name,
       file_path: doc.file_path,
@@ -454,59 +455,50 @@ export const filesAdapter = {
 
       console.log('User authenticated for upload:', user.id);
 
-      // Ensure storage bucket exists
-      const bucketResult = await ensureStorageBucketExists();
-      console.log('Storage bucket check result:', bucketResult);
+      // Create FormData for server upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('dealId', dealId);
+      formData.append('fileName', fileName);
+      formData.append('metadata', JSON.stringify(metadata));
+
+      // Upload via server endpoint to handle storage permissions
+      console.log('Uploading file via server...');
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${errorText}`);
+      }
+
+      const uploadResult = await response.json();
+      console.log('Server upload result:', uploadResult);
+
+      if (!uploadResult.success) {
+        throw new Error(`File upload failed: ${uploadResult.error}`);
+      }
+
+      console.log('File uploaded successfully via server:', uploadResult);
       
-      if (!bucketResult.success) {
-        throw new Error(`Storage setup failed: ${bucketResult.error}`);
-      }
-
-      // Upload to Supabase storage
-      console.log('Uploading file to storage...');
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('deal-documents')
-        .upload(fileName, file);
-
-      console.log('Upload result:', { uploadData, uploadError });
-
-      if (uploadError) {
-        throw new Error(`File upload failed: ${uploadError.message}`);
-      }
-
-      console.log('File uploaded successfully, saving metadata to database...');
-
-      // Save file metadata to deal_documents table
-      const { data, error } = await supabase
-        .from('deal_documents')
-        .insert({
-          deal_id: dealId,
-          file_name: file.name,
-          file_path: fileName,
-          file_size: file.size,
-          mime_type: file.type,
-          category: metadata.category || 'general',
-          subcategory: metadata.subcategory,
-          uploaded_by: user.id,
-          tags: metadata.tags || [],
-          is_confidential: metadata.is_confidential || false,
-          metadata: {
-            description: metadata.description,
-            ...metadata
-          }
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Database insert error:', error);
-        // If database insert fails, try to clean up the uploaded file
-        await supabase.storage.from('deal-documents').remove([fileName]);
-        throw new Error(`Database save failed: ${error.message}`);
-      }
-      
-      console.log('File upload and database save completed successfully:', data);
-      return data;
+      // Server already handles database insertion, so just return the result
+      return {
+        id: uploadResult.fileId,
+        deal_id: dealId,
+        file_name: file.name,
+        file_path: uploadResult.filePath || fileName,
+        file_size: file.size,
+        mime_type: file.type,
+        category: metadata.category || 'general',
+        uploaded_by: user.id,
+        created_at: new Date().toISOString()
+      };
     } catch (error) {
       console.error('Upload error:', error);
       // Re-throw with more context
@@ -552,9 +544,13 @@ export const filesAdapter = {
       // Delete from storage first
       if (fileInfo.file_path) {
         console.log('Attempting to delete from storage:', fileInfo.file_path);
+        
+        // URL encode the file path to handle special characters and spaces
+        const encodedFilePath = encodeFilePath(fileInfo.file_path);
+        
         const { error: storageError } = await supabase.storage
           .from('deal-documents')
-          .remove([fileInfo.file_path]);
+          .remove([encodedFilePath]);
 
         if (storageError) {
           console.warn('Storage deletion warning:', storageError);
@@ -597,10 +593,13 @@ export const filesAdapter = {
         throw new Error('File not found');
       }
 
+      // URL encode the file path to handle special characters and spaces
+      const encodedFilePath = encodeFilePath(fileInfo.file_path);
+
       // Create signed URL for private file access
       const { data, error } = await supabase.storage
         .from('deal-documents')
-        .createSignedUrl(fileInfo.file_path, 3600); // 1 hour expiry
+        .createSignedUrl(encodedFilePath, 3600); // 1 hour expiry
 
       if (error) {
         throw new Error(`Failed to generate download URL: ${error.message}`);
@@ -622,7 +621,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, file_name, mime_type')
+        .select('file_name, mime_type')
         .eq('id', fileId)
         .single();
 
@@ -633,36 +632,20 @@ export const filesAdapter = {
 
       console.log('File info retrieved:', fileInfo);
       
-      // Check if storage bucket exists and file exists
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      console.log('Available buckets:', buckets, 'Buckets error:', bucketsError);
-      
-      // Try to list files in the specific path to see if file exists
-      const pathParts = fileInfo.file_path.split('/');
-      const folder = pathParts.slice(0, -1).join('/');
-      console.log('Checking if file exists in folder:', folder);
-      
-      const { data: files, error: listError } = await supabase.storage
-        .from('deal-documents')
-        .list(folder || '');
-      
-      console.log('Files in folder:', files, 'List error:', listError);
+      // Download file from server endpoint
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
 
-      // Download file as blob
-      console.log('Attempting to download file from path:', fileInfo.file_path);
-      const { data, error } = await supabase.storage
-        .from('deal-documents')
-        .download(fileInfo.file_path);
-
-      if (error) {
-        console.error('Download error details:', error);
-        throw new Error(`Failed to download file: ${error.message || JSON.stringify(error)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to download file: ${errorText}`);
       }
 
-      console.log('File downloaded successfully, blob size:', data?.size);
+      const blob = await response.blob();
+      console.log('File downloaded successfully, blob size:', blob.size);
 
       return {
-        blob: data,
+        blob: blob,
         fileName: fileInfo.file_name,
         fileType: fileInfo.mime_type
       };
@@ -673,101 +656,6 @@ export const filesAdapter = {
   }
 };
 
-// Adapter for communications
-export const communicationsAdapter = {
-  async fetchDealCommunications(dealId: string) {
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .eq('deal_id', dealId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    
-    return data?.map(comm => ({
-      ...comm,
-      user_name: comm.profiles?.full_name || 'Unknown User',
-      user_email: comm.profiles?.email || ''
-    }));
-  },
-
-  async createCommunication(dealId: string, communicationData: Record<string, any>) {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) throw new Error(`Authentication failed: ${authError.message}`);
-    if (!user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .insert({
-        deal_id: dealId,
-        direction: communicationData.direction,
-        channel: communicationData.channel,
-        subject: communicationData.subject,
-        body: communicationData.body,
-        from_email: communicationData.from_email,
-        to_emails: communicationData.to_emails,
-        cc_emails: communicationData.cc_emails,
-        phone_number: communicationData.phone_number,
-        recording_url: communicationData.recording_url,
-        scheduled_at: communicationData.scheduled_at,
-        occurred_at: communicationData.occurred_at,
-        duration_minutes: communicationData.duration_minutes,
-        user_id: user.id,
-        contact_id: communicationData.contact_id,
-        thread_id: communicationData.thread_id,
-        status: communicationData.status || 'active'
-      })
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      ...data,
-      user_name: data.profiles?.full_name || 'Unknown User',
-      user_email: data.profiles?.email || ''
-    };
-  },
-
-  async updateCommunication(communicationId: string, updates: Record<string, any>) {
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', communicationId)
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      ...data,
-      user_name: data.profiles?.full_name || 'Unknown User',
-      user_email: data.profiles?.email || ''
-    };
-  },
-
-  async deleteCommunication(communicationId: string) {
-    const { error } = await supabase
-      .from('deal_communications')
-      .delete()
-      .eq('id', communicationId);
-
-    if (error) throw error;
-    return true;
-  }
-};
 
 // Adapter for ASINs
 export const asinsAdapter = {
@@ -828,7 +716,7 @@ export const tasksAdapter = {
         .from('deal_tasks')
         .select('*')
         .eq('deal_id', dealId)
-        .order('sort_order', { ascending: true });
+        .order('created_at', { ascending: true });
 
       if (error) {
         // If table doesn't exist, return empty array
@@ -851,16 +739,8 @@ export const tasksAdapter = {
       if (authError) throw new Error(`Authentication failed: ${authError.message}`);
       if (!user) throw new Error('User not authenticated');
 
-      // Get the highest sort_order for the status column
-      const { data: maxSortData } = await supabase
-        .from('deal_tasks')
-        .select('sort_order')
-        .eq('deal_id', dealId)
-        .eq('status', taskData.status || 'todo')
-        .order('sort_order', { ascending: false })
-        .limit(1);
-
-      const maxSort = maxSortData?.[0]?.sort_order || 0;
+      // Set a default order
+      // const maxSort = 0;
 
       const { data, error } = await supabase
         .from('deal_tasks')
@@ -873,7 +753,7 @@ export const tasksAdapter = {
           assigned_to: taskData.assigned_to,
           due_date: taskData.due_date,
           created_by: user.id,
-          sort_order: maxSort + 1
+          created_at: new Date().toISOString()
         })
         .select('*')
         .single();
@@ -916,39 +796,13 @@ export const tasksAdapter = {
     }
   },
 
-  async updateTaskStatus(taskId: string, newStatus: string, newSortOrder?: number) {
+  async updateTaskStatus(taskId: string, newStatus: string) {
     const updates: Record<string, any> = { status: newStatus };
-    
-    if (newSortOrder !== undefined) {
-      updates.sort_order = newSortOrder;
-    }
-
     return this.updateTask(taskId, updates);
   },
 
-  async reorderTasks(dealId: string, status: string, taskIds: string[]) {
-    // Update sort_order for all tasks in the column
-    const updates = taskIds.map((taskId, index) => ({
-      id: taskId,
-      sort_order: index
-    }));
-
-    const promises = updates.map(update =>
-      supabase
-        .from('deal_tasks')
-        .update({ sort_order: update.sort_order })
-        .eq('id', update.id)
-        .eq('deal_id', dealId)
-        .eq('status', status)
-    );
-
-    const results = await Promise.all(promises);
-    const errors = results.filter(result => result.error);
-    
-    if (errors.length > 0) {
-      throw new Error(`Failed to reorder tasks: ${errors[0].error?.message}`);
-    }
-
+  async reorderTasks(_dealId: string, _status: string, _taskIds: string[]) {
+    // For now, just return true as reordering is not implemented without sort_order
     return true;
   },
 
@@ -985,7 +839,6 @@ export const tasksAdapter = {
 export const dbAdapter = {
   deals: dealsAdapter,
   files: filesAdapter,
-  communications: communicationsAdapter,
   asins: asinsAdapter,
   tasks: tasksAdapter
 };

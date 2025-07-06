@@ -160,7 +160,7 @@ const ScrapingProgressModal = ({ isOpen, onClose, method = 'traditional', onComp
     
     // Use environment variable for API URL, fallback to current origin in production
     const apiUrl = import.meta.env.VITE_SCRAPING_API_URL || 
-                   (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+                   (window.location.hostname === 'localhost' ? 'http://localhost:3002' : window.location.origin);
     const eventSourceUrl = `${apiUrl}/api/scrape/stream?selectedSites=${siteParams}`;
     
     console.log('🔌 [SSE] Connecting to:', eventSourceUrl);

@@ -16,8 +16,8 @@ import { calculateOpportunityScore, getScoreColor, getScoreLabel } from '../util
 
 const dealStages: { status: DealStatus; title: string; color: string }[] = [
   { status: 'prospecting', title: 'Prospecting', color: 'bg-gray-500' },
-  { status: 'initial_contact', title: 'Initial Contact', color: 'bg-blue-500' },
   { status: 'analysis', title: 'Analysis', color: 'bg-purple-500' },
+  { status: 'initial_contact', title: 'Initial Contact', color: 'bg-blue-500' },
   { status: 'loi_submitted', title: 'LOI Submitted', color: 'bg-yellow-500' },
   { status: 'due_diligence', title: 'Due Diligence', color: 'bg-pink-500' },
   { status: 'negotiation', title: 'Negotiation', color: 'bg-orange-500' },

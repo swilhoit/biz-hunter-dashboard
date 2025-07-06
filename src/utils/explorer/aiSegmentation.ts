@@ -69,7 +69,7 @@ async function callAIProvider(
         max_tokens: 1000
       };
 
-      const response = await fetch('/api/ai/openai-proxy', {
+      const response = await fetch('http://localhost:3002/api/ai/openai-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

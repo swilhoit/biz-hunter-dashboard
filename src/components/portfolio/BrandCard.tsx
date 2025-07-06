@@ -1,5 +1,6 @@
 import React from 'react';
-import { Building2, Package, DollarSign, TrendingUp, Edit2, Trash2, ExternalLink } from 'lucide-react';
+import { Building2, Package, DollarSign, TrendingUp, Edit2, Trash2, ExternalLink, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Brand {
   id: string;
@@ -23,6 +24,8 @@ interface BrandCardProps {
 }
 
 function BrandCard({ brand, onEdit, onDelete, onClick, isSelected = false }: BrandCardProps) {
+  const navigate = useNavigate();
+  
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -39,6 +42,11 @@ function BrandCard({ brand, onEdit, onDelete, onClick, isSelected = false }: Bra
     if (window.confirm(`Are you sure you want to delete the brand "${brand.name}"? This will not delete the ASINs.`)) {
       onDelete(brand.id);
     }
+  };
+  
+  const handleViewDetails = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/brand/${brand.id}`);
   };
 
   return (
@@ -79,6 +87,13 @@ function BrandCard({ brand, onEdit, onDelete, onClick, isSelected = false }: Bra
             </div>
           </div>
           <div className="flex items-center space-x-1">
+            <button
+              onClick={handleViewDetails}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              title="View details"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
             <button
               onClick={handleEdit}
               className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"

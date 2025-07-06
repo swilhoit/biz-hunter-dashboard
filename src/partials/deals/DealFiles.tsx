@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2, Brain, Loader2 } from 'lucide-react';
-import { filesAdapter } from '../../lib/database-adapter';
+import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2, Brain, Loader2, DollarSign, TrendingUp } from 'lucide-react';
+import { filesAdapter, dealsAdapter } from '../../lib/database-adapter';
 import FileViewerModal from '../../components/FileViewerModal';
-import StorageTest from '../../components/StorageTest';
-import { AIAnalysisService } from '../../services/AIAnalysisService';
+import { AIAnalysisService, DocumentAnalysisService } from '../../services/AIAnalysisService';
 import { DocumentIntelligenceService } from '../../services/DocumentIntelligenceService';
+import { FinancialDocumentService } from '../../services/FinancialDocumentService';
 import { useToast } from '../../contexts/ToastContext';
 
 interface DealFilesProps {
@@ -24,6 +24,8 @@ function DealFiles({ dealId }: DealFilesProps) {
   const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<string>('');
+  const [autoFillResults, setAutoFillResults] = useState<any>(null);
+  const [showAutoFillSummary, setShowAutoFillSummary] = useState(false);
   const { showToast } = useToast();
 
   // Load files on component mount
@@ -31,66 +33,126 @@ function DealFiles({ dealId }: DealFilesProps) {
     loadFiles();
   }, [dealId]);
 
+  // Helper function to apply analysis results to deal form
+  const applyAnalysisToForm = async (analysis: any) => {
+    try {
+      // Get current deal data
+      const currentDeal = await dealsAdapter.fetchDealById(dealId);
+      if (!currentDeal) return null;
+
+      const updates: any = {};
+      let fieldsUpdated: string[] = [];
+
+      // Basic Information - only update if empty or minimal data
+      if (analysis.businessName && (!currentDeal.business_name || currentDeal.business_name.length < 3)) {
+        updates.business_name = analysis.businessName;
+        fieldsUpdated.push('Business Name');
+      }
+      if (analysis.description && (!currentDeal.description || currentDeal.description.length < 10)) {
+        updates.description = analysis.description;
+        fieldsUpdated.push('Description');
+      }
+      
+      // Financial Information - only update if zero or empty
+      if (analysis.askingPrice && (!currentDeal.asking_price || currentDeal.asking_price === 0)) {
+        updates.asking_price = analysis.askingPrice;
+        fieldsUpdated.push('Asking Price');
+      }
+      if (analysis.annualRevenue && (!currentDeal.annual_revenue || currentDeal.annual_revenue === 0)) {
+        updates.annual_revenue = analysis.annualRevenue;
+        fieldsUpdated.push('Annual Revenue');
+      }
+      if (analysis.annualProfit && (!currentDeal.annual_profit || currentDeal.annual_profit === 0)) {
+        updates.annual_profit = analysis.annualProfit;
+        fieldsUpdated.push('Annual Profit');
+      }
+      if (analysis.monthlyRevenue && (!currentDeal.monthly_revenue || currentDeal.monthly_revenue === 0)) {
+        updates.monthly_revenue = analysis.monthlyRevenue;
+        fieldsUpdated.push('Monthly Revenue');
+      }
+      if (analysis.monthlyProfit && (!currentDeal.monthly_profit || currentDeal.monthly_profit === 0)) {
+        updates.monthly_profit = analysis.monthlyProfit;
+        fieldsUpdated.push('Monthly Profit');
+      }
+      if (analysis.valuationMultiple && (!currentDeal.valuation_multiple || currentDeal.valuation_multiple === 0)) {
+        updates.valuation_multiple = analysis.valuationMultiple;
+        fieldsUpdated.push('Valuation Multiple');
+      }
+
+      // Business Details
+      if (analysis.businessAge && (!currentDeal.business_age || currentDeal.business_age === 0)) {
+        updates.business_age = analysis.businessAge;
+        fieldsUpdated.push('Business Age');
+      }
+      if (analysis.industry && (!currentDeal.industry || currentDeal.industry === 'Unknown')) {
+        updates.industry = analysis.industry;
+        fieldsUpdated.push('Industry');
+      }
+      if (analysis.location && (!currentDeal.seller_location)) {
+        updates.seller_location = analysis.location;
+        fieldsUpdated.push('Location');
+      }
+
+      // Amazon-specific data
+      if (analysis.amazonCategory && (!currentDeal.amazon_category)) {
+        updates.amazon_category = analysis.amazonCategory;
+        fieldsUpdated.push('Amazon Category');
+      }
+      if (analysis.amazonStoreUrl && (!currentDeal.amazon_store_url)) {
+        updates.amazon_store_url = analysis.amazonStoreUrl;
+        fieldsUpdated.push('Amazon Store URL');
+      }
+      if (analysis.fbaPercentage && (!currentDeal.fba_percentage || currentDeal.fba_percentage === 0)) {
+        updates.fba_percentage = analysis.fbaPercentage;
+        fieldsUpdated.push('FBA Percentage');
+      }
+
+      // Contact information
+      if (analysis.sellerName && (!currentDeal.seller_name || currentDeal.seller_name === 'Unknown')) {
+        updates.seller_name = analysis.sellerName;
+        fieldsUpdated.push('Seller Name');
+      }
+      if (analysis.sellerEmail && (!currentDeal.seller_email)) {
+        updates.seller_email = analysis.sellerEmail;
+        fieldsUpdated.push('Seller Email');
+      }
+      if (analysis.brokerName && (!currentDeal.broker_name)) {
+        updates.broker_name = analysis.brokerName;
+        fieldsUpdated.push('Broker Name');
+      }
+
+      // Apply updates if any fields were found
+      if (Object.keys(updates).length > 0) {
+        await dealsAdapter.updateDeal(dealId, updates);
+        return {
+          fieldsUpdated,
+          updates,
+          totalFields: Object.keys(updates).length
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error applying analysis to form:', error);
+      return null;
+    }
+  };
+
   const loadFiles = async () => {
     try {
       setIsLoading(true);
+      console.log('Loading files for deal:', dealId);
       const dealFiles = await filesAdapter.fetchDealFiles(dealId);
-      setFiles(dealFiles);
+      console.log('Loaded files:', dealFiles);
+      setFiles(dealFiles || []);
     } catch (error) {
       console.error('Error loading files:', error);
+      setFiles([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Mock file data - fallback for when no real files exist
-  const mockFiles = [
-    {
-      id: '1',
-      name: 'Financial_Statements_2023.pdf',
-      category: 'financial_statements',
-      size: '2.4 MB',
-      uploaded_date: '2024-02-01',
-      uploaded_by: 'John Smith',
-      is_confidential: true,
-    },
-    {
-      id: '2',
-      name: 'Tax_Returns_2022_2023.pdf',
-      category: 'tax_returns',
-      size: '1.8 MB',
-      uploaded_date: '2024-02-01',
-      uploaded_by: 'John Smith',
-      is_confidential: true,
-    },
-    {
-      id: '3',
-      name: 'Product_Catalog_Updated.xlsx',
-      category: 'product_info',
-      size: '856 KB',
-      uploaded_date: '2024-02-03',
-      uploaded_by: 'Sarah Johnson',
-      is_confidential: false,
-    },
-    {
-      id: '4',
-      name: 'Amazon_Business_Report_Jan2024.pdf',
-      category: 'analytics',
-      size: '3.2 MB',
-      uploaded_date: '2024-02-05',
-      uploaded_by: 'Sarah Johnson',
-      is_confidential: false,
-    },
-    {
-      id: '5',
-      name: 'Due_Diligence_Checklist.docx',
-      category: 'due_diligence',
-      size: '124 KB',
-      uploaded_date: '2024-02-10',
-      uploaded_by: 'Current User',
-      is_confidential: false,
-    },
-  ];
 
   const fileCategories = [
     { id: 'financial_statements', name: 'Financial Statements', icon: '💰' },
@@ -152,11 +214,13 @@ function DealFiles({ dealId }: DealFilesProps) {
     setIsUploading(true);
     setUploadError(null);
     setUploadProgress(0);
+    setAutoFillResults(null);
 
     try {
       const fileArray = Array.from(fileList);
       const totalFiles = fileArray.length;
       
+      // Step 1: Upload files
       for (let i = 0; i < totalFiles; i++) {
         const file = fileArray[i];
         
@@ -168,22 +232,136 @@ function DealFiles({ dealId }: DealFilesProps) {
 
         await filesAdapter.uploadFile(dealId, file, metadata);
         
-        const progress = Math.round(((i + 1) / totalFiles) * 100);
+        const progress = Math.round(((i + 1) / totalFiles) * 50); // First 50% for upload
         setUploadProgress(progress);
       }
       
-      // Success - reload files
+      // Step 2: Analyze uploaded files for auto-fill
+      setIsAnalyzing(true);
+      setAnalysisProgress('Starting document analysis...');
+      setUploadProgress(60);
+      
+      let allAutoFillResults: any[] = [];
+      let totalFieldsUpdated = 0;
+      let allUpdatedFields: string[] = [];
+      
+      for (let i = 0; i < totalFiles; i++) {
+        const file = fileArray[i];
+        
+        try {
+          setAnalysisProgress(`Analyzing ${file.name}...`);
+          
+          // Check if file type is supported for analysis
+          const supportedTypes = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt', '.csv', '.png', '.jpg', '.jpeg'];
+          const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+          
+          if (supportedTypes.includes(fileExtension)) {
+            const analysis = await DocumentAnalysisService.analyzeDocument(
+              file,
+              (progress: string) => {
+                setAnalysisProgress(`${file.name}: ${progress}`);
+              }
+            );
+            
+            if (analysis) {
+              // Apply analysis to deal form
+              const autoFillResult = await applyAnalysisToForm(analysis);
+              
+              if (autoFillResult) {
+                allAutoFillResults.push({
+                  fileName: file.name,
+                  ...autoFillResult
+                });
+                totalFieldsUpdated += autoFillResult.totalFields;
+                allUpdatedFields.push(...autoFillResult.fieldsUpdated);
+              }
+            }
+          } else {
+            console.log(`Skipping analysis for unsupported file type: ${file.name}`);
+          }
+          
+          const progress = 60 + Math.round(((i + 1) / totalFiles) * 35); // 60-95% for analysis
+          setUploadProgress(progress);
+          
+        } catch (analysisError) {
+          console.error(`Analysis error for ${file.name}:`, analysisError);
+          
+          // Provide user-friendly error feedback
+          const errorType = analysisError.message?.includes('vision') || analysisError.message?.includes('MIME type') 
+            ? 'AI_VISION_ERROR'
+            : analysisError.message?.includes('PDF')
+            ? 'PDF_PROCESSING_ERROR' 
+            : 'ANALYSIS_ERROR';
+            
+          switch (errorType) {
+            case 'AI_VISION_ERROR':
+              console.log(`⚠️ AI analysis unavailable for ${file.name} (vision API issue) - document saved successfully`);
+              break;
+            case 'PDF_PROCESSING_ERROR':
+              console.log(`⚠️ PDF text extraction failed for ${file.name} - document saved successfully, analysis skipped`);
+              break;
+            default:
+              console.log(`⚠️ AI analysis failed for ${file.name} - document saved successfully, analysis skipped`);
+          }
+          
+          // Still count this as a processed file, just with no auto-fill results
+          // This ensures the document is saved even though analysis failed
+        }
+      }
+      
+      // Step 3: Show results and cleanup
+      setUploadProgress(100);
+      
+      // Always refresh files first
+      await loadFiles();
+      
+      // Show results summary
+      if (allAutoFillResults.length > 0) {
+        setAutoFillResults({
+          files: allAutoFillResults,
+          totalFieldsUpdated,
+          uniqueFields: [...new Set(allUpdatedFields)]
+        });
+        setShowAutoFillSummary(true);
+        
+        showToast(
+          `Success! Uploaded ${totalFiles} file(s) and auto-filled ${totalFieldsUpdated} field(s)`,
+          'success'
+        );
+      } else {
+        const analysisFailedCount = totalFiles - allAutoFillResults.length;
+        if (analysisFailedCount > 0) {
+          showToast(
+            `Uploaded ${totalFiles} file(s) successfully! (AI analysis failed for ${analysisFailedCount} file(s) but documents were saved)`,
+            'success'
+          );
+        } else {
+          showToast(`Uploaded ${totalFiles} file(s) successfully`, 'success');
+        }
+      }
+      
+      // Cleanup UI state
       setTimeout(() => {
         setUploadProgress(null);
         setIsUploading(false);
-        loadFiles(); // Refresh file list
-      }, 1000);
+        setIsAnalyzing(false);
+        setAnalysisProgress('');
+        
+        // Dispatch event to refresh deal data in parent component
+        window.dispatchEvent(new CustomEvent('deal-updated', { detail: { dealId } }));
+      }, 1500);
       
     } catch (error: any) {
       console.error('Upload error:', error);
       setUploadError(error.message);
       setUploadProgress(null);
       setIsUploading(false);
+      setIsAnalyzing(false);
+      setAnalysisProgress('');
+      showToast(`Upload failed: ${error.message}`, 'error');
+      
+      // Still try to refresh files in case some uploaded successfully
+      loadFiles();
     }
   };
 
@@ -230,16 +408,31 @@ function DealFiles({ dealId }: DealFilesProps) {
 
   const handleDownloadFile = async (fileId: string, fileName: string) => {
     try {
-      const { url } = await filesAdapter.getFileUrl(fileId);
+      // Use server endpoint for download
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+      
+      // Get the blob from response
+      const blob = await response.blob();
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
     } catch (error: any) {
       console.error('Download error:', error);
-      alert(`Failed to download file: ${error.message}`);
+      showToast(`Failed to download file: ${error.message}`, 'error');
     }
   };
 
@@ -308,12 +501,10 @@ function DealFiles({ dealId }: DealFilesProps) {
     }
   };
 
-  const displayFiles = files.length > 0 ? files : mockFiles;
+  const displayFiles = files;
 
   return (
     <div className="space-y-6">
-      {/* Storage Diagnostics - Temporary */}
-      <StorageTest />
       
       {/* Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -504,6 +695,45 @@ function DealFiles({ dealId }: DealFilesProps) {
                       >
                         <Brain className="w-4 h-4" />
                       </button>
+                      {(file.category === 'financial_statements' || 
+                        file.category === 'tax_returns' || 
+                        file.category === 'bank_statements' ||
+                        file.file_name?.toLowerCase().includes('financ') ||
+                        file.file_name?.toLowerCase().includes('p&l') ||
+                        file.file_name?.toLowerCase().includes('profit')) && (
+                        <button
+                          onClick={async () => {
+                            const financialService = new FinancialDocumentService();
+                            try {
+                              setAnalysisProgress(`Processing financial document: ${file.file_name}...`);
+                              setIsAnalyzing(true);
+                              
+                              const extraction = await financialService.processFinancialDocument(
+                                file.id,
+                                dealId,
+                                (stage: string) => setAnalysisProgress(stage)
+                              );
+                              
+                              showToast(`Financial data extracted from ${file.file_name}!`, 'success');
+                              
+                              // Navigate to finance tab with the extraction
+                              window.dispatchEvent(new CustomEvent('navigate-to-finance', { 
+                                detail: { dealId, extraction } 
+                              }));
+                              
+                            } catch (error: any) {
+                              showToast(`Failed to extract financials: ${error.message}`, 'error');
+                            } finally {
+                              setIsAnalyzing(false);
+                              setAnalysisProgress('');
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                          title="Extract Financial Data"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => handleDeleteFile(file.id, file.file_name || file.name || 'Unknown File')}
                         disabled={deletingFileId === file.id}
@@ -561,6 +791,93 @@ function DealFiles({ dealId }: DealFilesProps) {
           </div>
         </div>
       </div>
+      
+      {/* Auto-Fill Summary Modal */}
+      {showAutoFillSummary && autoFillResults && autoFillResults.files && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <Brain className="w-6 h-6 mr-3 text-green-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Auto-Fill Complete!
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowAutoFillSummary(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-green-800 dark:text-green-200">
+                  Successfully analyzed {autoFillResults.files?.length || 0} document(s) and auto-filled {autoFillResults.totalFieldsUpdated || 0} field(s)
+                </p>
+              </div>
+              
+              <div className="space-y-4">
+                {autoFillResults.uniqueFields && autoFillResults.uniqueFields.length > 0 && (
+                  <>
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100">Updated Fields:</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {autoFillResults.uniqueFields.map((field: string, index: number) => (
+                        <div key={index} className="flex items-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                          <DollarSign className="w-4 h-4 mr-2 text-green-600" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{field}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                
+                {autoFillResults.files && autoFillResults.files.length > 0 && (
+                  <>
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100 mt-6">Files Analyzed:</h4>
+                    <div className="space-y-2">
+                      {autoFillResults.files.map((file: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                          <div className="flex items-center">
+                            <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{file.fileName || 'Unknown file'}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <TrendingUp className="w-4 h-4 mr-1 text-green-600" />
+                            <span className="text-sm text-green-600">{file.totalFields || 0} fields</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAutoFillSummary(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAutoFillSummary(false);
+                    // Navigate to deal overview to see updated fields
+                    window.dispatchEvent(new CustomEvent('navigate-to-overview', { detail: { dealId } }));
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  View Updated Deal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* File Viewer Modal */}
       {selectedFileId && (

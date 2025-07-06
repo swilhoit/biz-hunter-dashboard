@@ -119,7 +119,7 @@ function BrandDetails() {
   const handleEdit = async (updates) => {
     if (!brand) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/brands/${brand.brand_id}`, {
+      const response = await fetch(`http://localhost:3002/api/brands/${brand.brand_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -141,7 +141,7 @@ function BrandDetails() {
     if (!brand) return;
     if (confirm('Are you sure you want to delete this brand? The ASINs will remain but will be unlinked from this brand.')) {
       try {
-        const response = await fetch(`http://localhost:3001/api/brands/${brand.brand_id}`, {
+        const response = await fetch(`http://localhost:3002/api/brands/${brand.brand_id}`, {
           method: 'DELETE'
         });
         
@@ -159,7 +159,7 @@ function BrandDetails() {
 
   const handleBulkImport = async (asins) => {
     try {
-      const response = await fetch('http://localhost:3001/api/asins/bulk-import', {
+      const response = await fetch('http://localhost:3002/api/asins/bulk-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

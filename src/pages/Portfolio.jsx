@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
 import Sidebar from '../partials/Sidebar';
 import BrandCard from '../components/portfolio/BrandCard';
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 function Portfolio() {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +73,7 @@ function Portfolio() {
     
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3001/api/brands/${user.id}`);
+      const response = await fetch(`http://localhost:3002/api/brands/${user.id}`);
       const data = await response.json();
       
       if (data.success) {
@@ -103,7 +104,7 @@ function Portfolio() {
 
   const fetchBrandAsins = async (brandId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/brands/${brandId}/asins`);
+      const response = await fetch(`http://localhost:3002/api/brands/${brandId}/asins`);
       const data = await response.json();
       
       if (data.success) {
@@ -120,8 +121,8 @@ function Portfolio() {
   const handleCreateBrand = async (brandData) => {
     try {
       const url = editingBrand 
-        ? `http://localhost:3001/api/brands/${editingBrand.id}`
-        : 'http://localhost:3001/api/brands';
+        ? `http://localhost:3002/api/brands/${editingBrand.id}`
+        : 'http://localhost:3002/api/brands';
         
       const response = await fetch(url, {
         method: editingBrand ? 'PUT' : 'POST',
@@ -161,7 +162,7 @@ function Portfolio() {
 
   const handleDeleteBrand = async (brandId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/brands/${brandId}`, {
+      const response = await fetch(`http://localhost:3002/api/brands/${brandId}`, {
         method: 'DELETE'
       });
       
@@ -196,7 +197,7 @@ function Portfolio() {
     }
     
     try {
-      const response = await fetch(`http://localhost:3001/api/portfolio/0/asins`, {
+      const response = await fetch(`http://localhost:3002/api/portfolio/0/asins`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,7 +243,7 @@ function Portfolio() {
 
   const handleBulkImport = async (asins) => {
     try {
-      const response = await fetch('http://localhost:3001/api/asins/bulk-import', {
+      const response = await fetch('http://localhost:3002/api/asins/bulk-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,7 +275,7 @@ function Portfolio() {
     if (!confirm('Are you sure you want to delete this ASIN?')) return;
     
     try {
-      const response = await fetch(`http://localhost:3001/api/portfolio/asins/${asinId}`, {
+      const response = await fetch(`http://localhost:3002/api/portfolio/asins/${asinId}`, {
         method: 'DELETE'
       });
       

@@ -9,7 +9,12 @@ import PDFUploadGuide from './PDFUploadGuide';
 import { useAuth } from '../hooks/useAuth';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// Set PDF.js worker source with error handling
+if (pdfjs.GlobalWorkerOptions) {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+} else {
+  console.warn('PDF.js GlobalWorkerOptions not available');
+}
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -187,17 +192,32 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated, initialDa
       } catch (error: any) {
         console.error('Analysis error for', file.name, ':', error);
         
-        // Check if it's a PDF processing error
-        const isPDFError = file.name.toLowerCase().endsWith('.pdf') && 
-          (error.message.includes('PDF') || error.message.includes('Failed to open'));
+        // Provide user-friendly error feedback
+        const errorType = error.message?.includes('vision') || error.message?.includes('MIME type') 
+          ? 'AI_VISION_ERROR'
+          : error.message?.includes('PDF')
+          ? 'PDF_PROCESSING_ERROR' 
+          : 'ANALYSIS_ERROR';
         
-        if (isPDFError) {
-          setShowPDFGuide(true);
+        let userFriendlyError = '';
+        switch (errorType) {
+          case 'AI_VISION_ERROR':
+            userFriendlyError = 'AI analysis temporarily unavailable - file uploaded successfully';
+            console.log(`⚠️ AI analysis unavailable for ${file.name} (vision API issue) - file will still be saved`);
+            break;
+          case 'PDF_PROCESSING_ERROR':
+            userFriendlyError = 'PDF analysis failed - file uploaded successfully';
+            console.log(`⚠️ PDF text extraction failed for ${file.name} - file will still be saved`);
+            setShowPDFGuide(true);
+            break;
+          default:
+            userFriendlyError = 'AI analysis failed - file uploaded successfully';
+            console.log(`⚠️ AI analysis failed for ${file.name} - file will still be saved`);
         }
         
         setFileAnalyses(prev => prev.map(fa => 
           fa.id === analysisId
-            ? { ...fa, status: 'error', error: error.message }
+            ? { ...fa, status: 'error', error: userFriendlyError }
             : fa
         ));
       }
