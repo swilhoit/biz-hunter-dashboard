@@ -465,7 +465,7 @@ export const filesAdapter = {
 
       // Upload via server endpoint to handle storage permissions
       console.log('Uploading file via server...');
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
       const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
         method: 'POST',
         body: formData,
@@ -634,7 +634,7 @@ export const filesAdapter = {
       console.log('File info retrieved:', fileInfo);
       
       // Download file from server endpoint
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
       const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
 
       if (!response.ok) {
@@ -861,7 +861,7 @@ export const dbAdapter = {
       formData.append('category', category);
     }
 
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
     const response = await fetch(`${apiUrl}/api/files/upload`, {
       method: 'POST',
       body: formData,

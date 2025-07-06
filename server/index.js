@@ -1,9 +1,12 @@
+// Load environment variables FIRST before any other imports
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
-import dotenv from 'dotenv';
 import net from 'net';
 import morgan from 'morgan';
 import path from 'path';
@@ -17,9 +20,6 @@ import filesRoutes from './api/files.js';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
-// Load environment variables
-dotenv.config();
-
 // Log environment variables for debugging
 console.log('🔧 Environment check:');
 console.log('VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? 'Set' : 'Missing');
@@ -27,7 +27,8 @@ console.log('VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'Set
 console.log('SCRAPER_API_KEY:', process.env.SCRAPER_API_KEY ? 'Set' : 'Missing');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+// Read port from environment or use default
+const PORT = process.env.SERVER_PORT || process.env.PORT || 3002;
 
 // CORS configuration
 const corsOptions = {
@@ -3997,7 +3998,8 @@ const upload = multer({
   }
 });
 
-// File upload endpoint
+// File upload endpoint - DISABLED (using /api/files route instead)
+/*
 app.post('/api/files/upload', upload.single('file'), async (req, res) => {
   try {
     console.log('=== FILE UPLOAD ENDPOINT CALLED ===');
@@ -4289,6 +4291,7 @@ app.post('/api/files/upload', upload.single('file'), async (req, res) => {
     });
   }
 });
+*/
 
 // TEMPORARY: File upload endpoint that bypasses RLS for testing
 app.post('/api/files/upload-no-rls', upload.single('file'), async (req, res) => {
@@ -4523,6 +4526,9 @@ app.post('/api/files/upload-no-rls', upload.single('file'), async (req, res) => 
 });
 
 // File download endpoint for database-stored files
+// DISABLED - Using /api/files router instead
+// This was causing conflicts with the files router
+/*
 app.get('/api/files/download/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
@@ -4583,6 +4589,7 @@ app.get('/api/files/download/:fileId', async (req, res) => {
     });
   }
 });
+*/
 
 // Server status and environment check endpoint
 app.get('/api/server-status', async (req, res) => {
@@ -4863,10 +4870,53 @@ async function discoverRealSellers(batchSize) {
       return [];
     }
     
+    // Filter out fake/test ASINs that would cause 404s
+    const validAsins = topAsins.filter(asinData => {
+      const asin = asinData.asin;
+      
+      // Check if ASIN follows proper format (10 characters, alphanumeric)
+      if (!asin || asin.length !== 10 || !/^[A-Z0-9]{10}$/i.test(asin)) {
+        console.log(`⚠️ [REAL SCRAPER] Skipping invalid ASIN format: ${asin}`);
+        return false;
+      }
+      
+      // Filter out known test/fake ASINs
+      const fakePatterns = [
+        /^B089XYZ/i,     // B089XYZ123
+        /^B092ABC/i,     // B092ABC456
+        /^B094DEF/i,     // B094DEF789
+        /^B096GHI/i,     // B096GHI012
+        /^B098JKL/i,     // B098JKL345
+        /^B105STU/i,     // B105STU234
+        /^B109YZA/i,     // B109YZA890
+        /^B117KLM/i,     // B117KLM012
+        /TEST/i,         // Any ASIN containing "TEST"
+        /MOCK/i,         // Any ASIN containing "MOCK"
+        /DEMO/i,         // Any ASIN containing "DEMO"
+        /^B0[0-9]{2}[A-Z]{3}$/i  // Common fake pattern like B089XYZ
+      ];
+      
+      for (const pattern of fakePatterns) {
+        if (pattern.test(asin)) {
+          console.log(`⚠️ [REAL SCRAPER] Skipping fake/test ASIN: ${asin}`);
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    if (validAsins.length === 0) {
+      console.log('⚠️ [REAL SCRAPER] No valid ASINs found after filtering');
+      return [];
+    }
+    
+    console.log(`✅ [REAL SCRAPER] Filtered ${topAsins.length} ASINs down to ${validAsins.length} valid ones`);
+    
     const sellers = [];
     const seenSellers = new Set();
     
-    for (const asinData of topAsins) {
+    for (const asinData of validAsins) {
       try {
         console.log(`🔍 [REAL SCRAPER] Looking up sellers for ASIN: ${asinData.asin}`);
         
@@ -5359,6 +5409,7 @@ app.post('/api/crawl/products', async (req, res) => {
 });
 
 app.post('/api/crawl/sellers', async (req, res) => {
+  console.log('🎯 [CRAWL API] /api/crawl/sellers endpoint hit');
   try {
     const { batchSize = 100 } = req.body;
     
@@ -5395,27 +5446,26 @@ app.post('/api/crawl/sellers', async (req, res) => {
     
     // Run seller lookup using proper service in background
     (async () => {
+      console.log('🚨 [CRAWL API] Background task started');
       try {
         // Check DataForSEO configuration
         const dataForSEOUsername = process.env.DATAFORSEO_USERNAME;
         const dataForSEOPassword = process.env.DATAFORSEO_PASSWORD;
+        console.log('🚨 [CRAWL API] Checking credentials...');
         
         if (!dataForSEOUsername || !dataForSEOPassword) {
           console.log('⚠️ [CRAWL API] DataForSEO credentials not configured, using fallback scraping');
           throw new Error('DataForSEO credentials not configured');
         }
         
-        // Import the proper service classes
-        const { default: SellerLookupService } = await import('../src/services/SellerLookupService.js');
-        const sellerLookupService = new SellerLookupService();
-        
         console.log(`🔍 [CRAWL API] Running seller lookup for top 20% ASINs...`);
         
-        const result = await sellerLookupService.processTop20SellerLookup({
-          batchSize,
-          maxConcurrent: 3, // Limit concurrency to avoid overwhelming the API
-          priorityFilter: undefined // Process all priorities
-        });
+        // Use the execute-seller-lookup module we created
+        console.log(`📦 [CRAWL API] Importing execute-seller-lookup module...`);
+        const { executeSellerLookup } = await import('./execute-seller-lookup.js');
+        console.log(`📦 [CRAWL API] Module imported successfully, calling executeSellerLookup...`);
+        const result = await executeSellerLookup(batchSize);
+        console.log(`📦 [CRAWL API] executeSellerLookup returned:`, result);
         
         console.log(`✅ [CRAWL API] Seller lookup completed:`, {
           sellersFound: result.sellersFound,
@@ -5454,10 +5504,13 @@ app.post('/api/crawl/sellers', async (req, res) => {
           console.error('❌ [CRAWL API] Fallback seller discovery also failed:', fallbackError);
         }
       }
-    })();
+    })().catch(error => {
+      console.error('🚨 [CRAWL API] Unhandled error in background task:', error);
+      console.error('Stack:', error.stack);
+    });
     
   } catch (error) {
-    console.error('Seller lookup error:', error);
+    console.error('🚨 [CRAWL API] Seller lookup error:', error);
     res.status(500).json({ error: error.message });
   }
 });

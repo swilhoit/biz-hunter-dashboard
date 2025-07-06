@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:all": "npm run dev & cd server && node index.js",
+    "sync-ports": "node scripts/sync-ports.js",
+    "dev": "npm run sync-ports && vite",
+    "dev:all": "npm run sync-ports && npm run dev & cd server && node index.js",
+    "dev:server": "cd server && node index.js",
     "build": "vite build",
     "postinstall": "npm run build",
     "build:dev": "vite build --mode development",

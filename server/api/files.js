@@ -74,7 +74,29 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { dealId, userId } = req.body;
+    console.log('Request body:', req.body);
+    console.log('Request body keys:', Object.keys(req.body));
+    console.log('Request body values:', Object.entries(req.body));
+    
+    // Extract fields from req.body, handling potential array values from FormData
+    const dealId = Array.isArray(req.body.dealId) ? req.body.dealId[0] : req.body.dealId;
+    const userId = Array.isArray(req.body.userId) ? req.body.userId[0] : req.body.userId;
+    
+    console.log('Extracted userId:', userId);
+    console.log('Extracted dealId:', dealId);
+    
+    // Validate userId is provided and properly formatted
+    if (!userId) {
+      console.error('userId missing from request. Body:', req.body);
+      return res.status(400).json({ error: 'userId is required for file upload' });
+    }
+    
+    // Ensure userId is a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({ error: 'userId must be a valid UUID' });
+    }
+    
     const fileInfo = {
       id: req.body.fileId || generateId(),
       deal_id: dealId,
@@ -83,12 +105,18 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       file_size: req.file.size,
       mime_type: req.file.mimetype,
       uploaded_at: new Date().toISOString(),
-      uploaded_by: userId || 'system' // Add uploaded_by field
+      uploaded_by: userId // Ensure this is the actual user's UUID
     };
 
     // Store file info in database
     // Use admin client if available to bypass RLS, otherwise use regular client
     const dbClient = supabaseAdmin || supabase;
+    
+    console.log('Using database client:', supabaseAdmin ? 'Admin (Service Role)' : 'Regular (Anon Key)');
+    console.log('Attempting to insert file info:', {
+      ...fileInfo,
+      using_service_role: !!supabaseAdmin
+    });
     
     const { data, error } = await dbClient
       .from('deal_documents')
@@ -151,28 +179,44 @@ router.get('/download/:fileId', async (req, res) => {
       id: fileInfo.id,
       file_name: fileInfo.file_name,
       file_path: fileInfo.file_path,
-      storage_path: fileInfo.storage_path,
       mime_type: fileInfo.mime_type
     });
 
     // Determine if this is a local file or Supabase Storage file
-    // New files have just a filename, old files have a full path
-    const isLocalFile = fileInfo.file_path && !fileInfo.file_path.includes('/');
+    // Files with timestamp prefix pattern are local files (e.g., "1751816295543-966020908-filename.ext")
+    // Files with folder paths are Supabase Storage files
+    const timestampPattern = /^\d{13}-\d+-/;
+    const isLocalFile = fileInfo.file_path && (timestampPattern.test(fileInfo.file_path) || !fileInfo.file_path.includes('/'));
     
     if (isLocalFile) {
       // Try local file system
       const localFilePath = path.join(__dirname, '..', 'uploads', fileInfo.file_path);
+      console.log('Looking for local file at:', localFilePath);
       
       try {
         await fs.access(localFilePath);
+        console.log('Local file found, sending...');
+        
+        // Use absolute path for sendFile
+        const absolutePath = path.resolve(localFilePath);
+        
         // Set appropriate headers
         res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.file_name}"`);
         
         // Send file
-        res.sendFile(localFilePath);
-      } catch {
-        console.error('Local file not found:', localFilePath);
+        res.sendFile(absolutePath, (err) => {
+          if (err) {
+            console.error('Error sending file:', err);
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Error sending file' });
+            }
+          } else {
+            console.log('File sent successfully');
+          }
+        });
+      } catch (accessError) {
+        console.error('Local file not found:', localFilePath, accessError);
         return res.status(404).json({ error: 'File not found on server' });
       }
     } else {
@@ -180,8 +224,8 @@ router.get('/download/:fileId', async (req, res) => {
       console.log('Attempting to download from Supabase Storage...');
       
       try {
-        // Use storage_path if available, otherwise use file_path
-        const storagePath = fileInfo.storage_path || fileInfo.file_path;
+        // Use file_path since storage_path column doesn't exist
+        const storagePath = fileInfo.file_path;
         
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('deal-documents')

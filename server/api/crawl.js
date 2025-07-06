@@ -74,33 +74,45 @@ router.post('/products', async (req, res) => {
   }
 });
 
-// Mock crawl sellers endpoint
+// Execute actual seller lookup using DataForSEO
 router.post('/sellers', async (req, res) => {
   try {
     const { batchSize = 100 } = req.body;
     
     console.log('🔍 [CRAWL API] Seller lookup requested for batch size:', batchSize);
     
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Import the seller lookup executor
+    const { executeSellerLookup } = require('../execute-seller-lookup');
     
-    // Mock seller discovery results
-    const mockResults = {
-      new_sellers: Math.floor(Math.random() * 20) + 5,
-      total_sellers: Math.floor(Math.random() * 50) + 25,
-      duplicate_sellers: Math.floor(Math.random() * 10) + 2,
-      total_cost: Math.random() * 10 + 5,
-      processing_time: Math.floor(Math.random() * 30000) + 10000
-    };
-    
-    res.json({
-      success: true,
-      message: `Discovered ${mockResults.new_sellers} new sellers from ${mockResults.total_sellers} total sellers found`,
-      data: {
-        asins_processed: batchSize,
-        ...mockResults
-      }
-    });
+    try {
+      // Execute the actual seller lookup
+      const result = await executeSellerLookup(batchSize);
+      
+      console.log('✅ [CRAWL API] Seller lookup completed:', result);
+      
+      res.json({
+        success: true,
+        message: `Discovered ${result.newSellers} new sellers from ${result.sellersFound} total sellers found`,
+        data: {
+          asins_processed: batchSize,
+          new_sellers: result.newSellers,
+          total_sellers: result.sellersFound,
+          duplicate_sellers: result.duplicateSellers,
+          total_cost: result.totalCost,
+          processing_time: result.processingTime
+        }
+      });
+      
+    } catch (execError) {
+      console.error('❌ [CRAWL API] Execution error:', execError);
+      
+      // Return error with details
+      res.status(500).json({
+        success: false,
+        error: execError.message,
+        details: 'Failed to execute seller lookup. Check DataForSEO credentials and ensure there are top 20% ASINs to process.'
+      });
+    }
     
   } catch (error) {
     console.error('❌ [CRAWL API] Sellers error:', error);

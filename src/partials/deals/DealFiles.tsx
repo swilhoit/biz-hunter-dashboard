@@ -409,7 +409,7 @@ function DealFiles({ dealId }: DealFilesProps) {
   const handleDownloadFile = async (fileId: string, fileName: string) => {
     try {
       // Use server endpoint for download
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
       const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
       
       if (!response.ok) {

@@ -236,7 +236,7 @@ export class FinancialDocumentService {
         console.warn('⚠️ Direct download failed, trying server endpoint:', directDownloadError);
         
         // Fallback: use server endpoint for download
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
         const response = await fetch(`${API_BASE_URL}/api/files/download/${documentId}`);
 
         if (!response.ok) {
@@ -387,7 +387,12 @@ Return only the document type.`;
 
     try {
       const response = await this._callOpenAIProxy('chat.completions.create', payload);
-      const extracted = JSON.parse(response.choices[0]?.message?.content || '{}');
+      let content = response.choices[0]?.message?.content || '{}';
+      
+      // Remove markdown code blocks if present
+      content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      
+      const extracted = JSON.parse(content);
       return this.normalizeFinancialData(extracted, documentType);
     } catch (error) {
       console.error('Financial extraction error:', error);
