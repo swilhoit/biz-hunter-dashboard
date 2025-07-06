@@ -6,6 +6,7 @@ interface FinancialExtractionModalProps {
   isOpen: boolean;
   onClose: () => void;
   extraction: FinancialExtraction;
+  fileName: string;
   onConfirm: (updatedData: FinancialExtraction) => void;
   onReject: () => void;
 }
@@ -14,6 +15,7 @@ function FinancialExtractionModal({
   isOpen, 
   onClose, 
   extraction, 
+  fileName,
   onConfirm,
   onReject 
 }: FinancialExtractionModalProps) {
@@ -67,7 +69,7 @@ function FinancialExtractionModal({
                 Financial Data Extraction
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Review and confirm the extracted financial information
+                {fileName} - Review and confirm the extracted data
               </p>
             </div>
           </div>
@@ -134,69 +136,69 @@ function FinancialExtractionModal({
               <div className="space-y-3">
                 <DataRow
                   label="Revenue"
-                  value={editedData.revenue.total}
+                  value={editedData.revenue?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     revenue: { ...editedData.revenue, total: val }
                   })}
-                  confidence={extraction.confidence_scores.revenue}
+                  confidence={extraction.confidence_scores.revenue || 0.8}
                 />
                 
                 <DataRow
                   label="COGS"
-                  value={editedData.cogs.total}
+                  value={editedData.cogs?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     cogs: { ...editedData.cogs, total: val }
                   })}
-                  confidence={extraction.confidence_scores.expenses}
+                  confidence={extraction.confidence_scores.expenses || 0.8}
                 />
                 
                 <DataRow
                   label="Gross Profit"
-                  value={editedData.grossProfit}
+                  value={editedData.grossProfit || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     grossProfit: val
                   })}
-                  confidence={extraction.confidence_scores.profitability}
+                  confidence={extraction.confidence_scores.profitability || 0.8}
                   isCalculated
                 />
                 
                 <DataRow
                   label="Operating Expenses"
-                  value={editedData.operatingExpenses.total}
+                  value={editedData.operatingExpenses?.total || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     operatingExpenses: { ...editedData.operatingExpenses, total: val }
                   })}
-                  confidence={extraction.confidence_scores.expenses}
+                  confidence={extraction.confidence_scores.expenses || 0.8}
                 />
                 
                 <DataRow
                   label="EBITDA"
-                  value={editedData.ebitda}
+                  value={editedData.ebitda || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     ebitda: val
                   })}
-                  confidence={extraction.confidence_scores.profitability}
+                  confidence={extraction.confidence_scores.profitability || 0.8}
                 />
                 
                 <DataRow
                   label="Net Income"
-                  value={editedData.netIncome}
+                  value={editedData.netIncome || 0}
                   isEditing={isEditing}
                   onChange={(val) => setEditedData({
                     ...editedData,
                     netIncome: val
                   })}
-                  confidence={extraction.confidence_scores.profitability}
+                  confidence={extraction.confidence_scores.profitability || 0.8}
                   highlight
                 />
               </div>
@@ -211,66 +213,66 @@ function FinancialExtractionModal({
               <div className="space-y-3">
                 <MetricRow
                   label="Gross Margin"
-                  value={editedData.metrics.grossMargin}
+                  value={editedData.margins?.gross}
                   format="percent"
                 />
                 
                 <MetricRow
                   label="Operating Margin"
-                  value={editedData.metrics.operatingMargin}
+                  value={editedData.margins?.operating}
                   format="percent"
                 />
                 
                 <MetricRow
                   label="Net Margin"
-                  value={editedData.metrics.netMargin}
+                  value={editedData.margins?.net}
                   format="percent"
                 />
                 
-                {editedData.metrics.currentRatio && (
+                {editedData.currentRatio && (
                   <MetricRow
                     label="Current Ratio"
-                    value={editedData.metrics.currentRatio}
+                    value={editedData.currentRatio}
                     format="ratio"
                   />
                 )}
                 
-                {editedData.metrics.debtToEquity && (
+                {editedData.debtToEquity && (
                   <MetricRow
                     label="Debt to Equity"
-                    value={editedData.metrics.debtToEquity}
+                    value={editedData.debtToEquity}
                     format="ratio"
                   />
                 )}
                 
-                {editedData.metrics.workingCapital && (
+                {editedData.workingCapital && (
                   <MetricRow
                     label="Working Capital"
-                    value={editedData.metrics.workingCapital}
+                    value={editedData.workingCapital}
                     format="currency"
                   />
                 )}
               </div>
 
               {/* Balance Sheet Summary */}
-              {editedData.assets.total > 0 && (
+              {editedData.assets?.total > 0 && (
                 <div className="mt-6 space-y-3">
                   <h4 className="text-md font-medium text-gray-800 dark:text-gray-200">
                     Balance Sheet Summary
                   </h4>
                   <MetricRow
                     label="Total Assets"
-                    value={editedData.assets.total}
+                    value={editedData.assets?.total || 0}
                     format="currency"
                   />
                   <MetricRow
                     label="Total Liabilities"
-                    value={editedData.liabilities.total}
+                    value={editedData.liabilities?.total || 0}
                     format="currency"
                   />
                   <MetricRow
                     label="Total Equity"
-                    value={editedData.equity.total}
+                    value={editedData.equity?.total || 0}
                     format="currency"
                   />
                 </div>

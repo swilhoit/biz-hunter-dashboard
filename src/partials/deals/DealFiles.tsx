@@ -5,6 +5,7 @@ import FileViewerModal from '../../components/FileViewerModal';
 import { AIAnalysisService, DocumentAnalysisService } from '../../services/AIAnalysisService';
 import { DocumentIntelligenceService } from '../../services/DocumentIntelligenceService';
 import { FinancialDocumentService } from '../../services/FinancialDocumentService';
+import FinancialExtractionModal from '../../components/FinancialExtractionModal';
 import { useToast } from '../../contexts/ToastContext';
 
 interface DealFilesProps {
@@ -26,6 +27,9 @@ function DealFiles({ dealId }: DealFilesProps) {
   const [analysisProgress, setAnalysisProgress] = useState<string>('');
   const [autoFillResults, setAutoFillResults] = useState<any>(null);
   const [showAutoFillSummary, setShowAutoFillSummary] = useState(false);
+  const [showFinancialModal, setShowFinancialModal] = useState(false);
+  const [pendingExtraction, setPendingExtraction] = useState<any>(null);
+  const [extractingFileName, setExtractingFileName] = useState<string>('');
   const { showToast } = useToast();
 
   // Load files on component mount
@@ -707,19 +711,17 @@ function DealFiles({ dealId }: DealFilesProps) {
                             try {
                               setAnalysisProgress(`Processing financial document: ${file.file_name}...`);
                               setIsAnalyzing(true);
+                              setExtractingFileName(file.file_name || 'Financial Document');
                               
-                              const extraction = await financialService.processFinancialDocument(
+                              const extraction = await financialService.extractFinancialData(
                                 file.id,
                                 dealId,
                                 (stage: string) => setAnalysisProgress(stage)
                               );
                               
-                              showToast(`Financial data extracted from ${file.file_name}!`, 'success');
-                              
-                              // Navigate to finance tab with the extraction
-                              window.dispatchEvent(new CustomEvent('navigate-to-finance', { 
-                                detail: { dealId, extraction } 
-                              }));
+                              // Show modal for review
+                              setPendingExtraction(extraction);
+                              setShowFinancialModal(true);
                               
                             } catch (error: any) {
                               showToast(`Failed to extract financials: ${error.message}`, 'error');
@@ -889,6 +891,52 @@ function DealFiles({ dealId }: DealFilesProps) {
             setViewerOpen(false);
             setSelectedFileId(null);
             setSelectedFileName('');
+          }}
+        />
+      )}
+      
+      {/* Financial Extraction Modal */}
+      {pendingExtraction && (
+        <FinancialExtractionModal
+          isOpen={showFinancialModal}
+          onClose={() => {
+            setShowFinancialModal(false);
+            setPendingExtraction(null);
+          }}
+          extraction={pendingExtraction}
+          fileName={extractingFileName}
+          onConfirm={async (updatedExtraction) => {
+            try {
+              const financialService = new FinancialDocumentService();
+              setAnalysisProgress('Saving financial data...');
+              setIsAnalyzing(true);
+              
+              const saved = await financialService.saveFinancialExtraction(
+                updatedExtraction,
+                (stage: string) => setAnalysisProgress(stage)
+              );
+              
+              showToast(`Financial data saved successfully!`, 'success');
+              
+              // Navigate to finance tab
+              window.dispatchEvent(new CustomEvent('navigate-to-finance', { 
+                detail: { dealId, extraction: saved } 
+              }));
+              
+              setShowFinancialModal(false);
+              setPendingExtraction(null);
+              
+            } catch (error: any) {
+              showToast(`Failed to save financial data: ${error.message}`, 'error');
+            } finally {
+              setIsAnalyzing(false);
+              setAnalysisProgress('');
+            }
+          }}
+          onReject={() => {
+            setShowFinancialModal(false);
+            setPendingExtraction(null);
+            showToast('Financial extraction cancelled', 'info');
           }}
         />
       )}

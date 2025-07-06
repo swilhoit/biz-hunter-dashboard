@@ -189,9 +189,9 @@ export class FinancialDocumentService {
   }
 
   /**
-   * Process a financial document
+   * Extract financial data from a document without saving
    */
-  async processFinancialDocument(
+  async extractFinancialData(
     documentId: string,
     dealId: string,
     progressCallback?: (stage: string) => void
@@ -303,8 +303,25 @@ export class FinancialDocumentService {
         extracted_by: user?.id || 'system'
       };
 
-      // Save to database
+      progressCallback?.('Financial extraction complete!');
+      return extraction;
+
+    } catch (error) {
+      console.error('Financial document processing error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save confirmed financial extraction to database
+   */
+  async saveFinancialExtraction(
+    extraction: FinancialExtraction,
+    progressCallback?: (stage: string) => void
+  ): Promise<FinancialExtraction> {
+    try {
       progressCallback?.('Saving extraction results...');
+      
       const { data: saved, error: saveError } = await supabaseAny
         .from('financial_extractions')
         .insert(extraction)
@@ -316,18 +333,33 @@ export class FinancialDocumentService {
       }
 
       // Update deal financials if validated
-      if (validationStatus.isValidated && !validationStatus.issues?.some(i => i.severity === 'error')) {
+      if (extraction.validation_status.isValidated && !extraction.validation_status.issues?.some(i => i.severity === 'error')) {
         progressCallback?.('Updating deal financials...');
-        await this.updateDealFinancials(dealId, saved);
+        await this.updateDealFinancials(extraction.deal_id, saved);
       }
 
-      progressCallback?.('Financial extraction complete!');
+      progressCallback?.('Financial data saved successfully!');
       return saved;
-
+      
     } catch (error) {
-      console.error('Financial document processing error:', error);
+      console.error('Failed to save financial extraction:', error);
       throw error;
     }
+  }
+
+  /**
+   * Process a financial document (extract and save)
+   */
+  async processFinancialDocument(
+    documentId: string,
+    dealId: string,
+    progressCallback?: (stage: string) => void
+  ): Promise<FinancialExtraction> {
+    // Extract the data
+    const extraction = await this.extractFinancialData(documentId, dealId, progressCallback);
+    
+    // Save it to database
+    return await this.saveFinancialExtraction(extraction, progressCallback);
   }
 
   /**
