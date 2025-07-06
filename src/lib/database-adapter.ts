@@ -460,6 +460,7 @@ export const filesAdapter = {
       formData.append('file', file);
       formData.append('dealId', dealId);
       formData.append('fileName', fileName);
+      formData.append('userId', user.id); // Add userId for server-side RLS compliance
       formData.append('metadata', JSON.stringify(metadata));
 
       // Upload via server endpoint to handle storage permissions
@@ -840,5 +841,42 @@ export const dbAdapter = {
   deals: dealsAdapter,
   files: filesAdapter,
   asins: asinsAdapter,
-  tasks: tasksAdapter
+  tasks: tasksAdapter,
+  
+  // Convenience method for file upload with category
+  async uploadFile(file: File, dealId: string, category?: string): Promise<{ id: string; fileName: string }> {
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    
+    const fileId = crypto.randomUUID();
+    
+    // For development - upload to local server
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('dealId', dealId);
+    formData.append('fileId', fileId);
+    formData.append('userId', user.id); // Add userId for RLS compliance
+    if (category) {
+      formData.append('category', category);
+    }
+
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+    const response = await fetch(`${apiUrl}/api/files/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Upload failed: ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      id: result.fileId || fileId,
+      fileName: file.name
+    };
+  }
 };

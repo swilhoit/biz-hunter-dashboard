@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import supabase from '../supabaseClient.js';
+import supabase, { supabaseAdmin } from '../supabaseClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,13 +13,33 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 
 // Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    message: 'File API is running',
-    uploads_dir_exists: fsSync.existsSync(path.join(__dirname, '..', 'uploads')),
-    timestamp: new Date().toISOString()
-  });
+router.get('/health', async (req, res) => {
+  try {
+    // Test Supabase connection
+    const { data, error } = await supabase
+      .from('deal_documents')
+      .select('count')
+      .limit(1);
+    
+    res.json({ 
+      status: 'ok',
+      message: 'File API is running',
+      uploads_dir_exists: fsSync.existsSync(path.join(__dirname, '..', 'uploads')),
+      supabase_connected: !error,
+      supabase_error: error ? error.message : null,
+      env_check: {
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
+        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Configure multer for file uploads
@@ -54,7 +74,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { dealId } = req.body;
+    const { dealId, userId } = req.body;
     const fileInfo = {
       id: req.body.fileId || generateId(),
       deal_id: dealId,
@@ -62,11 +82,15 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       file_path: req.file.filename,
       file_size: req.file.size,
       mime_type: req.file.mimetype,
-      uploaded_at: new Date().toISOString()
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: userId || 'system' // Add uploaded_by field
     };
 
     // Store file info in database
-    const { data, error } = await supabase
+    // Use admin client if available to bypass RLS, otherwise use regular client
+    const dbClient = supabaseAdmin || supabase;
+    
+    const { data, error } = await dbClient
       .from('deal_documents')
       .insert([fileInfo])
       .select()
@@ -74,9 +98,25 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     if (error) {
       console.error('Database error:', error);
+      console.error('Failed to insert file info:', {
+        error_message: error.message,
+        error_code: error.code,
+        error_details: error.details,
+        file_info: fileInfo
+      });
+      
       // Clean up uploaded file on database error
-      await fs.unlink(req.file.path);
-      return res.status(500).json({ error: 'Failed to save file info' });
+      try {
+        await fs.unlink(req.file.path);
+      } catch (unlinkError) {
+        console.error('Failed to clean up file:', unlinkError);
+      }
+      
+      return res.status(500).json({ 
+        error: 'Failed to save file info',
+        details: error.message,
+        code: error.code
+      });
     }
 
     res.json({ 
