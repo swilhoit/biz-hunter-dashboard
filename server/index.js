@@ -22,6 +22,7 @@ import fs from 'fs';
 import { dirname } from 'path';
 import seoRoutes from './api/seo.js';
 import filesRoutes from './api/files.js';
+import amazonRoutes from './api/amazon.js';
 // import RealScrapers from './real-scrapers.js';
 // import { realQuietLightScraper, realEmpireFlippersScraper, realFlippaScraper } from './scraper-overrides.js';
 
@@ -52,17 +53,7 @@ app.use(morgan('dev'));
 // API Routes
 app.use('/api/seo', seoRoutes);
 app.use('/api/files', filesRoutes);
-
-// Amazon routes (dynamic import)
-app.use('/api/amazon', async (req, res, next) => {
-  try {
-    const { default: amazonRoutes } = await import('./api/amazon.js');
-    amazonRoutes(req, res, next);
-  } catch (error) {
-    console.error('Failed to load Amazon routes:', error);
-    res.status(500).json({ error: 'Amazon API service unavailable' });
-  }
-});
+app.use('/api/amazon', amazonRoutes);
 
 // PDF OCR route (dynamic import)
 app.use('/api/pdf-ocr', async (req, res, next) => {

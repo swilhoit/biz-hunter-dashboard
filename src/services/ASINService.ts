@@ -118,6 +118,12 @@ export class ASINService {
    */
   static async addASINToDeal(dealId: string, asinData: Partial<ASINData>): Promise<boolean> {
     try {
+      // Validate ASIN format
+      if (!asinData.asin || !/^[A-Z0-9]{10}$/.test(asinData.asin)) {
+        console.error('Invalid ASIN format:', asinData.asin);
+        return false;
+      }
+
       // First, ensure the ASIN exists in the asins table
       const { data: existingASIN, error: fetchError } = await supabase
         .from('asins')
@@ -298,6 +304,11 @@ export class ASINService {
    */
   static extractSellerIdFromURL(url: string): string | null {
     try {
+      // Validate URL is not empty
+      if (!url || url.trim() === '') {
+        return null;
+      }
+      
       // Handle various Amazon store URL formats
       // https://www.amazon.com/sp?seller=A1234567890
       // https://www.amazon.com/s?me=A1234567890
@@ -319,7 +330,7 @@ export class ASINService {
       
       return null;
     } catch (error) {
-      console.error('Error extracting seller ID from URL:', error);
+      // Don't log error for invalid URLs during typing
       return null;
     }
   }

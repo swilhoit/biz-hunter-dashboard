@@ -109,6 +109,12 @@ router.post('/store-asins', async (req, res) => {
     const asinArray = Array.from(asins);
     
     console.log(`Found ${asinArray.length} ASINs for seller ${sellerId}`);
+    
+    // If no ASINs found from scraping, return empty array
+    // In production, this would need more sophisticated scraping
+    if (asinArray.length === 0) {
+      console.log('No ASINs found via scraping, this may be due to Amazon\'s anti-scraping measures');
+    }
 
     res.json({
       sellerId,

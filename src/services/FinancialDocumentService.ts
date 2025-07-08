@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabase';
 import { DocumentExtractors } from './DocumentExtractors';
 import { DocumentAnalysisService } from './AIAnalysisService';
@@ -727,16 +728,12 @@ Return JSON:
     } catch (error) {
       console.error('⚠️ Failed to extract period via AI:', error);
       
-      // Try to extract year from content using regex as fallback
-      const yearMatches = content.match(/\b(20\d{2})\b/g);
-      if (yearMatches && yearMatches.length > 0) {
-        // Use the most recent year found
-        const years = yearMatches.map(y => parseInt(y)).sort((a, b) => b - a);
-        const mostRecentYear = years[0];
-        
+      // Try to extract year from content using smart contextual analysis
+      const bestYear = this.extractRelevantYear(content);
+      if (bestYear) {
         return {
-          startDate: `${mostRecentYear}-01-01`,
-          endDate: `${mostRecentYear}-12-31`,
+          startDate: `${bestYear}-01-01`,
+          endDate: `${bestYear}-12-31`,
           periodType: 'annual',
           isPartial: false
         };
@@ -751,6 +748,134 @@ Return JSON:
         isPartial: false
       };
     }
+  }
+
+  /**
+   * Extract the most relevant year for financial data using contextual analysis
+   */
+  private extractRelevantYear(content: string): number | null {
+    const currentYear = new Date().getFullYear();
+    const maxValidYear = currentYear + 1; // Allow next year for projections
+    const minValidYear = currentYear - 10; // Don't go back more than 10 years
+    
+    // Find all years in the content
+    const yearMatches = content.match(/\b(20\d{2})\b/g);
+    if (!yearMatches || yearMatches.length === 0) {
+      return null;
+    }
+    
+    const years = [...new Set(yearMatches.map(y => parseInt(y)))]
+      .filter(year => year >= minValidYear && year <= maxValidYear)
+      .sort((a, b) => a - b); // Sort chronologically
+    
+    if (years.length === 0) {
+      return null;
+    }
+    
+    // If only one year, use it
+    if (years.length === 1) {
+      return years[0];
+    }
+    
+    // Score years based on context relevance
+    const yearScores = new Map<number, number>();
+    
+    for (const year of years) {
+      let score = 0;
+      const yearStr = year.toString();
+      
+      // Look for financial keywords near this year
+      const contextRadius = 100; // Characters before and after
+      const yearRegex = new RegExp(`\\b${yearStr}\\b`, 'gi');
+      let match;
+      
+      while ((match = yearRegex.exec(content)) !== null) {
+        const start = Math.max(0, match.index - contextRadius);
+        const end = Math.min(content.length, match.index + yearStr.length + contextRadius);
+        const context = content.substring(start, end).toLowerCase();
+        
+        // Score based on financial keywords near the year
+        const financialKeywords = [
+          { word: 'revenue', weight: 10 },
+          { word: 'income', weight: 10 },
+          { word: 'sales', weight: 10 },
+          { word: 'profit', weight: 8 },
+          { word: 'earnings', weight: 8 },
+          { word: 'total', weight: 6 },
+          { word: 'annual', weight: 8 },
+          { word: 'monthly', weight: 6 },
+          { word: 'year ended', weight: 12 },
+          { word: 'ytd', weight: 8 },
+          { word: 'quarter', weight: 6 },
+          { word: 'q1', weight: 4 },
+          { word: 'q2', weight: 4 },
+          { word: 'q3', weight: 4 },
+          { word: 'q4', weight: 4 },
+          { word: 'jan', weight: 3 },
+          { word: 'feb', weight: 3 },
+          { word: 'mar', weight: 3 },
+          { word: 'apr', weight: 3 },
+          { word: 'may', weight: 3 },
+          { word: 'jun', weight: 3 },
+          { word: 'jul', weight: 3 },
+          { word: 'aug', weight: 3 },
+          { word: 'sep', weight: 3 },
+          { word: 'oct', weight: 3 },
+          { word: 'nov', weight: 3 },
+          { word: 'dec', weight: 3 }
+        ];
+        
+        for (const { word, weight } of financialKeywords) {
+          if (context.includes(word)) {
+            score += weight;
+          }
+        }
+        
+        // Bonus for dollar amounts near the year
+        if (/\$[\d,]+/.test(context)) {
+          score += 5;
+        }
+        
+        // Penalty for metadata/timestamp patterns
+        const metadataPatterns = [
+          'created', 'modified', 'updated', 'timestamp', 
+          'exported', 'generated', 'printed', 'version'
+        ];
+        
+        for (const pattern of metadataPatterns) {
+          if (context.includes(pattern)) {
+            score -= 8;
+          }
+        }
+      }
+      
+      // Preference for recent but not current year (financial data is usually from previous year)
+      if (year === currentYear - 1) {
+        score += 3;
+      } else if (year === currentYear - 2) {
+        score += 2;
+      } else if (year === currentYear) {
+        score -= 1; // Slightly penalize current year as it might be metadata
+      }
+      
+      yearScores.set(year, score);
+    }
+    
+    // Find the year with the highest score
+    let bestYear = years[0];
+    let bestScore = yearScores.get(bestYear) || 0;
+    
+    for (const [year, score] of yearScores.entries()) {
+      if (score > bestScore) {
+        bestYear = year;
+        bestScore = score;
+      }
+    }
+    
+    console.log('📅 Year extraction scores:', Object.fromEntries(yearScores));
+    console.log('📅 Selected year:', bestYear, 'with score:', bestScore);
+    
+    return bestYear;
   }
 
   /**
