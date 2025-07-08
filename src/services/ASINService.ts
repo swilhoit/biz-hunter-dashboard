@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchProductDatabaseQuery } from '../utils/explorer/junglescout';
 
 export interface ASINData {
   id: string;
@@ -23,6 +24,13 @@ export interface ASINData {
   fba: boolean;
   listing_quality: string;
   competition_level: string;
+}
+
+export interface StoreURLLookupResult {
+  storeUrl: string;
+  sellerName?: string;
+  asins: string[];
+  totalFound: number;
 }
 
 export interface ASINSummary {
@@ -278,6 +286,172 @@ export class ASINService {
         }
       } catch (error) {
         console.error(`Error adding ASIN ${asin}:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
+
+  /**
+   * Extract seller ID from Amazon store URL
+   */
+  static extractSellerIdFromURL(url: string): string | null {
+    try {
+      // Handle various Amazon store URL formats
+      // https://www.amazon.com/sp?seller=A1234567890
+      // https://www.amazon.com/s?me=A1234567890
+      // https://www.amazon.com/stores/page/12345678-1234-1234-1234-123456789012
+      
+      const urlObj = new URL(url);
+      
+      // Check for seller parameter
+      const sellerParam = urlObj.searchParams.get('seller');
+      if (sellerParam) return sellerParam;
+      
+      // Check for me parameter
+      const meParam = urlObj.searchParams.get('me');
+      if (meParam) return meParam;
+      
+      // Check for stores page format
+      const storesMatch = url.match(/\/stores\/(?:page\/)?([A-Z0-9]+)/i);
+      if (storesMatch) return storesMatch[1];
+      
+      return null;
+    } catch (error) {
+      console.error('Error extracting seller ID from URL:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lookup ASINs from an Amazon store URL
+   */
+  static async lookupASINsFromStoreURL(storeUrl: string): Promise<StoreURLLookupResult> {
+    try {
+      // Call server endpoint to scrape store
+      const response = await fetch('http://localhost:3002/api/amazon/store-asins', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ storeUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch store ASINs');
+      }
+
+      const data = await response.json();
+      
+      return {
+        storeUrl,
+        sellerName: data.sellerName,
+        asins: data.asins || [],
+        totalFound: data.asins?.length || 0
+      };
+    } catch (error) {
+      console.error('Error looking up ASINs from store URL:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch detailed data for multiple ASINs using JungleScout
+   */
+  static async fetchBulkASINData(asins: string[]): Promise<ASINData[]> {
+    try {
+      const results: ASINData[] = [];
+      
+      // JungleScout has a limit on how many products we can search at once
+      // We'll batch the requests
+      const batchSize = 10;
+      
+      for (let i = 0; i < asins.length; i += batchSize) {
+        const batch = asins.slice(i, i + batchSize);
+        
+        try {
+          // Search for products by ASIN
+          const response = await fetchProductDatabaseQuery({
+            marketplace: 'us',
+            includeKeywords: batch,
+            pageSize: 50
+          });
+          
+          if (response?.data) {
+            const products = response.data.map((item: any) => this.transformJungleScoutProduct(item));
+            results.push(...products);
+          }
+        } catch (error) {
+          console.error(`Error fetching batch ${i / batchSize + 1}:`, error);
+        }
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('Error fetching bulk ASIN data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Transform JungleScout product data to our ASINData format
+   */
+  private static transformJungleScoutProduct(product: any): ASINData {
+    const attributes = product.attributes || {};
+    
+    return {
+      id: product.id,
+      asin: product.id,
+      product_name: attributes.title || 'Unknown Product',
+      category: attributes.category || 'Unknown',
+      subcategory: attributes.subcategory || attributes.category || 'Unknown',
+      brand: attributes.brand || 'Unknown',
+      monthly_revenue: attributes.approximate_30_day_revenue || 0,
+      monthly_units: attributes.approximate_30_day_units_sold || 0,
+      price: attributes.price || 0,
+      rank_current: attributes.rank || 0,
+      rank_average: attributes.rank || 0,
+      rank_change: 0,
+      reviews: attributes.reviews || 0,
+      rating: attributes.rating || 0,
+      profit_margin: 30, // Default estimate
+      inventory_value: 0,
+      launch_date: attributes.date_first_available || new Date().toISOString(),
+      is_primary: false,
+      variations: attributes.number_of_variations || 1,
+      fba: attributes.fulfillment === 'FBA',
+      listing_quality: this.calculateListingQuality(attributes.rating, attributes.reviews),
+      competition_level: this.calculateCompetitionLevel(attributes.rank)
+    };
+  }
+
+  /**
+   * Add store ASINs to a deal
+   */
+  static async addStoreASINsToDeal(
+    dealId: string, 
+    asins: ASINData[],
+    markPrimary: boolean = false
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (let i = 0; i < asins.length; i++) {
+      const asin = asins[i];
+      try {
+        const added = await this.addASINToDeal(dealId, {
+          ...asin,
+          is_primary: markPrimary && i === 0 // Mark first ASIN as primary if requested
+        });
+
+        if (added) {
+          success++;
+        } else {
+          failed++;
+        }
+      } catch (error) {
+        console.error(`Error adding ASIN ${asin.asin}:`, error);
         failed++;
       }
     }

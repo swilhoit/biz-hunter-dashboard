@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Star, TrendingUp, TrendingDown, Package, Search, Filter, Download } from 'lucide-react';
+import { ExternalLink, Star, TrendingUp, TrendingDown, Package, Search, Filter, Download, Store, AlertCircle, CheckCircle } from 'lucide-react';
 import { getProductPlaceholderImage } from '../../utils/asinImageUtils';
 import ASINImage from '../../components/ASINImage';
 import { ASINService } from '../../services/ASINService';
@@ -13,6 +13,12 @@ function DealASINsTable({ dealId }) {
   const [sortField, setSortField] = useState('monthly_revenue');
   const [sortDirection, setSortDirection] = useState('desc');
   const [filterPrimary, setFilterPrimary] = useState('all'); // 'all', 'primary', 'secondary'
+  
+  // Store URL lookup states
+  const [storeUrl, setStoreUrl] = useState('');
+  const [lookupStatus, setLookupStatus] = useState(null); // null, 'detecting', 'found', 'fetching', 'completed'
+  const [foundASINs, setFoundASINs] = useState([]);
+  const [lookupMessage, setLookupMessage] = useState('');
 
   // Load ASINs when component mounts or dealId changes
   useEffect(() => {
@@ -100,6 +106,76 @@ function DealASINsTable({ dealId }) {
   // Calculate summary stats using the service
   const summary = ASINService.calculateSummary(asins);
 
+  // Handle store URL input
+  const handleStoreUrlChange = (e) => {
+    const url = e.target.value;
+    setStoreUrl(url);
+    
+    // Detect if it's a valid Amazon store URL
+    if (url && ASINService.extractSellerIdFromURL(url)) {
+      setLookupStatus('found');
+      setLookupMessage('Store URL found, find ASINs?');
+    } else {
+      setLookupStatus(null);
+      setLookupMessage('');
+    }
+  };
+
+  // Handle finding ASINs from store URL
+  const handleFindASINs = async () => {
+    try {
+      setLookupStatus('detecting');
+      setLookupMessage('Looking up ASINs from store...');
+      
+      const result = await ASINService.lookupASINsFromStoreURL(storeUrl);
+      
+      setFoundASINs(result.asins);
+      setLookupStatus('found');
+      setLookupMessage(`${result.totalFound} ASINs found`);
+    } catch (error) {
+      console.error('Error looking up ASINs:', error);
+      setLookupStatus(null);
+      setLookupMessage('Failed to lookup ASINs. Please try again.');
+    }
+  };
+
+  // Handle fetching ASIN details
+  const handleFetchASINDetails = async () => {
+    try {
+      setLookupStatus('fetching');
+      setLookupMessage('Fetching ASIN details from JungleScout...');
+      
+      // Fetch detailed data for the found ASINs
+      const detailedASINs = await ASINService.fetchBulkASINData(foundASINs);
+      
+      // Add the ASINs to the deal
+      const { success, failed } = await ASINService.addStoreASINsToDeal(
+        dealId,
+        detailedASINs,
+        asins.length === 0 // Mark first as primary if no ASINs exist
+      );
+      
+      setLookupStatus('completed');
+      setLookupMessage(`Successfully added ${success} ASINs${failed > 0 ? `, ${failed} failed` : ''}`);
+      
+      // Reload ASINs
+      const dealASINs = await ASINService.fetchDealASINs(dealId);
+      setAsins(dealASINs);
+      
+      // Reset form after a delay
+      setTimeout(() => {
+        setStoreUrl('');
+        setLookupStatus(null);
+        setLookupMessage('');
+        setFoundASINs([]);
+      }, 3000);
+    } catch (error) {
+      console.error('Error fetching ASIN details:', error);
+      setLookupStatus(null);
+      setLookupMessage('Failed to fetch ASIN details. Please try again.');
+    }
+  };
+
   // Show loading state
   if (loading) {
     return (
@@ -176,6 +252,63 @@ function DealASINsTable({ dealId }) {
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(summary.totalInventoryValue)}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Store URL Lookup */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <Store className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Import Store Products</h3>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Enter Amazon store URL..."
+                value={storeUrl}
+                onChange={handleStoreUrlChange}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            
+            {lookupStatus === 'found' && foundASINs.length === 0 && (
+              <button
+                onClick={handleFindASINs}
+                className="btn bg-violet-500 hover:bg-violet-600 text-white"
+              >
+                Find ASINs
+              </button>
+            )}
+            
+            {lookupStatus === 'found' && foundASINs.length > 0 && (
+              <button
+                onClick={handleFetchASINDetails}
+                className="btn bg-green-500 hover:bg-green-600 text-white"
+              >
+                Fetch ASIN Details
+              </button>
+            )}
+          </div>
+          
+          {lookupMessage && (
+            <div className={`flex items-center space-x-2 text-sm ${
+              lookupStatus === 'completed' ? 'text-green-600 dark:text-green-400' : 
+              lookupStatus === 'detecting' || lookupStatus === 'fetching' ? 'text-blue-600 dark:text-blue-400' : 
+              'text-gray-600 dark:text-gray-400'
+            }`}>
+              {lookupStatus === 'detecting' || lookupStatus === 'fetching' ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+              ) : lookupStatus === 'completed' ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : lookupStatus === 'found' ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : null}
+              <span>{lookupMessage}</span>
+            </div>
+          )}
         </div>
       </div>
 

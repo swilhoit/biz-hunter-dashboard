@@ -53,6 +53,17 @@ app.use(morgan('dev'));
 app.use('/api/seo', seoRoutes);
 app.use('/api/files', filesRoutes);
 
+// Amazon routes (dynamic import)
+app.use('/api/amazon', async (req, res, next) => {
+  try {
+    const { default: amazonRoutes } = await import('./api/amazon.js');
+    amazonRoutes(req, res, next);
+  } catch (error) {
+    console.error('Failed to load Amazon routes:', error);
+    res.status(500).json({ error: 'Amazon API service unavailable' });
+  }
+});
+
 // PDF OCR route (dynamic import)
 app.use('/api/pdf-ocr', async (req, res, next) => {
   try {
