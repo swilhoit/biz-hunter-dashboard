@@ -341,7 +341,7 @@ export class ASINService {
   static async lookupASINsFromStoreURL(storeUrl: string): Promise<StoreURLLookupResult> {
     try {
       // Call server endpoint to scrape store
-      const response = await fetch('http://localhost:3002/api/amazon/store-asins', {
+      const response = await fetch('/api/amazon/store-asins', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -372,6 +372,7 @@ export class ASINService {
    */
   static async fetchBulkASINData(asins: string[]): Promise<ASINData[]> {
     try {
+      console.log('Fetching bulk ASIN data for:', asins);
       const results: ASINData[] = [];
       
       // JungleScout has a limit on how many products we can search at once
@@ -380,6 +381,7 @@ export class ASINService {
       
       for (let i = 0; i < asins.length; i += batchSize) {
         const batch = asins.slice(i, i + batchSize);
+        console.log(`Processing batch ${i / batchSize + 1}:`, batch);
         
         try {
           // Search for products by ASIN
@@ -389,15 +391,21 @@ export class ASINService {
             pageSize: 50
           });
           
+          console.log('JungleScout response:', response);
+          
           if (response?.data) {
             const products = response.data.map((item: any) => this.transformJungleScoutProduct(item));
+            console.log('Transformed products:', products);
             results.push(...products);
+          } else {
+            console.log('No data in JungleScout response');
           }
         } catch (error) {
           console.error(`Error fetching batch ${i / batchSize + 1}:`, error);
         }
       }
       
+      console.log('Total ASIN data fetched:', results.length);
       return results;
     } catch (error) {
       console.error('Error fetching bulk ASIN data:', error);
@@ -445,11 +453,13 @@ export class ASINService {
     asins: ASINData[],
     markPrimary: boolean = false
   ): Promise<{ success: number; failed: number }> {
+    console.log('Adding store ASINs to deal:', { dealId, asinCount: asins.length, markPrimary });
     let success = 0;
     let failed = 0;
 
     for (let i = 0; i < asins.length; i++) {
       const asin = asins[i];
+      console.log(`Adding ASIN ${i + 1}/${asins.length}:`, asin.asin);
       try {
         const added = await this.addASINToDeal(dealId, {
           ...asin,
@@ -457,8 +467,10 @@ export class ASINService {
         });
 
         if (added) {
+          console.log(`Successfully added ASIN: ${asin.asin}`);
           success++;
         } else {
+          console.log(`Failed to add ASIN: ${asin.asin}`);
           failed++;
         }
       } catch (error) {
@@ -467,6 +479,7 @@ export class ASINService {
       }
     }
 
+    console.log('Store ASINs addition complete:', { success, failed });
     return { success, failed };
   }
 } 
