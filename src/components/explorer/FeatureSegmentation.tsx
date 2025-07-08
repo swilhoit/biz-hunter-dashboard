@@ -21,10 +21,12 @@ import {
 } from '../ui/table';
 import { extractFeatures, segmentByFeatures } from '../../utils/explorer/aiSegmentation';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import OpenAIService from '../../services/OpenAIService';
 
 interface Segment {
   id: string;
   name: string;
+  description?: string;
   features: string[];
   products: any[];
   metrics: {
@@ -33,6 +35,7 @@ interface Segment {
     avgPrice: number;
     avgRating: number;
     productCount: number;
+    marketShare?: number;
   };
 }
 
@@ -59,26 +62,49 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
     setError(null);
 
     try {
-      // Extract features from products
-      const features = await extractFeatures(products, aiProvider);
+      let segmentsWithMetrics = [];
       
-      // Segment products by features
-      const newSegments = await segmentByFeatures(products, features, aiProvider);
-      
-      // Calculate metrics for each segment
-      const segmentsWithMetrics = newSegments.map((segment, index) => ({
-        id: `segment-${index}`,
-        name: segment.name,
-        features: segment.features,
-        products: segment.products,
-        metrics: {
-          totalRevenue: segment.products.reduce((sum, p) => sum + p.revenue, 0),
-          totalSales: segment.products.reduce((sum, p) => sum + p.sales, 0),
-          avgPrice: segment.products.reduce((sum, p) => sum + p.price, 0) / segment.products.length,
-          avgRating: segment.products.reduce((sum, p) => sum + p.rating, 0) / segment.products.length,
-          productCount: segment.products.length
-        }
-      }));
+      if (aiProvider === 'openai') {
+        // Use server-side OpenAI segmentation for better results
+        const openAIService = new OpenAIService();
+        const response = await openAIService.segmentProductPortfolio(products);
+        
+        // Convert server response to component format
+        segmentsWithMetrics = response.segments.map((segment, index) => ({
+          id: `segment-${index}`,
+          name: segment.name,
+          description: segment.description || '',
+          features: segment.features || [],
+          products: segment.products,
+          metrics: {
+            totalRevenue: segment.totalRevenue,
+            totalSales: segment.products.reduce((sum, p) => sum + p.sales, 0),
+            avgPrice: segment.averagePrice,
+            avgRating: segment.averageRating || segment.products.reduce((sum, p) => sum + p.rating, 0) / segment.products.length,
+            productCount: segment.products.length,
+            marketShare: segment.marketShare
+          }
+        }));
+      } else {
+        // Use client-side segmentation for other providers
+        const features = await extractFeatures(products, aiProvider);
+        const newSegments = await segmentByFeatures(products, features, aiProvider);
+        
+        // Calculate metrics for each segment
+        segmentsWithMetrics = newSegments.map((segment, index) => ({
+          id: `segment-${index}`,
+          name: segment.name,
+          features: segment.features,
+          products: segment.products,
+          metrics: {
+            totalRevenue: segment.products.reduce((sum, p) => sum + p.revenue, 0),
+            totalSales: segment.products.reduce((sum, p) => sum + p.sales, 0),
+            avgPrice: segment.products.reduce((sum, p) => sum + p.price, 0) / segment.products.length,
+            avgRating: segment.products.reduce((sum, p) => sum + p.rating, 0) / segment.products.length,
+            productCount: segment.products.length
+          }
+        }));
+      }
 
       onSegmentsUpdate(segmentsWithMetrics);
     } catch (err) {
@@ -173,11 +199,21 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div>
+                  <div className="flex-1">
                     <CardTitle className="text-lg">{segment.name}</CardTitle>
-                    <CardDescription>{segment.metrics.productCount} products</CardDescription>
+                    {segment.description && (
+                      <CardDescription className="mt-1 text-xs">
+                        {segment.description}
+                      </CardDescription>
+                    )}
+                    <CardDescription className="mt-1">
+                      {segment.metrics.productCount} products
+                      {segment.metrics.marketShare && (
+                        <span className="ml-2">• {segment.metrics.marketShare.toFixed(1)}% market share</span>
+                      )}
+                    </CardDescription>
                   </div>
-                  <Layers className="w-8 h-8 text-violet-500" />
+                  <Layers className="w-8 h-8 text-violet-500 ml-4 flex-shrink-0" />
                 </div>
               </CardHeader>
               <CardContent>

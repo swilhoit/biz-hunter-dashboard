@@ -338,12 +338,12 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
                                 <h4 className="font-medium text-gray-900 dark:text-gray-100">{kw.keyword}</h4>
                                 <div className="flex items-center gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                                   <span>Volume: {formatNumberWithCommas(kw.searchVolume)}</span>
-                                  <span>PPC: ${kw.ppcBid.toFixed(2)}</span>
+                                  <span>PPC: ${kw.ppcBid ? kw.ppcBid.toFixed(2) : '0.00'}</span>
                                   <span className={`flex items-center gap-1 ${
                                     kw.searchVolumeTrend > 0 ? 'text-green-600' : 'text-red-600'
                                   }`}>
                                     <TrendingUp className="w-3 h-3" />
-                                    {kw.searchVolumeTrend > 0 ? '+' : ''}{kw.searchVolumeTrend}%
+                                    {kw.searchVolumeTrend > 0 ? '+' : ''}{kw.searchVolumeTrend || 0}%
                                   </span>
                                 </div>
                               </div>

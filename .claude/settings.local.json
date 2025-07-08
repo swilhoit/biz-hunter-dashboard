@@ -129,7 +129,8 @@
       "Bash(render --help)",
       "Bash(DATAFORSEO_USERNAME=\"tetrahedronglobal@gmail.com\" DATAFORSEO_PASSWORD=\"657d88542daef67e\" SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node temp-seller-lookup.mjs)",
       "Bash(SERVER_PORT=3002 node scripts/sync-ports.js)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(/Users/samwilhoit/CascadeProjects/biz-hunter-dashboard/scripts/add-render-env-vars-api.sh:*)"
     ],
     "deny": []
   }

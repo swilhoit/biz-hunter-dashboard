@@ -2751,6 +2751,35 @@ app.put('/api/asins/:asinId/brand', async (req, res) => {
 });
 
 // OpenAI API endpoint
+// Helper function to extract key features from a segment
+function extractSegmentFeatures(products, segmentName, description) {
+  const features = new Set();
+  
+  // Extract from segment name
+  if (segmentName.toLowerCase().includes('smart')) features.add('Smart Technology');
+  if (segmentName.toLowerCase().includes('professional')) features.add('Professional Grade');
+  if (segmentName.toLowerCase().includes('gaming')) features.add('Gaming Optimized');
+  if (segmentName.toLowerCase().includes('outdoor')) features.add('Outdoor Ready');
+  if (segmentName.toLowerCase().includes('home')) features.add('Home Use');
+  if (segmentName.toLowerCase().includes('travel')) features.add('Travel Friendly');
+  if (segmentName.toLowerCase().includes('eco')) features.add('Eco-Friendly');
+  
+  // Extract from product titles
+  const titleText = products.map(p => p.title).join(' ').toLowerCase();
+  if (titleText.includes('wireless') || titleText.includes('bluetooth')) features.add('Wireless');
+  if (titleText.includes('waterproof') || titleText.includes('water resistant')) features.add('Water Resistant');
+  if (titleText.includes('usb-c') || titleText.includes('type-c')) features.add('USB-C');
+  if (titleText.includes('fast charging') || titleText.includes('quick charge')) features.add('Fast Charging');
+  if (titleText.includes('portable')) features.add('Portable');
+  
+  // Extract from price range
+  const avgPrice = products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length;
+  if (avgPrice > 100) features.add('Premium');
+  else if (avgPrice < 30) features.add('Budget Friendly');
+  
+  return Array.from(features).slice(0, 5); // Limit to 5 features
+}
+
 app.post('/api/openai/segment-portfolio', async (req, res) => {
   try {
     const { products, batchSize = 20 } = req.body;
@@ -2783,19 +2812,28 @@ app.post('/api/openai/segment-portfolio', async (req, res) => {
     }
     
     const createSegmentationPrompt = (products) => {
-      return `Analyze and segment the following ${products.length} Amazon products into meaningful market segments based on their characteristics, price points, and categories.
+      return `Analyze and segment the following ${products.length} Amazon products into HIGHLY SPECIFIC market segments that reveal key differentiators and competitive positioning.
 
-Create segments that would be useful for a business acquisition analysis. Focus on:
-1. Product categories and niches
-2. Price tiers and market positioning  
-3. Brand positioning and competition
-4. Revenue potential and performance
+Create segments that highlight:
+1. FUNCTIONAL DIFFERENTIATORS: What unique capabilities or use cases define each segment
+2. TARGET CUSTOMER PROFILES: Who specifically buys these products and why
+3. COMPETITIVE POSITIONING: How these products compete (features vs price vs brand)
+4. MARKET OPPORTUNITY: Growth potential, seasonality, or emerging trends
+
+AVOID generic segments like "Premium Products" or "Portable Items". Instead create SPECIFIC segments like:
+- "Professional Content Creator Audio Equipment" (high-end mics, interfaces for YouTubers/podcasters)
+- "Smart Home Security for Renters" (no-installation required, app-controlled devices)
+- "Outdoor Adventure Power Solutions" (solar chargers, rugged batteries for camping)
+- "Gaming Peripheral Ecosystem" (RGB keyboards, mice, headsets with unified software)
+- "Work-From-Home Ergonomic Solutions" (standing desks, monitor arms, ergonomic accessories)
 
 Format your response as:
-**Segment 1: [Specific Segment Name]**
+**Segment 1: [Specific, Descriptive Segment Name]**
+[Brief description of what makes this segment unique and who it serves]
 1, 3, 5, 8, 12
 
-**Segment 2: [Another Segment Name]**  
+**Segment 2: [Another Specific Segment Name]**  
+[Brief description of segment characteristics and target market]
 2, 4, 6, 7, 9
 
 Requirements:
@@ -2803,10 +2841,11 @@ Requirements:
 - Minimum 2 products per segment
 - Use actual product index numbers (1-based)
 - Ensure ALL products are assigned to a segment
+- Segment names MUST be specific and descriptive (15-30 characters ideal)
 
 Products:
 ${products.map((p, index) => 
-  `${index + 1}. ${p.title} - ASIN: ${p.asin} - Price: $${p.price || 'N/A'} - Category: ${p.category || 'N/A'} - Revenue: $${p.revenue || 'N/A'}`
+  `${index + 1}. ${p.title} - ASIN: ${p.asin} - Price: $${p.price || 'N/A'} - Category: ${p.category || 'N/A'} - Revenue: $${p.revenue || 'N/A'} - Brand: ${p.brand || 'N/A'}`
 ).join('\n')}`;
     };
     
@@ -2815,7 +2854,7 @@ ${products.map((p, index) =>
       messages: [
         {
           role: "system",
-          content: "You are an expert Amazon marketplace analyst. Analyze product portfolios and create meaningful market segments based on product characteristics, price points, and market positioning."
+          content: "You are an expert Amazon marketplace analyst specializing in competitive intelligence and market segmentation. Create HIGHLY SPECIFIC segments that reveal competitive advantages, target customer profiles, and market opportunities. Avoid generic categorizations - focus on what makes each segment strategically unique for business acquisition analysis."
         },
         { role: "user", content: createSegmentationPrompt(products) }
       ],
@@ -2833,10 +2872,20 @@ ${products.map((p, index) =>
     const totalRevenue = products.reduce((sum, p) => sum + (p.revenue || 0), 0);
     
     const segmentedProducts = segments.map(segment => {
-      const [nameAndIndices, ...rest] = segment.split('\n').filter(Boolean);
-      const name = nameAndIndices.split(':')[1]?.trim() || "Unnamed Segment";
+      const lines = segment.split('\n').filter(Boolean);
+      const nameAndNumber = lines[0];
+      const name = nameAndNumber.split(':')[1]?.trim().replace(/\*\*/g, '') || "Unnamed Segment";
       
-      const indicesStr = rest.join(' ');
+      // Extract description if present (second line)
+      let description = '';
+      let indicesLine = 1;
+      if (lines[1] && !lines[1].match(/^\d/)) {
+        description = lines[1].replace(/^\[|\]$/g, '').trim();
+        indicesLine = 2;
+      }
+      
+      // Extract product indices
+      const indicesStr = lines.slice(indicesLine).join(' ');
       const indices = indicesStr.split(',')
         .flatMap(range => range.split(' '))
         .map(i => i.trim())
@@ -2849,13 +2898,20 @@ ${products.map((p, index) =>
       
       const segmentRevenue = segmentProducts.reduce((sum, p) => sum + (p.revenue || 0), 0);
       const averagePrice = segmentProducts.reduce((sum, p) => sum + (p.price || 0), 0) / segmentProducts.length;
+      const averageRating = segmentProducts.reduce((sum, p) => sum + (p.rating || 0), 0) / segmentProducts.length;
       const marketShare = totalRevenue > 0 ? (segmentRevenue / totalRevenue) * 100 : 0;
+      
+      // Extract key features from product titles and descriptions
+      const features = extractSegmentFeatures(segmentProducts, name, description);
       
       return {
         name,
+        description,
+        features,
         products: segmentProducts,
         totalRevenue: segmentRevenue,
         averagePrice: isNaN(averagePrice) ? 0 : averagePrice,
+        averageRating: isNaN(averageRating) ? 0 : averageRating,
         marketShare
       };
     }).filter(segment => segment.products.length > 0);
