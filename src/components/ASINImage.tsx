@@ -19,6 +19,7 @@ const ASINImage: React.FC<ASINImageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
 
   const handleError = () => {
+    console.error(`Failed to load image: ${src}`);
     setImageError(true);
     setIsLoading(false);
   };
@@ -53,6 +54,8 @@ const ASINImage: React.FC<ASINImageProps> = ({
         onError={handleError}
         onLoad={handleLoad}
         loading={loading}
+        crossOrigin="anonymous"
+        referrerPolicy="no-referrer"
       />
     </>
   );

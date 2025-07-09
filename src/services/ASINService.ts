@@ -24,6 +24,7 @@ export interface ASINData {
   fba: boolean;
   listing_quality: string;
   competition_level: string;
+  image_url?: string;
 }
 
 export interface StoreURLLookupResult {
@@ -42,6 +43,51 @@ export interface ASINSummary {
 
 export class ASINService {
   /**
+   * Remove an ASIN from a deal
+   */
+  static async removeASINFromDeal(dealId: string, asinId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('deal_asins')
+        .delete()
+        .eq('deal_id', dealId)
+        .eq('id', asinId);
+
+      if (error) {
+        console.error('Error removing ASIN from deal:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in removeASINFromDeal:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove multiple ASINs from a deal
+   */
+  static async removeMultipleASINsFromDeal(dealId: string, asinIds: string[]): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('deal_asins')
+        .delete()
+        .eq('deal_id', dealId)
+        .in('id', asinIds);
+
+      if (error) {
+        console.error('Error removing multiple ASINs from deal:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in removeMultipleASINsFromDeal:', error);
+      return false;
+    }
+  }
+  /**
    * Fetch ASINs for a specific deal
    */
   static async fetchDealASINs(dealId: string): Promise<ASINData[]> {
@@ -55,6 +101,7 @@ export class ASINService {
           notes,
           added_at,
           asins (
+            id,
             asin,
             title,
             category,
@@ -64,7 +111,12 @@ export class ASINService {
             current_bsr,
             review_count,
             review_rating,
-            main_image_url
+            main_image_url,
+            monthly_revenue,
+            monthly_units,
+            seller_name,
+            fulfillment,
+            date_first_available
           )
         `)
         .eq('deal_id', dealId);
@@ -83,14 +135,15 @@ export class ASINService {
         const asinDetail = item.asins;
         
         return {
-          id: item.id,
+          id: asinDetail?.id || item.id, // Use asins table ID for keyword queries
+          deal_asin_id: item.id, // Keep deal_asins table ID for reference
           asin: asinDetail?.asin || 'Unknown',
           product_name: asinDetail?.title || 'Unknown Product',
           category: asinDetail?.category || 'Unknown',
           subcategory: asinDetail?.subcategory || 'Unknown',
           brand: asinDetail?.brand || 'Unknown',
-          monthly_revenue: 0, // Not available in current schema
-          monthly_units: 0, // Not available in current schema
+          monthly_revenue: asinDetail?.monthly_revenue || 0,
+          monthly_units: asinDetail?.monthly_units || 0,
           price: asinDetail?.current_price || 0,
           rank_current: asinDetail?.current_bsr || 0,
           rank_average: asinDetail?.current_bsr || 0,
@@ -104,7 +157,8 @@ export class ASINService {
           variations: 1, // Default for now
           fba: true, // Default for now
           listing_quality: this.calculateListingQuality(asinDetail?.review_rating, asinDetail?.review_count),
-          competition_level: this.calculateCompetitionLevel(asinDetail?.current_bsr)
+          competition_level: this.calculateCompetitionLevel(asinDetail?.current_bsr),
+          image_url: asinDetail?.main_image_url
         };
       });
     } catch (error) {
@@ -146,7 +200,10 @@ export class ASINService {
             current_price: asinData.price,
             review_rating: asinData.rating,
             review_count: asinData.reviews,
-            current_bsr: asinData.rank_current
+            current_bsr: asinData.rank_current,
+            monthly_revenue: asinData.monthly_revenue,
+            monthly_units: asinData.monthly_units,
+            main_image_url: asinData.image_url
           })
           .select()
           .single();
@@ -162,6 +219,59 @@ export class ASINService {
         return false;
       } else {
         asinId = existingASIN.id;
+        
+        // Update existing ASIN with new data from JungleScout
+        const { error: updateASINError } = await supabase
+          .from('asins')
+          .update({
+            title: asinData.product_name,
+            category: asinData.category,
+            subcategory: asinData.subcategory,
+            brand: asinData.brand,
+            current_price: asinData.price,
+            review_rating: asinData.rating,
+            review_count: asinData.reviews,
+            current_bsr: asinData.rank_current,
+            monthly_revenue: asinData.monthly_revenue,
+            monthly_units: asinData.monthly_units,
+            main_image_url: asinData.image_url
+          })
+          .eq('id', asinId);
+          
+        if (updateASINError) {
+          console.error('Error updating ASIN data:', updateASINError);
+        }
+      }
+
+      // Check if the relationship already exists
+      const { data: existingRelation, error: checkError } = await supabase
+        .from('deal_asins')
+        .select('id')
+        .eq('deal_id', dealId)
+        .eq('asin_id', asinId)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing relation:', checkError);
+        return false;
+      }
+
+      // If relationship already exists, update it instead
+      if (existingRelation) {
+        const { error: updateError } = await supabase
+          .from('deal_asins')
+          .update({
+            is_primary: asinData.is_primary || false,
+            notes: ''
+          })
+          .eq('id', existingRelation.id);
+
+        if (updateError) {
+          console.error('Error updating ASIN relation:', updateError);
+          return false;
+        }
+        console.log('Updated existing ASIN relation');
+        return true;
       }
 
       // Now add the deal-asin relationship
@@ -384,32 +494,62 @@ export class ASINService {
         console.log(`Processing batch ${i / batchSize + 1}:`, batch);
         
         try {
-          // Search for products by ASIN
+          // Search for products by ASIN using the asins parameter
           const response = await fetchProductDatabaseQuery({
             marketplace: 'us',
-            includeKeywords: batch,
+            asins: batch,
             pageSize: 50
           });
           
           console.log('JungleScout response:', response);
           
           if (response?.data) {
-            const products = response.data.map((item: any) => this.transformJungleScoutProduct(item));
+            // Log the first product to see its structure
+            if (response.data.length > 0) {
+              console.log('First product structure:', JSON.stringify(response.data[0], null, 2));
+            }
+            const products = response.data.map((product: any) => this.transformJungleScoutProduct(product)).filter(Boolean);
             console.log('Transformed products:', products);
             results.push(...products);
-          } else {
-            console.log('No data in JungleScout response');
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error fetching batch ${i / batchSize + 1}:`, error);
+          
+          // If JungleScout fails, create basic ASIN entries with minimal data
+          console.log('Falling back to basic ASIN data for batch:', batch);
+          const fallbackProducts = batch.map(asin => ({
+            id: asin,
+            asin: asin,
+            product_name: `Product ${asin}`,
+            category: 'Unknown',
+            subcategory: 'Unknown',
+            brand: 'Unknown',
+            monthly_revenue: 0,
+            monthly_units: 0,
+            price: 0,
+            rank_current: 0,
+            rank_average: 0,
+            rank_change: 0,
+            reviews: 0,
+            rating: 0,
+            profit_margin: 0,
+            inventory_value: 0,
+            launch_date: new Date().toISOString(),
+            is_primary: false,
+            variations: 1,
+            fba: true,
+            listing_quality: 'Unknown',
+            competition_level: 'Unknown'
+          }));
+          results.push(...fallbackProducts);
         }
       }
       
       console.log('Total ASIN data fetched:', results.length);
       return results;
     } catch (error) {
-      console.error('Error fetching bulk ASIN data:', error);
-      throw error;
+      console.error('Error in fetchBulkASINData:', error);
+      return [];
     }
   }
 
@@ -419,9 +559,22 @@ export class ASINService {
   private static transformJungleScoutProduct(product: any): ASINData {
     const attributes = product.attributes || {};
     
+    // Log available image fields
+    console.log('Product image fields:', {
+      image_url: attributes.image_url,
+      image: attributes.image,
+      main_image: attributes.main_image,
+      images: attributes.images,
+      product_image_url: attributes.product_image_url
+    });
+    
+    // Extract ASIN from id which may include marketplace prefix (e.g., "us/B079HFZ2Z1")
+    const asinMatch = product.id.match(/([A-Z0-9]{10})$/);
+    const asin = asinMatch ? asinMatch[1] : product.id;
+    
     return {
-      id: product.id,
-      asin: product.id,
+      id: asin,
+      asin: asin,
       product_name: attributes.title || 'Unknown Product',
       category: attributes.category || 'Unknown',
       subcategory: attributes.subcategory || attributes.category || 'Unknown',
@@ -441,7 +594,8 @@ export class ASINService {
       variations: attributes.number_of_variations || 1,
       fba: attributes.fulfillment === 'FBA',
       listing_quality: this.calculateListingQuality(attributes.rating, attributes.reviews),
-      competition_level: this.calculateCompetitionLevel(attributes.rank)
+      competition_level: this.calculateCompetitionLevel(attributes.rank),
+      image_url: attributes.image_url || attributes.image || attributes.main_image || attributes.product_image_url
     };
   }
 

@@ -8,6 +8,7 @@ import DealMarketAnalysis from '../partials/deals/DealMarketAnalysis';
 import DealAnalysis from '../partials/deals/DealAnalysis';
 import DealFiles from '../partials/deals/DealFiles';
 import DealASINsTable from '../partials/deals/DealASINsTable';
+import DealKeywords from '../partials/deals/DealKeywords';
 import DealTasks from '../partials/deals/DealTasks';
 import DealNotes from '../partials/deals/DealNotes';
 import DealEditModal from '../components/DealEditModal';
@@ -54,14 +55,23 @@ function DealDetails() {
       }
     };
 
+    // Listen for navigation to ASINs tab
+    const handleNavigateToASINs = (event) => {
+      if (event.detail && event.detail.dealId === id) {
+        setActiveTab('asins');
+      }
+    };
+
     window.addEventListener('navigate-to-analysis', handleNavigateToAnalysis);
     window.addEventListener('deal-updated', handleDealUpdated);
     window.addEventListener('navigate-to-overview', handleNavigateToOverview);
+    window.addEventListener('navigate-to-asins', handleNavigateToASINs);
     
     return () => {
       window.removeEventListener('navigate-to-analysis', handleNavigateToAnalysis);
       window.removeEventListener('deal-updated', handleDealUpdated);
       window.removeEventListener('navigate-to-overview', handleNavigateToOverview);
+      window.removeEventListener('navigate-to-asins', handleNavigateToASINs);
     };
   }, [id]);
 
@@ -129,6 +139,7 @@ function DealDetails() {
     { id: 'market', label: 'Market Analysis', icon: '📊' },
     { id: 'analysis', label: 'Analysis', icon: '🧠' },
     { id: 'asins', label: 'ASINs', icon: '🔖' },
+    { id: 'keywords', label: 'Keywords', icon: '🔍' },
     { id: 'files', label: 'Files', icon: '📁' },
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'notes', label: 'Notes', icon: '📝' },
@@ -146,6 +157,8 @@ function DealDetails() {
         return <DealAnalysis deal={currentDeal} />;
       case 'asins':
         return <DealASINsTable dealId={currentDeal.id} />;
+      case 'keywords':
+        return <DealKeywords dealId={currentDeal.id} />;
       case 'files':
         return <DealFiles dealId={currentDeal.id} />;
       case 'tasks':

@@ -330,23 +330,40 @@ export class AmazonAnalyticsService {
   private extractStoreIdentifier(storeUrl: string): string | null {
     try {
       const url = new URL(storeUrl);
-      const pathParts = url.pathname.split('/');
-      
-      // Try to extract store/brand name from various Amazon URL patterns
+      const pathParts = url.pathname.split('/').filter(p => p);
+      const searchParams = url.searchParams;
+
       if (url.hostname.includes('amazon')) {
-        // Pattern: /stores/BrandName/page/...
+        // Pattern 1: seller ID in query params (e.g., ?me=A123XYZ)
+        const sellerId = searchParams.get('me') || searchParams.get('seller');
+        if (sellerId) {
+          return sellerId;
+        }
+
+        // Pattern 2: /stores/BrandName/page/...
         const storeIndex = pathParts.indexOf('stores');
-        if (storeIndex >= 0 && pathParts[storeIndex + 1]) {
+        if (storeIndex !== -1 && pathParts.length > storeIndex + 1) {
           return pathParts[storeIndex + 1];
         }
-        
-        // Pattern: /s?k=BrandName or similar
-        const searchParams = url.searchParams;
+
+        // Pattern 3: /s?k=BrandName or similar search keywords
         const k = searchParams.get('k');
         if (k) return k;
         
+        // Pattern 4: rh parameter for older store/brand formats
         const rh = searchParams.get('rh');
         if (rh) return rh;
+
+        // Pattern 5: Brand name in the path, e.g. /brandname
+        if (pathParts.length === 1 && pathParts[0] !== 'dp' && pathParts[0] !== 'gp') {
+          return pathParts[0];
+        }
+
+        // Fallback: If URL is like /stores/page/SOME_ID
+        const pageIndex = pathParts.indexOf('page');
+        if (storeIndex !== -1 && pageIndex !== -1 && pathParts.length > pageIndex + 1) {
+          return pathParts[pageIndex + 1];
+        }
       }
       
       return null;

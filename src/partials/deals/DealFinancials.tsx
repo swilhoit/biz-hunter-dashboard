@@ -123,15 +123,22 @@ function DealFinancials({ deal }: DealFinancialsProps) {
     }
   };
 
-  // Mock historical data - in real app this would come from API
-  const monthlyData = [
-    { month: 'Jan', revenue: 380000, profit: 76000 },
-    { month: 'Feb', revenue: 395000, profit: 79000 },
-    { month: 'Mar', revenue: 410000, profit: 82000 },
-    { month: 'Apr', revenue: 385000, profit: 77000 },
-    { month: 'May', revenue: 420000, profit: 84000 },
-    { month: 'Jun', revenue: 405000, profit: 81000 },
-  ];
+  // Use real monthly financials if available, otherwise use mock data
+  const monthlyData = deal.monthly_financials && deal.monthly_financials.length > 0
+    ? deal.monthly_financials.map(item => ({
+        month: new Date(item.month).toLocaleDateString('en-US', { month: 'short' }),
+        revenue: item.revenue || 0,
+        profit: item.profit || 0,
+        expenses: item.expenses || 0
+      }))
+    : [
+        { month: 'Jan', revenue: 380000, profit: 76000, expenses: 0 },
+        { month: 'Feb', revenue: 395000, profit: 79000, expenses: 0 },
+        { month: 'Mar', revenue: 410000, profit: 82000, expenses: 0 },
+        { month: 'Apr', revenue: 385000, profit: 77000, expenses: 0 },
+        { month: 'May', revenue: 420000, profit: 84000, expenses: 0 },
+        { month: 'Jun', revenue: 405000, profit: 81000, expenses: 0 },
+      ];
 
   // Prepare data for Chart.js LineChart
   const lineChartData = {
@@ -219,7 +226,7 @@ function DealFinancials({ deal }: DealFinancialsProps) {
   const keyMetrics = [
     {
       title: 'Annual Revenue',
-      value: formatCurrency(financialData.revenue.total || deal.annual_revenue),
+      value: formatCurrency(financialData.revenue.total || deal.annual_revenue || deal.ttm_revenue),
       icon: DollarSign,
       color: 'text-green-600 dark:text-green-400',
       bgColor: 'bg-green-50 dark:bg-green-900/20',
@@ -227,7 +234,7 @@ function DealFinancials({ deal }: DealFinancialsProps) {
     },
     {
       title: 'Annual Profit',
-      value: formatCurrency(financialData.netIncome || deal.annual_profit),
+      value: formatCurrency(financialData.netIncome || deal.annual_profit || deal.ttm_profit),
       icon: TrendingUp,
       color: 'text-blue-600 dark:text-blue-400',
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
@@ -257,7 +264,7 @@ function DealFinancials({ deal }: DealFinancialsProps) {
     },
     {
       title: 'Profit Margin',
-      value: `${(financialData.metrics.netMargin * 100).toFixed(1)}%`,
+      value: deal.profit_margin ? `${deal.profit_margin.toFixed(1)}%` : `${(financialData.metrics.netMargin * 100).toFixed(1)}%`,
       icon: PieChart,
       color: 'text-orange-600 dark:text-orange-400',
       bgColor: 'bg-orange-50 dark:bg-orange-900/20',

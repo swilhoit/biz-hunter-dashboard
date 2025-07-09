@@ -6,6 +6,7 @@ interface SearchParams {
   sort?: string;
   pageSize?: number;
   includeKeywords?: string[];
+  asins?: string[];
   excludeUnavailableProducts?: boolean;
 }
 
@@ -52,9 +53,51 @@ const getAPICredentials = () => {
   
   if (!apiKey || !keyName) {
     console.warn('JungleScout API credentials not found in environment variables');
+    console.warn('Please set VITE_JUNGLE_SCOUT_API_KEY and VITE_JUNGLE_SCOUT_KEY_NAME in your .env file');
   }
   
   return { apiKey, keyName };
+};
+
+// Test API credentials
+export const testJungleScoutAPI = async (): Promise<boolean> => {
+  const { apiKey, keyName } = getAPICredentials();
+  if (!apiKey || !keyName) {
+    return false;
+  }
+  
+  try {
+    // Try a simple API call to test credentials
+    const url = 'https://developer.junglescout.com/api/keywords/keywords_by_keyword_query';
+    const queryParams = new URLSearchParams({
+      marketplace: 'us',
+      'page[size]': '1'
+    });
+    
+    const payload = {
+      data: {
+        type: "keywords_by_keyword_query",
+        attributes: {
+          search_terms: "test"
+        }
+      }
+    };
+    
+    await axios.post(`${url}?${queryParams.toString()}`, payload, { 
+      headers: createHeaders() 
+    });
+    
+    console.log('JungleScout API test successful');
+    return true;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('JungleScout API test failed:', error.response?.status);
+      if (error.response?.status === 403) {
+        console.error('API access denied. Check your subscription includes keyword API access.');
+      }
+    }
+    return false;
+  }
 };
 
 // Create headers for API requests
@@ -85,18 +128,33 @@ export const fetchProductDatabaseQuery = async (searchParams: SearchParams) => {
 
   const url = `${baseUrl}?${queryParams.toString()}`;
 
+  const attributes: any = {
+    exclude_unavailable_products: searchParams.excludeUnavailableProducts !== false,
+    "min_sales": 1,
+  };
+
+  // If ASINs are provided, use them in the include_keywords field
+  // JungleScout API accepts ASINs through the include_keywords parameter
+  if (searchParams.asins && searchParams.asins.length > 0) {
+    attributes.include_keywords = searchParams.asins;
+  } else if (searchParams.includeKeywords && searchParams.includeKeywords.length > 0) {
+    attributes.include_keywords = searchParams.includeKeywords;
+  }
+
   const payload = {
     data: {
       type: "product_database_query",
-      attributes: {
-        include_keywords: searchParams.includeKeywords || [],
-        exclude_unavailable_products: searchParams.excludeUnavailableProducts !== false,
-        "min_sales": 1,
-      }
+      attributes: attributes
     }
   };
 
   try {
+    console.log('JungleScout API Request:', {
+      url,
+      payload: JSON.stringify(payload, null, 2),
+      headers: createHeaders()
+    });
+    
     const response = await axios.post(url, payload, { headers: createHeaders() });
     return response.data;
   } catch (error) {
@@ -104,6 +162,12 @@ export const fetchProductDatabaseQuery = async (searchParams: SearchParams) => {
     if (axios.isAxiosError(error) && error.response) {
       console.error('Response data:', error.response.data);
       console.error('Response status:', error.response.status);
+      console.error('Full error response:', JSON.stringify(error.response.data, null, 2));
+      
+      // Check for specific error messages
+      if (error.response.status === 400) {
+        console.error('Bad Request - Check if ASINs are valid or if the API key has proper permissions');
+      }
     }
     throw error;
   }
@@ -113,7 +177,8 @@ export const fetchProductDatabaseQuery = async (searchParams: SearchParams) => {
 export const fetchDataForKeywords = async (keywords: string[]): Promise<KeywordData[]> => {
   const { apiKey } = getAPICredentials();
   if (!apiKey) {
-    throw new Error('JungleScout API key not configured');
+    console.error('JungleScout API key not configured');
+    return [];
   }
 
   const url = `https://developer.junglescout.com/api/keywords/keywords_by_keyword_query`;
@@ -153,10 +218,23 @@ export const fetchDataForKeywords = async (keywords: string[]): Promise<KeywordD
         allResults = [...allResults, ...results];
       }
     } catch (error) {
-      console.error("API request failed:", error);
+      console.error(`API request failed for keyword "${keyword}":`, error);
       if (axios.isAxiosError(error) && error.response) {
         console.error('Response data:', error.response.data);
         console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+        
+        // Log detailed error information
+        if (error.response.data?.errors) {
+          error.response.data.errors.forEach((err: any) => {
+            console.error('Error detail:', err);
+          });
+        }
+        
+        // Handle specific error cases
+        if (error.response.status === 403) {
+          console.error('JungleScout API access denied. Please check your API credentials and subscription plan.');
+        }
       }
     }
   }

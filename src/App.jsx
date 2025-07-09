@@ -28,6 +28,7 @@ import DocumentManager from './pages/DocumentManager';
 import Portfolio from './pages/Portfolio';
 import BrandDetails from './pages/BrandDetails';
 import Explorer from './pages/ExplorerEnhanced';
+import ShareOfVoiceAnalysis from './pages/ShareOfVoiceAnalysis';
 
 import Fintech from './pages/Fintech';
 import Customers from './pages/ecommerce/Customers';
@@ -129,6 +130,7 @@ function App() {
         <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
         <Route path="/brand/:id" element={<ProtectedRoute><BrandDetails /></ProtectedRoute>} />
         <Route path="/explorer" element={<ProtectedRoute><Explorer /></ProtectedRoute>} />
+        <Route path="/share-of-voice" element={<ProtectedRoute><ShareOfVoiceAnalysis /></ProtectedRoute>} />
 
         <Route path="/dashboard/fintech" element={<ProtectedRoute><Fintech /></ProtectedRoute>} />
         <Route path="/ecommerce/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
