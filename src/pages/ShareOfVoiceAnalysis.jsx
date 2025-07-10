@@ -1,257 +1,438 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { PieChart, TrendingUp, Package, DollarSign, Hash, Search, Award, Users, BarChart3, AlertCircle, RefreshCw } from 'lucide-react';
 import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
-import ShareOfVoiceReport from '../components/analytics/ShareOfVoiceReport';
-import { Search, BarChart3, Building2, ArrowLeft } from 'lucide-react';
+import { ShareOfVoiceService } from '../services/ShareOfVoiceService';
+import DoughnutChart from '../charts/DoughnutChart';
+import BarChart01 from '../charts/BarChart01';
 
 function ShareOfVoiceAnalysis() {
-  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [brandName, setBrandName] = useState('');
-  const [storeUrl, setStoreUrl] = useState('');
-  const [inputType, setInputType] = useState('brand'); // 'brand' or 'store'
-  const [category, setCategory] = useState('');
-  const [showReport, setShowReport] = useState(false);
-  const [reportData, setReportData] = useState(null);
-  const [storeName, setStoreName] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [availableBrands, setAvailableBrands] = useState([]);
+  const [analysisData, setAnalysisData] = useState(null);
+  const [keywordLimit, setKeywordLimit] = useState(20);
 
-  const handleAnalyze = () => {
-    if (inputType === 'brand' && brandName.trim()) {
-      setShowReport(true);
-    } else if (inputType === 'store' && storeUrl.trim()) {
-      setShowReport(true);
+  // Load available brands on mount
+  useEffect(() => {
+    loadAvailableBrands();
+  }, []);
+
+  const loadAvailableBrands = async () => {
+    try {
+      const brands = await ShareOfVoiceService.getAvailableBrands();
+      setAvailableBrands(brands);
+      if (brands.length > 0 && !selectedBrand) {
+        setSelectedBrand(brands[0]);
+      }
+    } catch (err) {
+      console.error('Error loading brands:', err);
+      setError('Failed to load available brands');
     }
   };
 
-  const handleReportComplete = (report, name) => {
-    setReportData(report);
-    if (name) {
-      setStoreName(name);
+  const runAnalysis = async () => {
+    if (!selectedBrand) {
+      setError('Please select a brand');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setAnalysisData(null);
+
+    try {
+      const data = await ShareOfVoiceService.analyzeShareOfVoiceFromRecommendedKeywords(
+        selectedBrand,
+        keywordLimit
+      );
+      setAnalysisData(data);
+    } catch (err) {
+      console.error('Error running analysis:', err);
+      setError(err.message || 'Failed to analyze share of voice');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleExportReport = () => {
-    if (!reportData) return;
+  // Prepare chart data
+  const getSalesShareChartData = () => {
+    if (!analysisData) return null;
 
-    // Create CSV content
-    const headers = ['Brand', 'Revenue', 'Market Share %', 'Products', 'Avg Rating', 'Keyword Share %'];
-    const rows = reportData.topBrands.map(brand => [
-      brand.brand,
-      brand.totalRevenue,
-      brand.marketShare.toFixed(2),
-      brand.productCount,
-      brand.avgRating.toFixed(2),
-      brand.keywordShare.toFixed(2)
-    ]);
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const labels = [analysisData.brand];
+    const data = [analysisData.overallSalesShare];
+    const backgroundColors = ['#8b5cf6'];
 
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `share-of-voice-${brandName}-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Add top 5 competitors
+    analysisData.topCompetitors.slice(0, 5).forEach((competitor, index) => {
+      labels.push(competitor.brand);
+      data.push(competitor.salesShare);
+      backgroundColors.push(['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'][index % 5]);
+    });
+
+    // Add "Others"
+    const othersShare = 100 - data.reduce((sum, val) => sum + val, 0);
+    if (othersShare > 0) {
+      labels.push('Others');
+      data.push(othersShare);
+      backgroundColors.push('#9ca3af');
+    }
+
+    return {
+      labels,
+      datasets: [{
+        label: 'Sales Share %',
+        data,
+        backgroundColor: backgroundColors,
+        borderWidth: 0
+      }]
+    };
+  };
+
+  const getKeywordPerformanceData = () => {
+    if (!analysisData) return null;
+
+    const sortedKeywords = [...analysisData.keywords]
+      .sort((a, b) => b.salesShare - a.salesShare)
+      .slice(0, 10);
+
+    return {
+      labels: sortedKeywords.map(k => k.keyword.length > 20 ? k.keyword.substring(0, 20) + '...' : k.keyword),
+      datasets: [
+        {
+          label: 'Sales Share %',
+          data: sortedKeywords.map(k => k.salesShare),
+          backgroundColor: '#8b5cf6',
+          barPercentage: 0.4
+        },
+        {
+          label: 'Listing Share %',
+          data: sortedKeywords.map(k => k.listingShare),
+          backgroundColor: '#3b82f6',
+          barPercentage: 0.4
+        }
+      ]
+    };
   };
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
       <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
-      {/* Content area */}
+      
       <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-        {/* Site header */}
         <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
+        
         <main className="grow">
           <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
             {/* Page header */}
             <div className="mb-8">
-              <div className="flex items-center mb-4">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="mr-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">
-                  Share of Voice Analysis
-                </h1>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400">
-                Analyze brand dominance across categories and keywords
+              <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">
+                Share of Voice Analysis
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                Analyze brand market share using AI-recommended keywords
               </p>
             </div>
 
-            {/* Search Form */}
-            {!showReport && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-8">
-                <h2 className="text-lg font-semibold mb-4 flex items-center">
-                  <Search className="h-5 w-5 mr-2" />
-                  Brand Analysis Setup
-                </h2>
-                
-                <div className="space-y-4">
-                  {/* Input Type Toggle */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Input Type</label>
-                    <div className="flex space-x-4">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          value="brand"
-                          checked={inputType === 'brand'}
-                          onChange={(e) => setInputType(e.target.value)}
-                          className="mr-2"
-                        />
-                        <span>Brand Name</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          value="store"
-                          checked={inputType === 'store'}
-                          onChange={(e) => setInputType(e.target.value)}
-                          className="mr-2"
-                        />
-                        <span>Store URL</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Brand Name Input */}
-                  {inputType === 'brand' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Brand Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={brandName}
-                        onChange={(e) => setBrandName(e.target.value)}
-                        placeholder="e.g., Anker, AmazonBasics"
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Enter the exact brand name as it appears on Amazon
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Store URL Input */}
-                  {inputType === 'store' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Amazon Store URL <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={storeUrl}
-                        onChange={(e) => setStoreUrl(e.target.value)}
-                        placeholder="e.g., https://www.amazon.com/stores/page/12345..."
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Enter the Amazon store URL to analyze all products from that seller
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Category (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      placeholder="e.g., Electronics, Home & Kitchen"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Leave empty to auto-detect from brand's products
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleAnalyze}
-                    disabled={inputType === 'brand' ? !brandName.trim() : !storeUrl.trim()}
-                    className={`flex items-center justify-center px-6 py-3 rounded-lg font-medium transition-colors ${
-                      (inputType === 'brand' ? brandName.trim() : storeUrl.trim())
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
+            {/* Selection and Controls */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Select Brand
+                  </label>
+                  <select
+                    value={selectedBrand}
+                    onChange={(e) => setSelectedBrand(e.target.value)}
+                    className="form-select w-full"
+                    disabled={loading}
                   >
-                    <BarChart3 className="h-5 w-5 mr-2" />
-                    Analyze Share of Voice
+                    <option value="">Choose a brand...</option>
+                    {availableBrands.map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Keyword Limit
+                  </label>
+                  <input
+                    type="number"
+                    value={keywordLimit}
+                    onChange={(e) => setKeywordLimit(Math.max(1, Math.min(50, parseInt(e.target.value) || 20)))}
+                    min="1"
+                    max="50"
+                    className="form-input w-full"
+                    disabled={loading}
+                  />
+                </div>
+                
+                <div className="md:col-span-2 flex items-end">
+                  <button
+                    onClick={runAnalysis}
+                    disabled={loading || !selectedBrand}
+                    className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 mr-4"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Run Analysis
+                      </>
+                    )}
                   </button>
+                  
+                  {availableBrands.length === 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      No brands with recommended keywords found. Generate keywords first.
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
-
-            {/* Example Brands */}
-            {!showReport && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold mb-4">Popular Brands to Analyze</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {['Anker', 'AmazonBasics', 'RENPHO', 'Utopia Bedding', 'Simple Modern', 'Carhartt', 'YETI', 'Instant Pot'].map((brand) => (
-                    <button
-                      key={brand}
-                      onClick={() => setBrandName(brand)}
-                      className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
-                    >
-                      <Building2 className="h-4 w-4 inline-block mr-2" />
-                      {brand}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Report Display */}
-            {showReport && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
+              
+              {error && (
+                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <div className="flex items-center">
-                    <button
-                      onClick={() => {
-                        setShowReport(false);
-                        setReportData(null);
-                      }}
-                      className="mr-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <ArrowLeft className="h-5 w-5" />
-                    </button>
-                    <h2 className="text-xl font-semibold">
-                      Share of Voice Report: {inputType === 'brand' ? brandName : (storeName || 'Store')}
-                      {category && <span className="text-gray-500 text-base ml-2">in {category}</span>}
-                    </h2>
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Analysis Results */}
+            {analysisData && (
+              <>
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Sales Share</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {analysisData.overallSalesShare.toFixed(1)}%
+                        </p>
+                      </div>
+                      <DollarSign className="w-8 h-8 text-violet-500" />
+                    </div>
                   </div>
                   
-                  {reportData && (
-                    <button
-                      onClick={handleExportReport}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Export Report
-                    </button>
-                  )}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Listing Share</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {analysisData.overallListingShare.toFixed(1)}%
+                        </p>
+                      </div>
+                      <Package className="w-8 h-8 text-blue-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Keywords Covered</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {analysisData.keywordsCovered}/{analysisData.totalKeywords}
+                        </p>
+                      </div>
+                      <Hash className="w-8 h-8 text-green-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Position</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          #{analysisData.avgPosition}
+                        </p>
+                      </div>
+                      <Award className="w-8 h-8 text-amber-500" />
+                    </div>
+                  </div>
                 </div>
 
-                <ShareOfVoiceReport
-                  brandName={inputType === 'brand' ? brandName : undefined}
-                  storeUrl={inputType === 'store' ? storeUrl : undefined}
-                  category={category || undefined}
-                  onComplete={handleReportComplete}
-                />
-              </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* Sales Share Pie Chart */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                      Market Sales Share
+                    </h3>
+                    <div className="h-64">
+                      <DoughnutChart data={getSalesShareChartData()} />
+                    </div>
+                  </div>
+
+                  {/* Keyword Performance */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                      Top Keyword Performance
+                    </h3>
+                    <div className="h-64">
+                      <BarChart01 
+                        data={getKeywordPerformanceData()} 
+                        width={389} 
+                        height={256} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Competitors Table */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Top Competitors
+                    </h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Brand
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Sales Share
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Listing Share
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Keyword Overlap
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            # of ASINs
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {analysisData.topCompetitors.map((competitor, index) => (
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {competitor.brand}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="text-sm text-gray-900 dark:text-gray-100">
+                                  {competitor.salesShare.toFixed(1)}%
+                                </div>
+                                <div 
+                                  className="ml-2 w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2"
+                                  title={`${competitor.salesShare.toFixed(1)}%`}
+                                >
+                                  <div 
+                                    className="bg-violet-500 h-2 rounded-full" 
+                                    style={{ width: `${Math.min(100, competitor.salesShare)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {competitor.listingShare.toFixed(1)}%
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {competitor.keywordOverlap} keywords
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {competitor.uniqueASINs}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Keyword Details Table */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Keyword Analysis Details
+                    </h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Keyword
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Search Volume
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Brand Products
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Total Products
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Sales Share
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Listing Share
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {analysisData.keywords.map((keyword, index) => (
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {keyword.keyword}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.searchVolume.toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.brandProducts}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.totalProducts}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.salesShare.toFixed(1)}%
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.listingShare.toFixed(1)}%
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </main>

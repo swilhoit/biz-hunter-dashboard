@@ -426,33 +426,45 @@ function DealKeywords({ dealId }) {
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
                       <span className="capitalize">{keyword.search_intent} intent</span>
-                      {keyword.search_volume > 0 && (
-                        <span>{keyword.search_volume.toLocaleString()} searches/mo</span>
-                      )}
-                      {keyword.monthly_trend !== undefined && keyword.monthly_trend !== null && (
-                        <span className={keyword.monthly_trend > 0 ? 'text-green-600' : 'text-red-600'}>
-                          {keyword.monthly_trend > 0 ? '+' : ''}{keyword.monthly_trend.toFixed(1)}%
-                        </span>
-                      )}
                     </div>
-                    {(keyword.ppc_bid_exact > 0 || keyword.organic_product_count > 0 || keyword.sponsored_product_count > 0) && (
-                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-500 mb-2">
-                        {keyword.ppc_bid_exact > 0 && (
-                          <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
+                    {(keyword.amazon_search_volume > 0 || keyword.google_search_volume > 0) && (
+                      <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        {keyword.amazon_search_volume > 0 && (
+                          <span className="flex items-center">
+                            <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M13.958 10.09c0 1.232.029 2.256-.591 3.351-.502.891-1.301 1.44-2.186 1.44-1.214 0-1.922-.924-1.922-2.292 0-2.692 2.415-3.182 4.7-3.182v.683zm3.186 7.705c-.209.189-.512.201-.745.074-1.052-.872-1.238-1.276-1.814-2.106-1.734 1.767-2.962 2.297-5.209 2.297-2.66 0-4.731-1.641-4.731-4.925 0-2.565 1.391-4.309 3.37-5.164 1.715-.754 4.11-.891 5.942-1.095v-.41c0-.753.06-1.642-.383-2.294-.385-.579-1.124-.82-1.775-.82-1.205 0-2.277.618-2.54 1.897-.054.285-.261.567-.549.58l-3.061-.333c-.259-.056-.548-.266-.472-.66.704-3.716 4.06-4.838 7.066-4.838 1.537 0 3.547.41 4.758 1.574 1.538 1.436 1.392 3.352 1.392 5.438v4.923c0 1.481.615 2.13 1.192 2.929.204.287.248.63-.01.838-.647.541-1.794 1.537-2.423 2.099l-.008-.007zm3.559 1.988c-2.748 1.472-5.735 2.181-8.453 2.181-4.027 0-7.927-1.393-11.081-3.706-.277-.202-.481.154-.251.416 3.138 3.027 7.497 4.684 11.779 4.684 3.165 0 6.29-.965 8.693-2.653.55-.385.503-1.168-.687-.922z"/>
+                            </svg>
+                            {keyword.amazon_search_volume.toLocaleString()}/mo
+                          </span>
                         )}
-                        {keyword.organic_product_count > 0 && (
-                          <span>Organic: {keyword.organic_product_count}</span>
-                        )}
-                        {keyword.sponsored_product_count > 0 && (
-                          <span>Sponsored: {keyword.sponsored_product_count}</span>
+                        {keyword.google_search_volume > 0 && (
+                          <span className="flex items-center">
+                            <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+                            </svg>
+                            {keyword.google_search_volume.toLocaleString()}/mo
+                          </span>
                         )}
                       </div>
                     )}
+                    {keyword.junglescout_updated_at ? (
+                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-500 mb-2">
+                        {keyword.ppc_bid_exact !== undefined && (
+                          <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
+                        )}
+                        {keyword.organic_product_count !== undefined && (
+                          <span>Organic: {keyword.organic_product_count}</span>
+                        )}
+                        {keyword.sponsored_product_count !== undefined && (
+                          <span>Sponsored: {keyword.sponsored_product_count}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mb-2 italic">
+                        Keyword metrics not available
+                      </div>
+                    )}
                     
-                    {/* Debug info - remove this later */}
-                    <div className="text-xs text-gray-400 mt-2 border-t pt-2">
-                      DEBUG: search_volume={keyword.search_volume}, monthly_trend={keyword.monthly_trend}, ppc_bid_exact={keyword.ppc_bid_exact}
-                    </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{keyword.relevance_reason}</p>
                   </div>
                 ))}

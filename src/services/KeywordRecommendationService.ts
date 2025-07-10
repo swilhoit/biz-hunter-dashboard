@@ -1,13 +1,18 @@
 import OpenAI from 'openai';
-import { fetchDataForKeywords } from '../utils/explorer/junglescout';
+import { supabase } from '../lib/supabase';
 
 interface RecommendedKeyword {
   keyword: string;
   search_intent: 'informational' | 'commercial' | 'transactional';
   estimated_competition: 'low' | 'medium' | 'high';
   relevance_reason: string;
-  // JungleScout metrics
-  search_volume?: number;
+  // Search volume metrics
+  search_volume?: number; // Legacy field
+  amazon_search_volume?: number;
+  google_search_volume?: number;
+  google_cpc?: number;
+  google_competition?: number;
+  // Other metrics
   monthly_trend?: number;
   quarterly_trend?: number;
   ppc_bid_broad?: number;
@@ -32,6 +37,133 @@ export class KeywordRecommendationService {
       });
     }
     return this.openai;
+  }
+
+  /**
+   * Fetch keyword data from DataForSEO for both Google and Amazon
+   */
+  private static async fetchKeywordDataFromDataForSEO(keywords: string[]): Promise<Map<string, any>> {
+    const username = import.meta.env.VITE_DATAFORSEO_USERNAME;
+    const password = import.meta.env.VITE_DATAFORSEO_PASSWORD;
+    
+    if (!username || !password) {
+      console.error('[DataForSEO] Credentials not configured');
+      return new Map();
+    }
+
+    const credentials = btoa(`${username}:${password}`);
+    const keywordData = new Map<string, any>();
+
+    try {
+      // Batch fetch Amazon search volumes (up to 1000 keywords at once)
+      try {
+        const amazonEndpoint = 'https://api.dataforseo.com/v3/dataforseo_labs/amazon/bulk_search_volume/live';
+        const amazonPayload = [{
+          keywords: keywords,
+          location_code: 2840, // USA
+          language_code: 'en'
+        }];
+
+        console.log('[DataForSEO] Fetching Amazon bulk search volume for', keywords.length, 'keywords');
+
+        const amazonResponse = await fetch(amazonEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(amazonPayload)
+        });
+
+        if (amazonResponse.ok) {
+          const amazonData = await amazonResponse.json();
+          
+          if (amazonData.status_code === 20000 && amazonData.tasks?.[0]?.result?.[0]?.items) {
+            const items = amazonData.tasks[0].result[0].items;
+            console.log('[DataForSEO] Amazon API returned', items.length, 'results');
+            
+            // Map Amazon results
+            items.forEach((item: any) => {
+              const key = item.keyword.toLowerCase();
+              if (!keywordData.has(key)) {
+                keywordData.set(key, {
+                  keyword: item.keyword,
+                  amazon_search_volume: 0,
+                  google_search_volume: 0,
+                  google_cpc: 0,
+                  google_competition: 0
+                });
+              }
+              keywordData.get(key).amazon_search_volume = item.search_volume || 0;
+            });
+          }
+        } else {
+          const errorText = await amazonResponse.text();
+          console.error('[DataForSEO] Amazon API error:', amazonResponse.status, errorText);
+        }
+      } catch (error) {
+        console.error('[DataForSEO] Error fetching Amazon data:', error);
+      }
+
+      // Batch fetch Google keyword data
+      try {
+        const googleEndpoint = 'https://api.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live';
+        const googlePayload = [{
+          keywords: keywords,
+          location_code: 2840, // USA
+          language_code: 'en'
+        }];
+
+        console.log('[DataForSEO] Fetching Google keyword data for', keywords.length, 'keywords');
+
+        const googleResponse = await fetch(googleEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(googlePayload)
+        });
+
+        if (googleResponse.ok) {
+          const googleData = await googleResponse.json();
+          
+          if (googleData.status_code === 20000 && googleData.tasks?.[0]?.result) {
+            const results = googleData.tasks[0].result;
+            console.log('[DataForSEO] Google API returned', results.length, 'results');
+            
+            // Map Google results
+            results.forEach((result: any) => {
+              const key = result.keyword.toLowerCase();
+              if (!keywordData.has(key)) {
+                keywordData.set(key, {
+                  keyword: result.keyword,
+                  amazon_search_volume: 0,
+                  google_search_volume: 0,
+                  google_cpc: 0,
+                  google_competition: 0
+                });
+              }
+              const data = keywordData.get(key);
+              data.google_search_volume = result.search_volume || 0;
+              data.google_cpc = result.cpc || 0;
+              data.google_competition = result.competition || 0;
+            });
+          }
+        } else {
+          const errorText = await googleResponse.text();
+          console.error('[DataForSEO] Google API error:', googleResponse.status, errorText);
+        }
+      } catch (error) {
+        console.error('[DataForSEO] Error fetching Google data:', error);
+      }
+
+    } catch (error) {
+      console.error('[DataForSEO] Error fetching keyword data:', error);
+    }
+
+    console.log('[DataForSEO] Final keyword data map size:', keywordData.size);
+    return keywordData;
   }
 
   static async generateKeywordRecommendations(
@@ -105,10 +237,11 @@ Return as JSON array with this structure:
         .filter((kw: any) => kw.keyword && typeof kw.keyword === 'string')
         .slice(0, 10) // Ensure we only return 10 keywords
         .map((kw: any) => ({
-          keyword: kw.keyword.toLowerCase().trim(),
+          keyword: kw.keyword.trim(), // Don't force lowercase - JungleScout might be case-sensitive
           search_intent: kw.search_intent || 'commercial',
           estimated_competition: kw.estimated_competition || 'medium',
-          relevance_reason: kw.relevance_reason || 'Relevant to product category'
+          relevance_reason: kw.relevance_reason || 'Relevant to product category',
+          relevance_score: kw.relevance_score || 85 // Default relevance score
         }));
 
     } catch (error) {
@@ -169,76 +302,93 @@ Return as a simple JSON array of strings.`;
   }
 
   /**
-   * Enhance recommended keywords with JungleScout metrics
+   * Enhance recommended keywords with DataForSEO metrics
    */
-  static async enhanceKeywordsWithJungleScoutData(
+  static async enhanceKeywordsWithDataForSEOMetrics(
     keywords: RecommendedKeyword[]
   ): Promise<RecommendedKeyword[]> {
     try {
-      console.log('Enhancing keywords with JungleScout data:', keywords.length);
-      console.log('Keywords to enhance:', keywords.map(k => k.keyword));
+      console.log('[DataForSEO] Enhancing keywords with DataForSEO data:', keywords.length);
+      console.log('[DataForSEO] Keywords to enhance:', keywords.map(k => k.keyword));
       
       // Extract just the keyword strings
       const keywordStrings = keywords.map(kw => kw.keyword);
       
-      console.log('Calling fetchDataForKeywords with:', keywordStrings);
+      // Fetch DataForSEO data for these keywords
+      const dataForSEOMap = await this.fetchKeywordDataFromDataForSEO(keywordStrings);
       
-      // Fetch JungleScout data for these keywords
-      const junglescoutData = await fetchDataForKeywords(keywordStrings);
+      console.log('[DataForSEO] Data received for', dataForSEOMap.size, 'keywords');
       
-      console.log('Raw JungleScout response:', junglescoutData);
-      
-      console.log('JungleScout data received:', junglescoutData.length);
-      console.log('JungleScout sample data:', junglescoutData.slice(0, 2));
-      
-      // Create a map of keyword to JungleScout metrics
-      const metricsMap = new Map();
-      junglescoutData.forEach(data => {
-        metricsMap.set(data.keyword.toLowerCase(), data);
-      });
-      
-      // Enhance each keyword with JungleScout metrics
+      // Enhance each keyword with DataForSEO metrics
       const enhancedKeywords = keywords.map(keyword => {
-        const metrics = metricsMap.get(keyword.keyword.toLowerCase());
+        // Try to find metrics with case-insensitive lookup
+        const metrics = dataForSEOMap.get(keyword.keyword.toLowerCase());
         
         if (metrics) {
-          console.log(`Enhanced keyword "${keyword.keyword}" with metrics:`, {
-            search_volume: metrics.search_volume,
-            monthly_trend: metrics.monthly_trend,
-            ppc_bid_exact: metrics.ppc_bid_exact
+          console.log(`[DataForSEO] Enhanced keyword "${keyword.keyword}" with metrics:`, {
+            amazon_search_volume: metrics.amazon_search_volume,
+            google_search_volume: metrics.google_search_volume,
+            google_cpc: metrics.google_cpc,
+            google_competition: metrics.google_competition
           });
+          
+          // Map competition level to estimated values
+          const competitionMap: { [key: string]: number } = {
+            'low': 20,
+            'medium': 50,
+            'high': 80,
+            'unknown': 0
+          };
           
           return {
             ...keyword,
-            search_volume: metrics.search_volume || 0,
-            monthly_trend: metrics.monthly_trend || 0,
-            quarterly_trend: metrics.quarterly_trend || 0,
-            ppc_bid_broad: metrics.ppc_bid_broad || 0,
-            ppc_bid_exact: metrics.ppc_bid_exact || 0,
-            organic_product_count: metrics.organic_product_count || 0,
-            sponsored_product_count: metrics.sponsored_product_count || 0,
-            junglescout_updated_at: new Date().toISOString()
+            search_volume: metrics.amazon_search_volume || 0, // Legacy field uses Amazon volume
+            amazon_search_volume: metrics.amazon_search_volume || 0,
+            google_search_volume: metrics.google_search_volume || 0,
+            google_cpc: metrics.google_cpc || 0,
+            google_competition: metrics.google_competition || 0,
+            monthly_trend: 0, // DataForSEO doesn't provide trend in same format
+            quarterly_trend: 0,
+            ppc_bid_broad: metrics.google_cpc || 0, // Use Google CPC as estimate
+            ppc_bid_exact: metrics.google_cpc || 0,
+            organic_product_count: competitionMap[metrics.amazon_competition_level] || Math.floor(metrics.google_competition * 100) || 0,
+            sponsored_product_count: Math.floor((competitionMap[metrics.amazon_competition_level] || (metrics.google_competition * 100)) * 0.3) || 0,
+            junglescout_updated_at: new Date().toISOString() // Using same field name for compatibility
           };
         } else {
-          console.log(`No metrics found for keyword "${keyword.keyword}"`);
+          console.log(`[DataForSEO] No metrics found for keyword "${keyword.keyword}" - returning with defaults`);
+          // Return keyword with default/zero values so UI can still display something
+          return {
+            ...keyword,
+            search_volume: 0,
+            amazon_search_volume: 0,
+            google_search_volume: 0,
+            google_cpc: 0,
+            google_competition: 0,
+            monthly_trend: 0,
+            quarterly_trend: 0,
+            ppc_bid_broad: 0,
+            ppc_bid_exact: 0,
+            organic_product_count: 0,
+            sponsored_product_count: 0,
+            junglescout_updated_at: null
+          };
         }
-        
-        return keyword;
       });
       
-      console.log('Enhanced keywords:', enhancedKeywords.length);
-      console.log('Sample enhanced keyword:', enhancedKeywords[0]);
+      console.log('[DataForSEO] Enhanced keywords:', enhancedKeywords.length);
+      console.log('[DataForSEO] Sample enhanced keyword:', enhancedKeywords[0]);
       return enhancedKeywords;
       
     } catch (error) {
-      console.error('Error enhancing keywords with JungleScout data:', error);
+      console.error('[DataForSEO] Error enhancing keywords with DataForSEO data:', error);
       // Return original keywords if enhancement fails
       return keywords;
     }
   }
 
   /**
-   * Generate keyword recommendations with JungleScout metrics
+   * Generate keyword recommendations with DataForSEO metrics
    */
   static async generateKeywordRecommendationsWithMetrics(
     productTitles: string[],
@@ -253,8 +403,8 @@ Return as a simple JSON array of strings.`;
         brand
       );
       
-      // Then enhance with JungleScout metrics
-      const enhancedRecommendations = await this.enhanceKeywordsWithJungleScoutData(
+      // Then enhance with DataForSEO metrics
+      const enhancedRecommendations = await this.enhanceKeywordsWithDataForSEOMetrics(
         recommendations
       );
       

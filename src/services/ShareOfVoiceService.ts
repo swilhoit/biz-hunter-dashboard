@@ -5,6 +5,7 @@ import {
   generateBrandShareOfVoiceReport,
   generateShareOfVoiceReportFromStoreURL 
 } from '../utils/shareOfVoiceAnalysis';
+import { fetchProductDatabaseQuery } from '../utils/explorer/junglescout';
 
 export interface StoredShareOfVoiceReport {
   id: string;
@@ -30,6 +31,34 @@ export interface StoredShareOfVoiceReport {
   category_distribution: any;
   created_at: string;
   updated_at: string;
+}
+
+interface KeywordShareAnalysis {
+  keyword: string;
+  searchVolume: number;
+  brandProducts: number;
+  totalProducts: number;
+  brandRevenue: number;
+  totalRevenue: number;
+  salesShare: number;
+  listingShare: number;
+}
+
+interface BrandKeywordAnalysis {
+  brand: string;
+  keywords: KeywordShareAnalysis[];
+  overallSalesShare: number;
+  overallListingShare: number;
+  keywordsCovered: number;
+  totalKeywords: number;
+  avgPosition: number;
+  topCompetitors: {
+    brand: string;
+    salesShare: number;
+    listingShare: number;
+    keywordOverlap: number;
+    uniqueASINs: number;
+  }[];
 }
 
 export class ShareOfVoiceService {
@@ -291,6 +320,233 @@ export class ShareOfVoiceService {
       }
     } catch (error) {
       console.error('Error cleaning up old reports:', error);
+    }
+  }
+
+  /**
+   * Analyze share of voice using recommended keywords from a brand
+   * This fetches ASIN results for each recommended keyword and calculates market share
+   */
+  static async analyzeShareOfVoiceFromRecommendedKeywords(
+    brandName: string,
+    limit: number = 20
+  ): Promise<BrandKeywordAnalysis> {
+    try {
+      // Step 1: Get all ASINs for this brand
+      const { data: brandAsins, error: asinError } = await supabase
+        .from('asins')
+        .select('id, asin')
+        .eq('brand', brandName);
+
+      if (asinError) throw asinError;
+      
+      if (!brandAsins || brandAsins.length === 0) {
+        throw new Error(`No ASINs found for brand: ${brandName}`);
+      }
+
+      // Step 2: Get recommended keywords for this brand's ASINs
+      const asinIds = brandAsins.map(a => a.id);
+      const { data: recommendedKeywords, error: keywordError } = await supabase
+        .from('asin_recommended_keywords')
+        .select('keyword, search_volume')
+        .in('asin_id', asinIds)
+        .order('search_volume', { ascending: false })
+        .limit(limit);
+
+      if (keywordError) throw keywordError;
+
+      if (!recommendedKeywords || recommendedKeywords.length === 0) {
+        throw new Error(`No recommended keywords found for brand: ${brandName}. Generate keywords first.`);
+      }
+
+      // Get unique keywords with highest search volume
+      const uniqueKeywords = new Map<string, number>();
+      recommendedKeywords.forEach(kw => {
+        if (!uniqueKeywords.has(kw.keyword)) {
+          uniqueKeywords.set(kw.keyword, kw.search_volume || 0);
+        }
+      });
+
+      console.log(`[ShareOfVoice] Analyzing ${uniqueKeywords.size} keywords for brand: ${brandName}`);
+
+      // Step 3: For each keyword, fetch ASIN results from JungleScout
+      const keywordAnalyses: KeywordShareAnalysis[] = [];
+      const brandMetrics = {
+        totalRevenue: 0,
+        totalListings: new Set<string>(),
+        positions: [] as number[],
+        keywordsCovered: 0
+      };
+
+      const competitorData = new Map<string, {
+        revenue: number;
+        listings: Set<string>;
+        keywordOverlap: number;
+      }>();
+
+      for (const [keyword, searchVolume] of uniqueKeywords) {
+        try {
+          console.log(`[ShareOfVoice] Fetching results for keyword: "${keyword}"`);
+          
+          // Use JungleScout API to search for products
+          const searchResults = await fetchProductDatabaseQuery({
+            includeKeywords: [keyword],
+            marketplace: 'us',
+            pageSize: 50, // Get top 50 results
+            excludeUnavailableProducts: true
+          });
+
+          if (searchResults?.data && searchResults.data.length > 0) {
+            let keywordBrandRevenue = 0;
+            let keywordTotalRevenue = 0;
+            let keywordBrandProducts = 0;
+            const keywordBrandASINs = new Set<string>();
+
+            searchResults.data.forEach((product: any, index: number) => {
+              const productBrand = product.attributes.brand || 'Unknown';
+              const revenue = product.attributes.approximate_30_day_revenue || 0;
+              const asin = product.id;
+
+              keywordTotalRevenue += revenue;
+
+              // Track competitor data
+              if (productBrand !== brandName) {
+                if (!competitorData.has(productBrand)) {
+                  competitorData.set(productBrand, {
+                    revenue: 0,
+                    listings: new Set(),
+                    keywordOverlap: 0
+                  });
+                }
+                const competitor = competitorData.get(productBrand)!;
+                competitor.revenue += revenue;
+                competitor.listings.add(asin);
+              }
+
+              // Check if this is the target brand
+              if (productBrand === brandName) {
+                keywordBrandRevenue += revenue;
+                keywordBrandProducts++;
+                keywordBrandASINs.add(asin);
+                brandMetrics.totalListings.add(asin);
+                brandMetrics.positions.push(index + 1);
+              }
+            });
+
+            if (keywordBrandProducts > 0) {
+              brandMetrics.keywordsCovered++;
+              brandMetrics.totalRevenue += keywordBrandRevenue;
+
+              // Increment keyword overlap for competitors appearing in same keywords
+              competitorData.forEach(competitor => {
+                competitor.keywordOverlap++;
+              });
+            }
+
+            const analysis: KeywordShareAnalysis = {
+              keyword,
+              searchVolume,
+              brandProducts: keywordBrandProducts,
+              totalProducts: searchResults.data.length,
+              brandRevenue: keywordBrandRevenue,
+              totalRevenue: keywordTotalRevenue,
+              salesShare: keywordTotalRevenue > 0 ? (keywordBrandRevenue / keywordTotalRevenue) * 100 : 0,
+              listingShare: searchResults.data.length > 0 ? (keywordBrandProducts / searchResults.data.length) * 100 : 0
+            };
+
+            keywordAnalyses.push(analysis);
+          }
+        } catch (error) {
+          console.error(`[ShareOfVoice] Error fetching results for keyword "${keyword}":`, error);
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Calculate overall metrics
+      const totalMarketRevenue = keywordAnalyses.reduce((sum, ka) => sum + ka.totalRevenue, 0);
+      const totalMarketListings = keywordAnalyses.reduce((sum, ka) => sum + ka.totalProducts, 0);
+      
+      const overallSalesShare = totalMarketRevenue > 0 ? (brandMetrics.totalRevenue / totalMarketRevenue) * 100 : 0;
+      const overallListingShare = totalMarketListings > 0 ? (brandMetrics.totalListings.size / totalMarketListings) * 100 : 0;
+      
+      const avgPosition = brandMetrics.positions.length > 0
+        ? brandMetrics.positions.reduce((a, b) => a + b, 0) / brandMetrics.positions.length
+        : 0;
+
+      // Process competitor data
+      const topCompetitors = Array.from(competitorData.entries())
+        .map(([brand, data]) => ({
+          brand,
+          salesShare: totalMarketRevenue > 0 ? (data.revenue / totalMarketRevenue) * 100 : 0,
+          listingShare: totalMarketListings > 0 ? (data.listings.size / totalMarketListings) * 100 : 0,
+          keywordOverlap: data.keywordOverlap,
+          uniqueASINs: data.listings.size
+        }))
+        .sort((a, b) => b.salesShare - a.salesShare)
+        .slice(0, 10);
+
+      return {
+        brand: brandName,
+        keywords: keywordAnalyses,
+        overallSalesShare,
+        overallListingShare,
+        keywordsCovered: brandMetrics.keywordsCovered,
+        totalKeywords: uniqueKeywords.size,
+        avgPosition: Math.round(avgPosition * 10) / 10,
+        topCompetitors
+      };
+
+    } catch (error) {
+      console.error('[ShareOfVoice] Error analyzing share of voice:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available brands for share of voice analysis
+   * (brands that have recommended keywords)
+   */
+  static async getAvailableBrands(): Promise<string[]> {
+    try {
+      // Get brands that have ASINs with recommended keywords
+      const { data, error } = await supabase
+        .from('asins')
+        .select('brand')
+        .not('brand', 'is', null)
+        .neq('brand', 'Unknown');
+
+      if (error) throw error;
+
+      // Get unique brands
+      const uniqueBrands = [...new Set(data?.map(d => d.brand) || [])];
+
+      // Filter to only brands with recommended keywords
+      const brandsWithKeywords: string[] = [];
+      
+      for (const brand of uniqueBrands) {
+        const { data: asinData } = await supabase
+          .from('asins')
+          .select('id')
+          .eq('brand', brand);
+
+        if (asinData && asinData.length > 0) {
+          const { count } = await supabase
+            .from('asin_recommended_keywords')
+            .select('*', { count: 'exact', head: true })
+            .in('asin_id', asinData.map(a => a.id));
+
+          if (count && count > 0) {
+            brandsWithKeywords.push(brand);
+          }
+        }
+      }
+
+      return brandsWithKeywords.sort();
+    } catch (error) {
+      console.error('[ShareOfVoice] Error getting available brands:', error);
+      return [];
     }
   }
 }

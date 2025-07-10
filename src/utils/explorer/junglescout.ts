@@ -104,6 +104,10 @@ export const testJungleScoutAPI = async (): Promise<boolean> => {
 const createHeaders = () => {
   const { apiKey, keyName } = getAPICredentials();
   
+  // Log credentials availability (without exposing them)
+  console.log('[JungleScout] API Key Name available:', !!keyName);
+  console.log('[JungleScout] API Key available:', !!apiKey);
+  
   return {
     'Authorization': `${keyName}:${apiKey}`,
     'X-API-Type': 'junglescout',
@@ -191,6 +195,9 @@ export const fetchDataForKeywords = async (keywords: string[]): Promise<KeywordD
   let allResults: KeywordData[] = [];
 
   for (const keyword of keywords) {
+    console.log(`[JungleScout] Searching for keyword: "${keyword}"`);
+    
+    // Try exact match first
     const payload = {
       data: {
         type: "keywords_by_keyword_query",
@@ -202,6 +209,10 @@ export const fetchDataForKeywords = async (keywords: string[]): Promise<KeywordD
 
     try {
       const response = await axios.post(`${url}?${queryParams.toString()}`, payload, { headers: createHeaders() });
+      console.log(`[JungleScout] Response status for "${keyword}":`, response.status);
+      console.log(`[JungleScout] Response data available:`, !!response.data);
+      console.log(`[JungleScout] Number of results:`, response.data?.data?.length || 0);
+      
       if (response.data && Array.isArray(response.data.data)) {
         const results = response.data.data.map((item: any) => ({
           keyword: item.attributes.name,
@@ -215,25 +226,38 @@ export const fetchDataForKeywords = async (keywords: string[]): Promise<KeywordD
           organic_product_count: item.attributes.organic_product_count,
           sponsored_product_count: item.attributes.sponsored_product_count
         }));
+        
+        console.log(`[JungleScout] Found ${results.length} results for "${keyword}"`);
+        if (results.length > 0) {
+          console.log(`[JungleScout] First result:`, results[0]);
+        }
+        
         allResults = [...allResults, ...results];
+      } else {
+        console.log(`[JungleScout] No data array in response for "${keyword}"`);
+        console.log(`[JungleScout] Full response structure:`, JSON.stringify(response.data, null, 2));
       }
     } catch (error) {
-      console.error(`API request failed for keyword "${keyword}":`, error);
+      console.error(`[JungleScout] API request failed for keyword "${keyword}":`, error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-        console.error('Response headers:', error.response.headers);
+        console.error('[JungleScout] Response data:', error.response.data);
+        console.error('[JungleScout] Response status:', error.response.status);
+        console.error('[JungleScout] Response headers:', error.response.headers);
         
         // Log detailed error information
         if (error.response.data?.errors) {
           error.response.data.errors.forEach((err: any) => {
-            console.error('Error detail:', err);
+            console.error('[JungleScout] Error detail:', err);
           });
         }
         
         // Handle specific error cases
         if (error.response.status === 403) {
-          console.error('JungleScout API access denied. Please check your API credentials and subscription plan.');
+          console.error('[JungleScout] API access denied. Please check your API credentials and subscription plan.');
+        } else if (error.response.status === 400) {
+          console.error('[JungleScout] Bad request - check API parameters');
+        } else if (error.response.status === 404) {
+          console.error('[JungleScout] Endpoint not found - check API URL');
         }
       }
     }

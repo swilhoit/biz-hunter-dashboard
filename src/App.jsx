@@ -9,6 +9,11 @@ import './css/style.css';
 
 import './charts/ChartjsConfig';
 
+// Import diagnostic tools
+import './utils/testJungleScout';
+import './utils/testDataForSEO';
+import './utils/testDataForSEOBoth';
+
 // Import pages
 import Dashboard from './pages/Dashboard';
 import DealPipeline from './pages/DealPipelineIntegrated';
