@@ -10,6 +10,9 @@ import dotenv from 'dotenv';
 import seoRoutes from './server/api/seo.js';
 import filesRoutes from './server/api/files.js';
 
+// Import Supabase client
+import { createClient } from '@supabase/supabase-js';
+
 // Add uncaught exception handler
 process.on('uncaughtException', (err) => {
   console.error('FATAL: Uncaught exception:', err);
@@ -369,6 +372,58 @@ Extract and format as JSON:
   }
 });
 
+// Initialize Supabase client
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+let supabase = null;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
+
+// Delete listing endpoint
+app.delete('/api/listings/:listingId', async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ success: false, message: 'Database connection not configured' });
+    }
+
+    const { listingId } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    // First check if the listing exists
+    const { data: listing, error: fetchError } = await supabase
+      .from('business_listings')
+      .select('id, name')
+      .eq('id', listingId)
+      .single();
+
+    if (fetchError || !listing) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
+
+    // Delete the listing
+    const { error: deleteError } = await supabase
+      .from('business_listings')
+      .delete()
+      .eq('id', listingId);
+
+    if (deleteError) {
+      console.error('Error deleting listing:', deleteError);
+      return res.status(500).json({ success: false, message: 'Failed to delete listing' });
+    }
+
+    res.json({ success: true, message: 'Listing deleted successfully' });
+  } catch (error) {
+    console.error('Delete listing error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Serve static files - Try multiple possible locations for dist
 const possiblePaths = [
   path.join(__dirname, 'dist'),
@@ -436,13 +491,14 @@ const server = app.listen(PORT, () => {
   console.log(`\n✨ Server is running on port ${PORT}`);
   console.log(`🌐 Access the app at: http://localhost:${PORT}`);
   console.log(`📡 API endpoints:`);
-  console.log(`   GET  /api/health`);
-  console.log(`   GET  /api/test-env`);
-  console.log(`   GET  /api/diagnostics`);
-  console.log(`   GET  /api/scrape/stream`);
-  console.log(`   POST /api/openai/chat`);
-  console.log(`   POST /api/openai/vision`);
-  console.log(`   POST /api/openai/analyze-document`);
+  console.log(`   GET    /api/health`);
+  console.log(`   GET    /api/test-env`);
+  console.log(`   GET    /api/diagnostics`);
+  console.log(`   GET    /api/scrape/stream`);
+  console.log(`   POST   /api/openai/chat`);
+  console.log(`   POST   /api/openai/vision`);
+  console.log(`   POST   /api/openai/analyze-document`);
+  console.log(`   DELETE /api/listings/:id`);
   
   if (isRailway) {
     console.log(`\n🚂 Railway URL: https://${process.env.RAILWAY_STATIC_URL || 'your-app.up.railway.app'}`);

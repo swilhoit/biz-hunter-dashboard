@@ -300,7 +300,7 @@ function ListingsFeed() {
       
       for (const listingId of selectedListings) {
         try {
-          const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+          const apiUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
           const response = await fetch(`${apiUrl}/api/listings/${listingId}?userId=${user.id}`, {
             method: 'DELETE',
             headers: {
@@ -345,7 +345,7 @@ function ListingsFeed() {
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/listings/${listingId}?userId=${user.id}`, {
         method: 'DELETE',
         headers: {
