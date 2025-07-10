@@ -1662,22 +1662,27 @@ app.delete('/api/listings/:listingId', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Listing not found' });
     }
 
-    // Add to deleted listings blacklist to prevent re-scraping
-    const { error: blacklistError } = await supabase
-      .from('deleted_listings')
-      .insert({
-        listing_name: listing.name,
-        original_url: listing.original_url,
-        source: listing.source,
-        deleted_by: userId,
-        reason: 'user_deleted'
-      });
+    // Try to add to deleted listings blacklist to prevent re-scraping
+    // Note: This table might not exist yet, so we'll handle the error gracefully
+    try {
+      const { error: blacklistError } = await supabase
+        .from('deleted_listings')
+        .insert({
+          listing_name: listing.name,
+          original_url: listing.original_url,
+          source: listing.source,
+          deleted_by: userId,
+          reason: 'user_deleted'
+        });
 
-    if (blacklistError) {
-      console.warn('⚠️ Failed to add to blacklist:', blacklistError.message);
-      // Continue with deletion even if blacklist fails
-    } else {
-      console.log(`🚫 Added to blacklist: ${listing.name} from ${listing.source}`);
+      if (blacklistError) {
+        console.warn('⚠️ Failed to add to blacklist:', blacklistError.message);
+        // Continue with deletion even if blacklist fails
+      } else {
+        console.log(`🚫 Added to blacklist: ${listing.name} from ${listing.source}`);
+      }
+    } catch (blacklistErr) {
+      console.warn('⚠️ Blacklist table might not exist, continuing with deletion:', blacklistErr.message);
     }
 
     // Delete any associated favorites first
