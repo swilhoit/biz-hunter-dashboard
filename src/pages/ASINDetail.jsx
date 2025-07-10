@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { KeywordService } from '../services/KeywordService';
 import { getAmazonImageUrl } from '../utils/amazonImageUrl';
 import KeywordRecommendationService from '../services/KeywordRecommendationService';
+import { testJungleScoutAPI } from '../utils/explorer/junglescout';
 
 // Chart components
 import LineChart01 from '../charts/LineChart01';
@@ -167,6 +168,13 @@ function ASINDetail() {
     }
   };
   
+  // Test JungleScout API
+  const testJungleScout = async () => {
+    console.log('Testing JungleScout API...');
+    const result = await testJungleScoutAPI();
+    console.log('Test result:', result);
+  };
+
   // Generate new recommended keywords
   const generateRecommendedKeywords = async () => {
     if (!asinData) return;
@@ -174,12 +182,23 @@ function ASINDetail() {
     setLoadingRecommendations(true);
     
     try {
+      console.log('Starting keyword recommendation generation for ASIN:', asinData.asin);
+      console.log('Product title:', asinData.title || asinData.product_name);
+      console.log('Category:', asinData.category);
+      console.log('Brand:', asinData.brand);
+      
+      // Test JungleScout API first
+      await testJungleScout();
+      
       // Generate recommendations with JungleScout metrics
       const recommendations = await KeywordRecommendationService.generateKeywordRecommendationsWithMetrics(
         [asinData.title || asinData.product_name],
         asinData.category,
         asinData.brand !== 'Unknown' ? asinData.brand : null
       );
+      
+      console.log('Final recommendations received:', recommendations.length);
+      console.log('Sample recommendation with all data:', recommendations[0]);
       
       // Save to database
       if (recommendations.length > 0 && asinData.id) {
@@ -189,16 +208,16 @@ function ASINDetail() {
           search_intent: rec.search_intent,
           estimated_competition: rec.estimated_competition,
           relevance_reason: rec.relevance_reason,
-          relevance_score: rec.relevance_score || 80,
-          // JungleScout metrics
-          search_volume: rec.search_volume || 0,
-          monthly_trend: rec.monthly_trend || 0,
-          quarterly_trend: rec.quarterly_trend || 0,
-          ppc_bid_broad: rec.ppc_bid_broad || 0,
-          ppc_bid_exact: rec.ppc_bid_exact || 0,
-          organic_product_count: rec.organic_product_count || 0,
-          sponsored_product_count: rec.sponsored_product_count || 0,
-          junglescout_updated_at: rec.junglescout_updated_at || null
+          relevance_score: rec.relevance_score || 80
+          // Note: JungleScout metrics will be added once migration is applied
+          // search_volume: rec.search_volume || 0,
+          // monthly_trend: rec.monthly_trend || 0,
+          // quarterly_trend: rec.quarterly_trend || 0,
+          // ppc_bid_broad: rec.ppc_bid_broad || 0,
+          // ppc_bid_exact: rec.ppc_bid_exact || 0,
+          // organic_product_count: rec.organic_product_count || 0,
+          // sponsored_product_count: rec.sponsored_product_count || 0,
+          // junglescout_updated_at: rec.junglescout_updated_at || null
         }));
         
         // Delete existing recommendations first
@@ -214,8 +233,11 @@ function ASINDetail() {
           
         if (error) throw error;
         
-        // Reload recommendations
-        await fetchRecommendedKeywords();
+        // Set enhanced recommendations in state (even if not saved to DB yet)
+        setRecommendedKeywords(recommendations);
+        
+        // Also try to reload from database in case some were saved
+        // await fetchRecommendedKeywords();
       }
     } catch (error) {
       console.error('Error generating recommendations:', error);
@@ -1060,26 +1082,33 @@ function ASINDetail() {
                                     </div>
                                     <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
                                       <span className="capitalize">{keyword.search_intent} intent</span>
-                                      {keyword.search_volume && (
+                                      {keyword.search_volume > 0 && (
                                         <span>{keyword.search_volume.toLocaleString()} searches/mo</span>
                                       )}
-                                      {keyword.monthly_trend && (
+                                      {keyword.monthly_trend !== undefined && keyword.monthly_trend !== null && (
                                         <span className={keyword.monthly_trend > 0 ? 'text-green-600' : 'text-red-600'}>
                                           {keyword.monthly_trend > 0 ? '+' : ''}{keyword.monthly_trend.toFixed(1)}%
                                         </span>
                                       )}
                                     </div>
-                                    {keyword.ppc_bid_exact && (
+                                    {(keyword.ppc_bid_exact > 0 || keyword.organic_product_count > 0 || keyword.sponsored_product_count > 0) && (
                                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-500 mb-2">
-                                        <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
-                                        {keyword.organic_product_count && (
+                                        {keyword.ppc_bid_exact > 0 && (
+                                          <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
+                                        )}
+                                        {keyword.organic_product_count > 0 && (
                                           <span>Organic: {keyword.organic_product_count}</span>
                                         )}
-                                        {keyword.sponsored_product_count && (
+                                        {keyword.sponsored_product_count > 0 && (
                                           <span>Sponsored: {keyword.sponsored_product_count}</span>
                                         )}
                                       </div>
                                     )}
+                                    
+                                    {/* Debug info - remove this later */}
+                                    <div className="text-xs text-gray-400 mt-2 border-t pt-2">
+                                      DEBUG: search_volume={keyword.search_volume}, monthly_trend={keyword.monthly_trend}, ppc_bid_exact={keyword.ppc_bid_exact}
+                                    </div>
                                     <p className="text-xs text-gray-600 dark:text-gray-400">{keyword.relevance_reason}</p>
                                   </div>
                                 ))}

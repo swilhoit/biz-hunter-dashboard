@@ -176,14 +176,20 @@ Return as a simple JSON array of strings.`;
   ): Promise<RecommendedKeyword[]> {
     try {
       console.log('Enhancing keywords with JungleScout data:', keywords.length);
+      console.log('Keywords to enhance:', keywords.map(k => k.keyword));
       
       // Extract just the keyword strings
       const keywordStrings = keywords.map(kw => kw.keyword);
       
+      console.log('Calling fetchDataForKeywords with:', keywordStrings);
+      
       // Fetch JungleScout data for these keywords
       const junglescoutData = await fetchDataForKeywords(keywordStrings);
       
+      console.log('Raw JungleScout response:', junglescoutData);
+      
       console.log('JungleScout data received:', junglescoutData.length);
+      console.log('JungleScout sample data:', junglescoutData.slice(0, 2));
       
       // Create a map of keyword to JungleScout metrics
       const metricsMap = new Map();
@@ -196,6 +202,12 @@ Return as a simple JSON array of strings.`;
         const metrics = metricsMap.get(keyword.keyword.toLowerCase());
         
         if (metrics) {
+          console.log(`Enhanced keyword "${keyword.keyword}" with metrics:`, {
+            search_volume: metrics.search_volume,
+            monthly_trend: metrics.monthly_trend,
+            ppc_bid_exact: metrics.ppc_bid_exact
+          });
+          
           return {
             ...keyword,
             search_volume: metrics.search_volume || 0,
@@ -207,12 +219,15 @@ Return as a simple JSON array of strings.`;
             sponsored_product_count: metrics.sponsored_product_count || 0,
             junglescout_updated_at: new Date().toISOString()
           };
+        } else {
+          console.log(`No metrics found for keyword "${keyword.keyword}"`);
         }
         
         return keyword;
       });
       
       console.log('Enhanced keywords:', enhancedKeywords.length);
+      console.log('Sample enhanced keyword:', enhancedKeywords[0]);
       return enhancedKeywords;
       
     } catch (error) {

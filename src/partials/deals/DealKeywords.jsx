@@ -180,11 +180,22 @@ function DealKeywords({ dealId }) {
       const brands = [...new Set(asins.map(a => a.brand).filter(b => b && b !== 'Unknown'))];
       const brand = brands.length === 1 ? brands[0] : null; // Only use brand if all products are same brand
       
+      console.log('=== DEAL-LEVEL KEYWORD GENERATION ===');
+      console.log('Product titles:', productTitles);
+      console.log('Category:', category);
+      console.log('Brand:', brand);
+      console.log('ASINs count:', asins.length);
+      
       const recommendations = await KeywordRecommendationService.generateKeywordRecommendationsWithMetrics(
         productTitles,
         category,
         brand
       );
+      
+      console.log('=== DEAL-LEVEL RECOMMENDATIONS RECEIVED ===');
+      console.log('Recommendations count:', recommendations.length);
+      console.log('Sample recommendation:', recommendations[0]);
+      console.log('All recommendations:', recommendations);
       
       setRecommendedKeywords(recommendations);
     } catch (err) {
@@ -396,38 +407,52 @@ function DealKeywords({ dealId }) {
                   <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-medium text-gray-900 dark:text-gray-100">{keyword.keyword}</h4>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        keyword.estimated_competition === 'low' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
-                          : keyword.estimated_competition === 'medium'
-                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
-                          : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                      }`}>
-                        {keyword.estimated_competition} competition
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        {keyword.relevance_score && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {keyword.relevance_score}%
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          keyword.estimated_competition === 'low' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                            : keyword.estimated_competition === 'medium'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                            : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                        }`}>
+                          {keyword.estimated_competition}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
                       <span className="capitalize">{keyword.search_intent} intent</span>
-                      {keyword.search_volume && (
+                      {keyword.search_volume > 0 && (
                         <span>{keyword.search_volume.toLocaleString()} searches/mo</span>
                       )}
-                      {keyword.monthly_trend && (
+                      {keyword.monthly_trend !== undefined && keyword.monthly_trend !== null && (
                         <span className={keyword.monthly_trend > 0 ? 'text-green-600' : 'text-red-600'}>
                           {keyword.monthly_trend > 0 ? '+' : ''}{keyword.monthly_trend.toFixed(1)}%
                         </span>
                       )}
                     </div>
-                    {keyword.ppc_bid_exact && (
+                    {(keyword.ppc_bid_exact > 0 || keyword.organic_product_count > 0 || keyword.sponsored_product_count > 0) && (
                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-500 mb-2">
-                        <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
-                        {keyword.organic_product_count && (
+                        {keyword.ppc_bid_exact > 0 && (
+                          <span>PPC: ${keyword.ppc_bid_exact.toFixed(2)}</span>
+                        )}
+                        {keyword.organic_product_count > 0 && (
                           <span>Organic: {keyword.organic_product_count}</span>
                         )}
-                        {keyword.sponsored_product_count && (
+                        {keyword.sponsored_product_count > 0 && (
                           <span>Sponsored: {keyword.sponsored_product_count}</span>
                         )}
                       </div>
                     )}
+                    
+                    {/* Debug info - remove this later */}
+                    <div className="text-xs text-gray-400 mt-2 border-t pt-2">
+                      DEBUG: search_volume={keyword.search_volume}, monthly_trend={keyword.monthly_trend}, ppc_bid_exact={keyword.ppc_bid_exact}
+                    </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{keyword.relevance_reason}</p>
                   </div>
                 ))}
