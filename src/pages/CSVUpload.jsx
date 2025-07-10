@@ -4,6 +4,9 @@ import Header from '../partials/Header';
 import Sidebar from '../partials/Sidebar';
 import { supabase } from '../lib/supabase';
 import Papa from 'papaparse';
+import { CSVColumnMappingService } from '../services/CSVColumnMappingService';
+import { Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import CSVMappingEditor from '../components/CSVMappingEditor';
 
 function CSVUpload() {
   const navigate = useNavigate();
@@ -14,6 +17,10 @@ function CSVUpload() {
   const [errors, setErrors] = useState([]);
   const [previewData, setPreviewData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [columnMappings, setColumnMappings] = useState(null);
+  const [showMappingDetails, setShowMappingDetails] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [targetTable, setTargetTable] = useState('deals'); // 'deals' or 'business_listings'
 
   // Mapping of CSV fields to database fields
   const fieldMapping = {
@@ -62,13 +69,32 @@ function CSVUpload() {
     }
   };
 
-  const handlePreview = (fileToPreview) => {
+  const handlePreview = async (fileToPreview) => {
     Papa.parse(fileToPreview, {
       header: true,
-      preview: 5,
-      complete: (results) => {
-        setPreviewData(results.data);
+      preview: 10, // Get more rows for better AI analysis
+      complete: async (results) => {
+        setPreviewData(results.data.slice(0, 5)); // Show first 5 rows in preview
         setShowPreview(true);
+        
+        // Automatically analyze column mappings with AI
+        if (results.data.length > 0) {
+          setIsAnalyzing(true);
+          try {
+            const headers = Object.keys(results.data[0]);
+            const mappingResult = await CSVColumnMappingService.generateSmartMapping(
+              headers,
+              results.data,
+              targetTable
+            );
+            setColumnMappings(mappingResult);
+          } catch (error) {
+            console.error('Error analyzing columns:', error);
+            setErrors([`AI column analysis failed: ${error.message}. Using fallback mapping.`]);
+          } finally {
+            setIsAnalyzing(false);
+          }
+        }
       },
       error: (error) => {
         setErrors([`Preview error: ${error.message}`]);
@@ -77,6 +103,10 @@ function CSVUpload() {
   };
 
   const transformData = (row) => {
+    // Use AI mappings if available, otherwise fall back to hardcoded mappings
+    const mappingsToUse = columnMappings?.mappings || [];
+    const hasMappings = mappingsToUse.length > 0;
+    
     const transformed = {
       source: row.source || 'CSV Import',
       scraped_at: row.scrape_timestamp ? new Date(row.scrape_timestamp).toISOString() : new Date().toISOString(),
@@ -85,10 +115,15 @@ function CSVUpload() {
       is_off_market: false // CSV imports are on-market listings
     };
 
-    // Process each field with proper type conversion
-    Object.entries(row).forEach(([key, value]) => {
-      const dbField = fieldMapping[key.toLowerCase()];
-      if (dbField && value && value.trim() !== '') {
+    // If we have AI mappings, use them
+    if (hasMappings) {
+      const result = CSVColumnMappingService.transformDataWithMapping([row], mappingsToUse)[0];
+      Object.assign(transformed, result);
+    } else {
+      // Fall back to original logic with hardcoded mappings
+      Object.entries(row).forEach(([key, value]) => {
+        const dbField = fieldMapping[key.toLowerCase()];
+        if (dbField && value && value.trim() !== '') {
         // Handle numeric fields
         if (['asking_price', 'annual_revenue', 'annual_profit', 'monthly_revenue', 'monthly_profit', 'inventory_value'].includes(dbField)) {
           const numValue = parseFloat(value.replace(/[$,]/g, ''));
@@ -155,10 +190,17 @@ function CSVUpload() {
         }
       }
     });
+    }
 
-    // Ensure required fields
-    if (!transformed.name) {
-      transformed.name = row.business_name || row.name || 'Unnamed Business';
+    // Ensure required fields based on target table
+    if (targetTable === 'deals') {
+      if (!transformed.business_name) {
+        transformed.business_name = row.business_name || row.name || row.title || 'Unnamed Business';
+      }
+    } else {
+      if (!transformed.name) {
+        transformed.name = row.business_name || row.name || row.title || 'Unnamed Business';
+      }
     }
 
     return transformed;
@@ -201,9 +243,9 @@ function CSVUpload() {
         if (listings.length > 0) {
           try {
             const { data, error } = await supabase
-              .from('business_listings')
+              .from(targetTable)
               .upsert(listings, {
-                onConflict: 'name,original_url,source',
+                onConflict: targetTable === 'business_listings' ? 'name,original_url,source' : undefined,
                 ignoreDuplicates: true
               })
               .select();
@@ -249,7 +291,36 @@ function CSVUpload() {
             </div>
 
             <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl p-6">
-              <div className="max-w-3xl">
+              <div className="max-w-4xl">
+                {/* Target Table Selection */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium mb-2">
+                    Import Destination
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="deals"
+                        checked={targetTable === 'deals'}
+                        onChange={(e) => setTargetTable(e.target.value)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Deals (Pipeline)</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="business_listings"
+                        checked={targetTable === 'business_listings'}
+                        onChange={(e) => setTargetTable(e.target.value)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Business Listings (Feed)</span>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="mb-6">
                   <label className="block text-sm font-medium mb-2">
                     Select CSV File
@@ -261,7 +332,7 @@ function CSVUpload() {
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Upload a CSV file with business listing data. The file should include columns like: name, asking_price, annual_revenue, location, industry, yoy_trend, etc.
+                    Upload a CSV file with business data. AI will automatically detect and map columns.
                   </p>
                 </div>
 
@@ -301,36 +372,183 @@ function CSVUpload() {
                   </div>
                 )}
 
+                {/* AI Column Mapping Analysis */}
+                {isAnalyzing && (
+                  <div className="mb-6 p-4 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg">
+                    <div className="flex items-center">
+                      <Loader2 className="w-5 h-5 mr-3 animate-spin text-violet-600" />
+                      <span className="text-sm font-medium text-violet-800 dark:text-violet-200">
+                        AI is analyzing your CSV columns...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {columnMappings && !isAnalyzing && (
+                  <div className="mb-6">
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <Sparkles className="w-5 h-5 mr-2 text-indigo-600" />
+                          <h3 className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                            AI Column Mapping Analysis
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setShowMappingDetails(!showMappingDetails)}
+                            className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                          >
+                            {showMappingDetails ? 'Hide' : 'Show'} Details
+                            {showMappingDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          {previewData && previewData.length > 0 && (
+                            <>
+                              <span className="text-gray-400">|</span>
+                              <CSVMappingEditor
+                                mappings={columnMappings}
+                                onMappingsChange={setColumnMappings}
+                                availableColumns={Object.keys(previewData[0])}
+                                targetTable={targetTable}
+                              />
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-indigo-700 dark:text-indigo-300">Mapped Columns:</span>
+                          <span className="ml-2 font-medium text-indigo-900 dark:text-indigo-100">
+                            {columnMappings.mappings.length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-indigo-700 dark:text-indigo-300">Unmapped Columns:</span>
+                          <span className="ml-2 font-medium text-indigo-900 dark:text-indigo-100">
+                            {columnMappings.unmappedColumns.length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-indigo-700 dark:text-indigo-300">Data Types Detected:</span>
+                          <span className="ml-2 font-medium text-indigo-900 dark:text-indigo-100">
+                            {Object.keys(columnMappings.dataTypeDetection || {}).length}
+                          </span>
+                        </div>
+                      </div>
+
+                      {showMappingDetails && (
+                        <div className="mt-4 space-y-3">
+                          {/* Mapped Columns */}
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Mapped Columns
+                            </h4>
+                            <div className="space-y-2">
+                              {columnMappings.mappings.map((mapping, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-sm bg-white dark:bg-gray-800 rounded p-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-600 dark:text-gray-400">{mapping.csvColumn}</span>
+                                    <span className="text-gray-400">→</span>
+                                    <span className="font-medium text-gray-900 dark:text-gray-100">{mapping.dbField}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs px-2 py-1 rounded ${
+                                      mapping.confidence >= 80 ? 'bg-green-100 text-green-700' :
+                                      mapping.confidence >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-red-100 text-red-700'
+                                    }`}>
+                                      {mapping.confidence}% confidence
+                                    </span>
+                                    {mapping.transformationType && (
+                                      <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                                        {mapping.transformationType}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Unmapped Columns */}
+                          {columnMappings.unmappedColumns.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Unmapped Columns
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {columnMappings.unmappedColumns.map((col, idx) => (
+                                  <span key={idx} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                    {col}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Suggestions */}
+                          {columnMappings.suggestions?.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                AI Suggestions
+                              </h4>
+                              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                                {columnMappings.suggestions.map((suggestion, idx) => (
+                                  <li key={idx} className="flex items-start">
+                                    <span className="mr-2">•</span>
+                                    <span>{suggestion}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {errors.length > 0 && (
                   <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Errors:</h3>
-                    <ul className="list-disc list-inside text-sm text-red-700 dark:text-red-300">
-                      {errors.slice(0, 10).map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                      {errors.length > 10 && (
-                        <li>... and {errors.length - 10} more errors</li>
-                      )}
-                    </ul>
+                    <div className="flex items-start">
+                      <AlertCircle className="w-5 h-5 mr-2 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Errors:</h3>
+                        <ul className="list-disc list-inside text-sm text-red-700 dark:text-red-300">
+                          {errors.slice(0, 10).map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                          {errors.length > 10 && (
+                            <li>... and {errors.length - 10} more errors</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {uploadResults && (
                   <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <h3 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Upload Results:</h3>
-                    <ul className="text-sm text-green-700 dark:text-green-300">
-                      <li>Total rows: {uploadResults.total}</li>
-                      <li>Successfully imported: {uploadResults.successful}</li>
-                      <li>Failed/Skipped: {uploadResults.failed}</li>
-                    </ul>
-                    {uploadResults.successful > 0 && (
-                      <button
-                        onClick={() => navigate('/listings')}
-                        className="mt-3 text-sm text-green-600 dark:text-green-400 hover:underline"
-                      >
-                        View imported listings →
-                      </button>
-                    )}
+                    <div className="flex items-start">
+                      <CheckCircle2 className="w-5 h-5 mr-2 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Upload Results:</h3>
+                        <ul className="text-sm text-green-700 dark:text-green-300">
+                          <li>Total rows: {uploadResults.total}</li>
+                          <li>Successfully imported: {uploadResults.successful}</li>
+                          <li>Failed/Skipped: {uploadResults.failed}</li>
+                        </ul>
+                        {uploadResults.successful > 0 && (
+                          <button
+                            onClick={() => navigate(targetTable === 'deals' ? '/deals' : '/listings')}
+                            className="mt-3 text-sm text-green-600 dark:text-green-400 hover:underline"
+                          >
+                            View imported {targetTable === 'deals' ? 'deals' : 'listings'} →
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
