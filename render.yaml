@@ -5,7 +5,7 @@ services:
     runtime: node
     region: oregon # Optional: specify a region
     plan: free # Change to 'starter' or higher for production
-    buildCommand: ./render-build.sh
+    buildCommand: npm run render-build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -25,6 +25,10 @@ services:
       - key: VITE_SCRAPING_API_URL
         value: https://biz-hunter-dashboard.onrender.com
       - key: SCRAPER_API_KEY
+        sync: false # Set this in Render dashboard for security
+      - key: VITE_DATAFORSEO_USERNAME
+        sync: false # Set this in Render dashboard for security
+      - key: VITE_DATAFORSEO_PASSWORD
         sync: false # Set this in Render dashboard for security
     # Health check configuration
     healthCheckPath: /api/health
