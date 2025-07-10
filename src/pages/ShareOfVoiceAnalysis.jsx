@@ -91,31 +91,6 @@ function ShareOfVoiceAnalysis() {
     };
   };
 
-  const getKeywordPerformanceData = () => {
-    if (!analysisData) return null;
-
-    const sortedKeywords = [...analysisData.keywords]
-      .sort((a, b) => b.salesShare - a.salesShare)
-      .slice(0, 10);
-
-    return {
-      labels: sortedKeywords.map(k => k.keyword.length > 20 ? k.keyword.substring(0, 20) + '...' : k.keyword),
-      datasets: [
-        {
-          label: 'Sales Share %',
-          data: sortedKeywords.map(k => k.salesShare),
-          backgroundColor: '#8b5cf6',
-          barPercentage: 0.4
-        },
-        {
-          label: 'Listing Share %',
-          data: sortedKeywords.map(k => k.listingShare),
-          backgroundColor: '#3b82f6',
-          barPercentage: 0.4
-        }
-      ]
-    };
-  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -211,6 +186,7 @@ function ShareOfVoiceAnalysis() {
             {/* Analysis Results */}
             {analysisData && (
               <>
+
                 {/* Key Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
@@ -268,22 +244,75 @@ function ShareOfVoiceAnalysis() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                       Market Sales Share
                     </h3>
-                    <div className="h-64">
+                    <div className="h-96">
                       <DoughnutChart data={getSalesShareChartData()} />
                     </div>
                   </div>
 
-                  {/* Keyword Performance */}
+                  {/* Keyword Coverage Heatmap */}
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                      Top Keyword Performance
+                      Keyword Coverage Analysis
                     </h3>
-                    <div className="h-64">
-                      <BarChart01 
-                        data={getKeywordPerformanceData()} 
-                        width={389} 
-                        height={256} 
-                      />
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">High Volume Keywords ({analysisData.keywords.filter(k => k.searchVolume > 1000).length})</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-violet-500 h-2 rounded-full" 
+                              style={{width: `${(analysisData.keywords.filter(k => k.searchVolume > 1000 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume > 1000).length * 100) || 0}%`}}
+                            />
+                          </div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {Math.round((analysisData.keywords.filter(k => k.searchVolume > 1000 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume > 1000).length * 100) || 0)}%
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Medium Volume Keywords ({analysisData.keywords.filter(k => k.searchVolume >= 500 && k.searchVolume <= 1000).length})</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-blue-500 h-2 rounded-full" 
+                              style={{width: `${(analysisData.keywords.filter(k => k.searchVolume >= 500 && k.searchVolume <= 1000 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume >= 500 && k.searchVolume <= 1000).length * 100) || 0}%`}}
+                            />
+                          </div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {Math.round((analysisData.keywords.filter(k => k.searchVolume >= 500 && k.searchVolume <= 1000 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume >= 500 && k.searchVolume <= 1000).length * 100) || 0)}%
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Low Volume Keywords ({analysisData.keywords.filter(k => k.searchVolume < 500).length})</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-green-500 h-2 rounded-full" 
+                              style={{width: `${(analysisData.keywords.filter(k => k.searchVolume < 500 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume < 500).length * 100) || 0}%`}}
+                            />
+                          </div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {Math.round((analysisData.keywords.filter(k => k.searchVolume < 500 && k.brandProducts > 0).length / analysisData.keywords.filter(k => k.searchVolume < 500).length * 100) || 0)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Opportunity Analysis</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {(() => {
+                            const uncoveredHighVolume = analysisData.keywords.filter(k => k.searchVolume > 1000 && k.brandProducts === 0).length;
+                            const totalHighVolume = analysisData.keywords.filter(k => k.searchVolume > 1000).length;
+                            if (uncoveredHighVolume > 0) {
+                              return `${uncoveredHighVolume} high-volume keyword${uncoveredHighVolume > 1 ? 's' : ''} with no brand presence - potential opportunity!`;
+                            }
+                            return "Great coverage on high-volume keywords!";
+                          })()}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -299,6 +328,9 @@ function ShareOfVoiceAnalysis() {
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Rank
+                          </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Brand
                           </th>
@@ -317,13 +349,46 @@ function ShareOfVoiceAnalysis() {
                         </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {analysisData.topCompetitors.map((competitor, index) => (
-                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                {competitor.brand}
-                              </div>
-                            </td>
+                        {(() => {
+                          // Create array with current brand and competitors
+                          const allBrands = [
+                            {
+                              brand: analysisData.brand,
+                              salesShare: analysisData.overallSalesShare,
+                              listingShare: analysisData.overallListingShare,
+                              keywordOverlap: analysisData.keywordsCovered,
+                              uniqueASINs: 1 // Placeholder - would need actual count
+                            },
+                            ...analysisData.topCompetitors
+                          ];
+                          
+                          // Sort by sales share descending
+                          const sortedBrands = allBrands.sort((a, b) => b.salesShare - a.salesShare);
+                          
+                          return sortedBrands.map((competitor, index) => (
+                            <tr 
+                              key={index} 
+                              className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                competitor.brand === analysisData.brand 
+                                  ? 'bg-violet-50 dark:bg-violet-900/20 border-l-4 border-violet-500' 
+                                  : ''
+                              }`}
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                  #{index + 1}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                                  {competitor.brand}
+                                  {competitor.brand === analysisData.brand && (
+                                    <span className="ml-2 px-2 py-0.5 text-xs bg-violet-100 dark:bg-violet-800 text-violet-800 dark:text-violet-100 rounded">
+                                      Your Brand
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div className="text-sm text-gray-900 dark:text-gray-100">
@@ -356,7 +421,8 @@ function ShareOfVoiceAnalysis() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          ));
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -377,7 +443,10 @@ function ShareOfVoiceAnalysis() {
                             Keyword
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Search Volume
+                            Amazon Volume
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Google Volume
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Brand Products
@@ -403,7 +472,12 @@ function ShareOfVoiceAnalysis() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900 dark:text-gray-100">
-                                {keyword.searchVolume.toLocaleString()}
+                                {keyword.amazonSearchVolume ? keyword.amazonSearchVolume.toLocaleString() : keyword.searchVolume.toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-gray-100">
+                                {keyword.googleSearchVolume ? keyword.googleSearchVolume.toLocaleString() : '-'}
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, TrendingDown, Download, Filter, RefreshCw, AlertCircle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Download, Filter, RefreshCw, AlertCircle, Sparkles, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ASINService } from '../../services/ASINService';
 import KeywordRecommendationService from '../../services/KeywordRecommendationService';
@@ -26,6 +26,10 @@ function DealKeywords({ dealId }) {
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
   const [recommendationError, setRecommendationError] = useState(null);
+  
+  // Selection states
+  const [selectedKeywordIds, setSelectedKeywordIds] = useState([]);
+  const [isDeletingKeywords, setIsDeletingKeywords] = useState(false);
 
   // Load ASINs and keywords
   useEffect(() => {
@@ -98,13 +102,15 @@ function DealKeywords({ dealId }) {
             organic_product_count: kw.organic_product_count,
             sponsored_product_count: kw.sponsored_product_count,
             asins: [],
-            asin_count: 0
+            asin_count: 0,
+            keywordIds: [] // Track all IDs for this keyword
           });
         }
         
         const kwData = keywordMap.get(key);
         kwData.relevancy_scores.push(kw.relevancy_score);
         kwData.monthly_trends.push(kw.monthly_trend);
+        kwData.keywordIds.push(kw.id); // Store the keyword ID
         
         // Find the ASIN data from our loaded ASINs if the join failed
         const asinData = kw.asins || dealASINs.find(a => a.id === kw.asin_id);
@@ -262,6 +268,68 @@ function DealKeywords({ dealId }) {
         return aVal < bVal ? 1 : -1;
       }
     });
+
+  // Delete selected keywords
+  const deleteSelectedKeywords = async () => {
+    if (selectedKeywordIds.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedKeywordIds.length} keyword${selectedKeywordIds.length > 1 ? 's' : ''}?`)) {
+      return;
+    }
+    
+    setIsDeletingKeywords(true);
+    
+    try {
+      // Delete keywords in batches to avoid URL length limits
+      const BATCH_SIZE = 50;
+      const batches = [];
+      
+      for (let i = 0; i < selectedKeywordIds.length; i += BATCH_SIZE) {
+        batches.push(selectedKeywordIds.slice(i, i + BATCH_SIZE));
+      }
+      
+      console.log(`Deleting ${selectedKeywordIds.length} keywords in ${batches.length} batches`);
+      
+      // Delete each batch
+      for (const batch of batches) {
+        const { error } = await supabase
+          .from('asin_keywords')
+          .delete()
+          .in('id', batch);
+          
+        if (error) throw error;
+      }
+      
+      // Reload data
+      await loadData();
+      
+      // Clear selection
+      setSelectedKeywordIds([]);
+      
+      // Show success message
+      console.log(`Successfully deleted ${selectedKeywordIds.length} keywords`);
+      alert(`Successfully deleted ${selectedKeywordIds.length} keywords`);
+      
+    } catch (error) {
+      console.error('Error deleting keywords:', error);
+      alert('Failed to delete keywords. Please try again.');
+    } finally {
+      setIsDeletingKeywords(false);
+    }
+  };
+  
+  // Handle select all/none
+  const handleSelectAll = () => {
+    const allVisibleIds = filteredAndSortedKeywords.reduce((ids, kw) => {
+      return [...ids, ...kw.keywordIds];
+    }, []);
+    
+    if (selectedKeywordIds.length === allVisibleIds.length) {
+      setSelectedKeywordIds([]);
+    } else {
+      setSelectedKeywordIds(allVisibleIds);
+    }
+  };
 
   // Export to CSV
   const exportToCSV = () => {
@@ -546,8 +614,32 @@ function DealKeywords({ dealId }) {
           </button>
         </div>
         
-        <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          Showing {filteredAndSortedKeywords.length} of {keywords.length} keywords
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {filteredAndSortedKeywords.length} of {keywords.length} keywords
+            {selectedKeywordIds.length > 0 && (
+              <span className="ml-2">• {selectedKeywordIds.length} selected</span>
+            )}
+          </div>
+          {selectedKeywordIds.length > 0 && (
+            <button
+              onClick={deleteSelectedKeywords}
+              disabled={isDeletingKeywords}
+              className="btn bg-red-500 hover:bg-red-600 text-white text-sm disabled:opacity-50"
+            >
+              {isDeletingKeywords ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -557,6 +649,14 @@ function DealKeywords({ dealId }) {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeywordIds.length > 0 && selectedKeywordIds.length === filteredAndSortedKeywords.reduce((sum, kw) => sum + kw.keywordIds.length, 0)}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-700"
+                  />
+                </th>
                 <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                   onClick={() => handleSort('keyword')}
@@ -624,6 +724,20 @@ function DealKeywords({ dealId }) {
                   return (
                     <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={keyword.keywordIds.some(id => selectedKeywordIds.includes(id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedKeywordIds([...selectedKeywordIds, ...keyword.keywordIds]);
+                            } else {
+                              setSelectedKeywordIds(selectedKeywordIds.filter(id => !keyword.keywordIds.includes(id)));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-violet-600 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-700"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {keyword.keyword}
                         </div>
@@ -674,7 +788,7 @@ function DealKeywords({ dealId }) {
                 })
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center">
+                  <td colSpan="7" className="px-6 py-8 text-center">
                     <div className="text-gray-500 dark:text-gray-400">
                       {keywords.length === 0 ? (
                         <>

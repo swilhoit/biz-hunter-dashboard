@@ -40,6 +40,10 @@ function ASINDetail() {
   const [sortField, setSortField] = useState('relevancy_score');
   const [sortDirection, setSortDirection] = useState('desc');
   
+  // Keyword selection state
+  const [selectedKeywords, setSelectedKeywords] = useState([]);
+  const [isDeletingKeywords, setIsDeletingKeywords] = useState(false);
+  
   // Fetch ASIN data from Supabase
   useEffect(() => {
     const fetchASINData = async () => {
@@ -109,38 +113,44 @@ function ASINDetail() {
   }, [asinId]);
 
   // Function to fetch keywords for the ASIN
-  const fetchKeywords = async () => {
+  const fetchKeywords = async (forceRefresh = false) => {
     try {
       setLoadingKeywords(true);
       
-      console.log('Fetching keywords for ASIN:', asinId);
+      console.log('Fetching keywords for ASIN:', asinId, 'Force refresh:', forceRefresh);
       
-      // First check if we have existing keywords
-      const existingKeywords = await KeywordService.getKeywordsForASIN(asinId);
-      
-      console.log('Existing keywords found:', existingKeywords.length);
-      
-      if (existingKeywords.length > 0) {
-        setKeywords(existingKeywords);
-        console.log('Set keywords to existing:', existingKeywords.length);
-      } else {
-        console.log('No existing keywords, fetching from JungleScout...');
+      // First check if we have existing keywords (unless force refresh)
+      if (!forceRefresh) {
+        const existingKeywords = await KeywordService.getKeywordsForASIN(asinId);
         
-        // Fetch new keywords from JungleScout
-        const newKeywords = await KeywordService.fetchKeywordsForASIN(asinId);
+        console.log('Existing keywords found:', existingKeywords.length);
         
-        console.log('New keywords fetched:', newKeywords.length);
-        
-        if (newKeywords.length > 0) {
-          // Save to database
-          const saved = await KeywordService.saveKeywordsForASIN(asinId, newKeywords);
-          console.log('Keywords saved successfully:', saved);
-          
-          // Get the saved keywords with IDs
-          const savedKeywords = await KeywordService.getKeywordsForASIN(asinId);
-          console.log('Saved keywords retrieved:', savedKeywords.length);
-          setKeywords(savedKeywords);
+        if (existingKeywords.length > 0) {
+          setKeywords(existingKeywords);
+          console.log('Set keywords to existing:', existingKeywords.length);
+          return;
         }
+      }
+      
+      console.log('Fetching fresh keywords from DataForSEO...');
+      
+      // Fetch new keywords from DataForSEO
+      const newKeywords = await KeywordService.fetchKeywordsForASIN(asinId);
+      
+      console.log('New keywords fetched:', newKeywords.length);
+      
+      if (newKeywords.length > 0) {
+        // Save to database
+        const saved = await KeywordService.saveKeywordsForASIN(asinId, newKeywords);
+        console.log('Keywords saved successfully:', saved);
+        
+        // Get the saved keywords with IDs
+        const savedKeywords = await KeywordService.getKeywordsForASIN(asinId);
+        console.log('Saved keywords retrieved:', savedKeywords.length);
+        setKeywords(savedKeywords);
+      } else {
+        // If no new keywords, clear existing
+        setKeywords([]);
       }
     } catch (error) {
       console.error('Error fetching keywords:', error);
@@ -208,16 +218,19 @@ function ASINDetail() {
           search_intent: rec.search_intent,
           estimated_competition: rec.estimated_competition,
           relevance_reason: rec.relevance_reason,
-          relevance_score: rec.relevance_score || 80
-          // Note: JungleScout metrics will be added once migration is applied
-          // search_volume: rec.search_volume || 0,
-          // monthly_trend: rec.monthly_trend || 0,
-          // quarterly_trend: rec.quarterly_trend || 0,
-          // ppc_bid_broad: rec.ppc_bid_broad || 0,
-          // ppc_bid_exact: rec.ppc_bid_exact || 0,
-          // organic_product_count: rec.organic_product_count || 0,
-          // sponsored_product_count: rec.sponsored_product_count || 0,
-          // junglescout_updated_at: rec.junglescout_updated_at || null
+          relevance_score: rec.relevance_score || 80,
+          search_volume: rec.search_volume || 0,
+          amazon_search_volume: rec.amazon_search_volume || 0,
+          google_search_volume: rec.google_search_volume || 0,
+          google_cpc: rec.google_cpc || 0,
+          google_competition: rec.google_competition || 0,
+          monthly_trend: rec.monthly_trend || 0,
+          quarterly_trend: rec.quarterly_trend || 0,
+          ppc_bid_broad: rec.ppc_bid_broad || 0,
+          ppc_bid_exact: rec.ppc_bid_exact || 0,
+          organic_product_count: rec.organic_product_count || 0,
+          sponsored_product_count: rec.sponsored_product_count || 0,
+          junglescout_updated_at: rec.junglescout_updated_at || null
         }));
         
         // Delete existing recommendations first
@@ -243,6 +256,71 @@ function ASINDetail() {
       console.error('Error generating recommendations:', error);
     } finally {
       setLoadingRecommendations(false);
+    }
+  };
+  
+  // Delete selected keywords
+  const deleteSelectedKeywords = async () => {
+    if (selectedKeywords.length === 0) {
+      alert('Please select keywords to delete');
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${selectedKeywords.length} keyword(s)?`)) {
+      return;
+    }
+    
+    setIsDeletingKeywords(true);
+    
+    try {
+      // Delete keywords in batches to avoid URL length limits
+      const BATCH_SIZE = 50;
+      const batches = [];
+      
+      for (let i = 0; i < selectedKeywords.length; i += BATCH_SIZE) {
+        batches.push(selectedKeywords.slice(i, i + BATCH_SIZE));
+      }
+      
+      console.log(`Deleting ${selectedKeywords.length} keywords in ${batches.length} batches`);
+      
+      // Delete each batch
+      for (const batch of batches) {
+        const { error } = await supabase
+          .from('asin_keywords')
+          .delete()
+          .in('id', batch);
+          
+        if (error) throw error;
+      }
+      
+      // Remove deleted keywords from state
+      setKeywords(keywords.filter(k => !selectedKeywords.includes(k.id)));
+      setSelectedKeywords([]);
+      
+      alert(`Successfully deleted ${selectedKeywords.length} keyword(s)`);
+    } catch (error) {
+      console.error('Error deleting keywords:', error);
+      alert('Failed to delete keywords');
+    } finally {
+      setIsDeletingKeywords(false);
+    }
+  };
+  
+  // Toggle keyword selection
+  const toggleKeywordSelection = (keywordId) => {
+    setSelectedKeywords(prev => 
+      prev.includes(keywordId) 
+        ? prev.filter(id => id !== keywordId)
+        : [...prev, keywordId]
+    );
+  };
+  
+  // Select/deselect all keywords
+  const toggleSelectAllKeywords = () => {
+    if (selectedKeywords.length === filteredAndSortedKeywords.length) {
+      setSelectedKeywords([]);
+    } else {
+      setSelectedKeywords(filteredAndSortedKeywords.map(k => k.id));
     }
   };
 
@@ -788,16 +866,28 @@ function ASINDetail() {
                         {keywords.length > 0 && (
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             {keywords.length} keywords found
+                            {selectedKeywords.length > 0 && ` • ${selectedKeywords.length} selected`}
                           </p>
                         )}
                       </div>
-                      <button 
-                        onClick={fetchKeywords}
-                        disabled={loadingKeywords}
-                        className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50"
-                      >
-                        {loadingKeywords ? 'Loading...' : keywords.length === 0 ? 'Fetch Keyword Data' : 'Refresh Keywords'}
-                      </button>
+                      <div className="flex gap-2">
+                        {selectedKeywords.length > 0 && (
+                          <button 
+                            onClick={deleteSelectedKeywords}
+                            disabled={isDeletingKeywords}
+                            className="btn bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+                          >
+                            {isDeletingKeywords ? 'Deleting...' : `Delete ${selectedKeywords.length} Keyword${selectedKeywords.length > 1 ? 's' : ''}`}
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => fetchKeywords(keywords.length > 0)}
+                          disabled={loadingKeywords}
+                          className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50"
+                        >
+                          {loadingKeywords ? 'Loading...' : keywords.length === 0 ? 'Fetch Keyword Data' : 'Refresh Keywords'}
+                        </button>
+                      </div>
                     </header>
                     <div className="p-5">
                       {loadingKeywords ? (
@@ -870,6 +960,14 @@ function ASINDetail() {
                           <table className="table-auto w-full">
                             <thead className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/20">
                               <tr>
+                                <th className="p-2 w-8">
+                                  <input
+                                    type="checkbox"
+                                    className="form-checkbox"
+                                    checked={selectedKeywords.length === filteredAndSortedKeywords.length && filteredAndSortedKeywords.length > 0}
+                                    onChange={toggleSelectAllKeywords}
+                                  />
+                                </th>
                                 <th 
                                   className="p-2 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                                   onClick={() => handleSort('keyword')}
@@ -943,7 +1041,15 @@ function ASINDetail() {
                             </thead>
                             <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/60">
                               {filteredAndSortedKeywords.map((keyword) => (
-                                <tr key={keyword.id}>
+                                <tr key={keyword.id} className={selectedKeywords.includes(keyword.id) ? 'bg-violet-50 dark:bg-violet-900/20' : ''}>
+                                  <td className="p-2 w-8">
+                                    <input
+                                      type="checkbox"
+                                      className="form-checkbox"
+                                      checked={selectedKeywords.includes(keyword.id)}
+                                      onChange={() => toggleKeywordSelection(keyword.id)}
+                                    />
+                                  </td>
                                   <td className="p-2 whitespace-nowrap">
                                     <div className="text-gray-800 dark:text-gray-100 font-medium">
                                       {keyword.keyword}
@@ -1015,7 +1121,7 @@ function ASINDetail() {
                         <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                           <p className="mb-4">No keyword data available for this ASIN.</p>
                           <button 
-                            onClick={fetchKeywords}
+                            onClick={() => fetchKeywords(false)}
                             className="btn bg-violet-500 hover:bg-violet-600 text-white"
                           >
                             Fetch Keyword Data

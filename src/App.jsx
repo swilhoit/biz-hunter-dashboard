@@ -13,6 +13,7 @@ import './charts/ChartjsConfig';
 import './utils/testJungleScout';
 import './utils/testDataForSEO';
 import './utils/testDataForSEOBoth';
+import './utils/testDataForSEOASIN';
 
 // Import pages
 import Dashboard from './pages/Dashboard';

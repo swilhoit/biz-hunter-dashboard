@@ -9,7 +9,6 @@
     "dev:all": "npm run sync-ports && npm run dev & cd server && node index.js",
     "dev:server": "cd server && node index.js",
     "build": "vite build",
-    "postinstall": "npm run build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",

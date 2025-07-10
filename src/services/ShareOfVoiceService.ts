@@ -36,6 +36,8 @@ export interface StoredShareOfVoiceReport {
 interface KeywordShareAnalysis {
   keyword: string;
   searchVolume: number;
+  amazonSearchVolume?: number;
+  googleSearchVolume?: number;
   brandProducts: number;
   totalProducts: number;
   brandRevenue: number;
@@ -62,6 +64,88 @@ interface BrandKeywordAnalysis {
 }
 
 export class ShareOfVoiceService {
+  /**
+   * Fetch keyword metrics from DataForSEO
+   */
+  private static async fetchDataForSEOMetrics(keywords: string[]): Promise<Map<string, { amazonVolume: number, googleVolume: number }>> {
+    const username = (import.meta as any).env?.VITE_DATAFORSEO_USERNAME;
+    const password = (import.meta as any).env?.VITE_DATAFORSEO_PASSWORD;
+    
+    if (!username || !password) {
+      console.error('[DataForSEO] Credentials not configured');
+      return new Map();
+    }
+
+    const credentials = btoa(`${username}:${password}`);
+    const metricsMap = new Map<string, { amazonVolume: number, googleVolume: number }>();
+
+    try {
+      // Batch fetch Amazon search volumes
+      const amazonEndpoint = 'https://api.dataforseo.com/v3/dataforseo_labs/amazon/bulk_search_volume/live';
+      const amazonPayload = [{
+        keywords: keywords,
+        location_code: 2840, // USA
+        language_code: 'en'
+      }];
+
+      const amazonResponse = await fetch(amazonEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(amazonPayload)
+      });
+
+      if (amazonResponse.ok) {
+        const amazonData = await amazonResponse.json();
+        if (amazonData.status_code === 20000 && amazonData.tasks?.[0]?.result?.[0]?.items) {
+          amazonData.tasks[0].result[0].items.forEach((item: any) => {
+            const key = item.keyword.toLowerCase();
+            if (!metricsMap.has(key)) {
+              metricsMap.set(key, { amazonVolume: 0, googleVolume: 0 });
+            }
+            metricsMap.get(key)!.amazonVolume = item.search_volume || 0;
+          });
+        }
+      }
+
+      // Batch fetch Google keyword data
+      const googleEndpoint = 'https://api.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live';
+      const googlePayload = [{
+        keywords: keywords,
+        location_code: 2840, // USA
+        language_code: 'en'
+      }];
+
+      const googleResponse = await fetch(googleEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(googlePayload)
+      });
+
+      if (googleResponse.ok) {
+        const googleData = await googleResponse.json();
+        if (googleData.status_code === 20000 && googleData.tasks?.[0]?.result) {
+          googleData.tasks[0].result.forEach((result: any) => {
+            const key = result.keyword.toLowerCase();
+            if (!metricsMap.has(key)) {
+              metricsMap.set(key, { amazonVolume: 0, googleVolume: 0 });
+            }
+            metricsMap.get(key)!.googleVolume = result.search_volume || 0;
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[DataForSEO] Error fetching keyword metrics:', error);
+    }
+
+    return metricsMap;
+  }
+
   /**
    * Check if a share of voice report exists for a deal
    */
@@ -348,7 +432,7 @@ export class ShareOfVoiceService {
       const asinIds = brandAsins.map(a => a.id);
       const { data: recommendedKeywords, error: keywordError } = await supabase
         .from('asin_recommended_keywords')
-        .select('keyword, search_volume')
+        .select('keyword, search_volume, amazon_search_volume, google_search_volume')
         .in('asin_id', asinIds)
         .order('search_volume', { ascending: false })
         .limit(limit);
@@ -368,6 +452,12 @@ export class ShareOfVoiceService {
       });
 
       console.log(`[ShareOfVoice] Analyzing ${uniqueKeywords.size} keywords for brand: ${brandName}`);
+      
+      // Fetch DataForSEO data for all keywords
+      const keywordsList = Array.from(uniqueKeywords.keys());
+      console.log(`[ShareOfVoice] Fetching DataForSEO metrics for ${keywordsList.length} keywords`);
+      
+      const dataForSEOMetrics = await this.fetchDataForSEOMetrics(keywordsList);
 
       // Step 3: For each keyword, fetch ASIN results from JungleScout
       const keywordAnalyses: KeywordShareAnalysis[] = [];
@@ -443,9 +533,14 @@ export class ShareOfVoiceService {
               });
             }
 
+            // Get DataForSEO metrics for this keyword
+            const dataForSEOData = dataForSEOMetrics.get(keyword.toLowerCase());
+            
             const analysis: KeywordShareAnalysis = {
               keyword,
               searchVolume,
+              amazonSearchVolume: dataForSEOData?.amazonVolume,
+              googleSearchVolume: dataForSEOData?.googleVolume,
               brandProducts: keywordBrandProducts,
               totalProducts: searchResults.data.length,
               brandRevenue: keywordBrandRevenue,
@@ -487,7 +582,7 @@ export class ShareOfVoiceService {
         .sort((a, b) => b.salesShare - a.salesShare)
         .slice(0, 10);
 
-      return {
+      const result = {
         brand: brandName,
         keywords: keywordAnalyses,
         overallSalesShare,
@@ -498,9 +593,182 @@ export class ShareOfVoiceService {
         topCompetitors
       };
 
+      // Save the report
+      await this.saveShareOfVoiceReport(result);
+
+      return result;
+
     } catch (error) {
       console.error('[ShareOfVoice] Error analyzing share of voice:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Save Share of Voice report to database
+   */
+  private static async saveShareOfVoiceReport(analysis: BrandKeywordAnalysis): Promise<void> {
+    try {
+      // Calculate brand rank
+      const allBrands = [
+        {
+          brand: analysis.brand,
+          salesShare: analysis.overallSalesShare
+        },
+        ...analysis.topCompetitors
+      ].sort((a, b) => b.salesShare - a.salesShare);
+      
+      const brandRank = allBrands.findIndex(b => b.brand === analysis.brand) + 1;
+      
+      // Prepare report data
+      const reportData = {
+        brand_name: analysis.brand,
+        analysis_date: new Date().toISOString(),
+        brand_market_share: analysis.overallSalesShare,
+        brand_keyword_share: analysis.overallListingShare,
+        brand_rank: brandRank,
+        total_brands: allBrands.length,
+        keyword_analysis: {
+          totalKeywords: analysis.totalKeywords,
+          keywordsCovered: analysis.keywordsCovered,
+          avgPosition: analysis.avgPosition
+        },
+        top_brands: analysis.topCompetitors
+      };
+      
+      // Insert main report
+      const { data: report, error: reportError } = await supabase
+        .from('share_of_voice_reports')
+        .insert(reportData)
+        .select()
+        .single();
+        
+      if (reportError) throw reportError;
+      
+      // Save keyword details
+      if (report && analysis.keywords.length > 0) {
+        const keywordRecords = analysis.keywords.map(kw => ({
+          report_id: report.id,
+          keyword: kw.keyword,
+          search_volume: kw.searchVolume,
+          amazon_search_volume: kw.amazonSearchVolume || null,
+          google_search_volume: kw.googleSearchVolume || null,
+          brand_product_count: kw.brandProducts,
+          total_product_count: kw.totalProducts,
+          share_percentage: kw.salesShare,
+          sales_share_percentage: kw.salesShare,
+          listing_share_percentage: kw.listingShare
+        }));
+        
+        const { error: keywordError } = await supabase
+          .from('share_of_voice_keywords')
+          .insert(keywordRecords);
+          
+        if (keywordError) {
+          console.error('[ShareOfVoice] Error saving keywords:', keywordError);
+        }
+      }
+      
+      // Save competitor details
+      if (report && analysis.topCompetitors.length > 0) {
+        const competitorRecords = analysis.topCompetitors.map((comp, index) => ({
+          report_id: report.id,
+          brand_name: comp.brand,
+          rank: index + 1,
+          market_share: comp.salesShare,
+          keyword_overlap: comp.keywordOverlap,
+          unique_asins: comp.uniqueASINs
+        }));
+        
+        const { error: competitorError } = await supabase
+          .from('share_of_voice_competitors')
+          .insert(competitorRecords);
+          
+        if (competitorError) {
+          console.error('[ShareOfVoice] Error saving competitors:', competitorError);
+        }
+      }
+      
+      console.log('[ShareOfVoice] Report saved successfully');
+    } catch (error) {
+      console.error('[ShareOfVoice] Error saving report:', error);
+      // Don't throw - we still want to return the analysis even if saving fails
+    }
+  }
+  
+  /**
+   * Get latest Share of Voice report for a brand (used for keyword analysis)
+   */
+  static async getLatestBrandReport(brandName: string): Promise<BrandKeywordAnalysis | null> {
+    try {
+      // Get the latest report
+      const { data: report, error: reportError } = await supabase
+        .from('share_of_voice_reports')
+        .select('*')
+        .eq('brand_name', brandName)
+        .order('analysis_date', { ascending: false })
+        .limit(1)
+        .single();
+        
+      if (reportError || !report) return null;
+      
+      // Check if report is recent (less than 24 hours old)
+      const reportAge = Date.now() - new Date(report.analysis_date).getTime();
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      
+      if (reportAge > maxAge) {
+        console.log('[ShareOfVoice] Report is too old, will generate fresh');
+        return null;
+      }
+      
+      // Get keywords
+      const { data: keywords } = await supabase
+        .from('share_of_voice_keywords')
+        .select('*')
+        .eq('report_id', report.id);
+        
+      // Get competitors
+      const { data: competitors } = await supabase
+        .from('share_of_voice_competitors')
+        .select('*')
+        .eq('report_id', report.id)
+        .order('rank');
+        
+      // Reconstruct the analysis object
+      const analysis: BrandKeywordAnalysis = {
+        brand: report.brand_name,
+        keywords: (keywords || []).map(kw => ({
+          keyword: kw.keyword,
+          searchVolume: kw.search_volume,
+          amazonSearchVolume: kw.amazon_search_volume,
+          googleSearchVolume: kw.google_search_volume,
+          brandProducts: kw.brand_product_count,
+          totalProducts: kw.total_product_count,
+          brandRevenue: 0, // Not stored
+          totalRevenue: 0, // Not stored
+          salesShare: kw.sales_share_percentage || kw.share_percentage,
+          listingShare: kw.listing_share_percentage || 0
+        })),
+        overallSalesShare: report.brand_market_share,
+        overallListingShare: report.brand_keyword_share,
+        keywordsCovered: report.keyword_analysis?.keywordsCovered || 0,
+        totalKeywords: report.keyword_analysis?.totalKeywords || 0,
+        avgPosition: report.keyword_analysis?.avgPosition || 0,
+        topCompetitors: (competitors || []).map(comp => ({
+          brand: comp.brand_name,
+          salesShare: comp.market_share,
+          listingShare: 0, // Not stored separately
+          keywordOverlap: comp.keyword_overlap,
+          uniqueASINs: comp.unique_asins
+        }))
+      };
+      
+      console.log('[ShareOfVoice] Using cached report from', new Date(report.analysis_date).toLocaleString());
+      return analysis;
+      
+    } catch (error) {
+      console.error('[ShareOfVoice] Error retrieving report:', error);
+      return null;
     }
   }
 

@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { fetchDataForKeywords } from '../utils/explorer/junglescout';
 
 export interface KeywordData {
   id: string;
@@ -12,6 +11,8 @@ export interface KeywordData {
   ppc_bid_exact: number;
   organic_product_count: number;
   sponsored_product_count: number;
+  rank_organic?: number;
+  rank_sponsored?: number;
 }
 
 export interface ASINKeyword {
@@ -27,55 +28,72 @@ export interface ASINKeyword {
 
 export class KeywordService {
   /**
-   * Fetch keywords for a specific ASIN from JungleScout
+   * Fetch keywords for a specific ASIN from DataForSEO
    */
   static async fetchKeywordsForASIN(asin: string): Promise<KeywordData[]> {
     try {
       console.log('Fetching keywords for ASIN:', asin);
       
-      // JungleScout doesn't have a direct ASIN to keywords endpoint in our current implementation
-      // We'll need to use a different approach or implement the keywords_by_asin endpoint
-      // For now, we'll fetch based on the product title or brand
+      const username = import.meta.env.VITE_DATAFORSEO_USERNAME;
+      const password = import.meta.env.VITE_DATAFORSEO_PASSWORD;
       
-      // Get ASIN details first
-      const { data: asinData, error } = await supabase
-        .from('asins')
-        .select('title, brand, category')
-        .eq('asin', asin)
-        .single();
-        
-      if (error || !asinData) {
-        console.error('Error fetching ASIN data:', error);
+      if (!username || !password) {
+        console.error('[DataForSEO] Credentials not configured');
         return [];
       }
+
+      const credentials = btoa(`${username}:${password}`);
+      const endpoint = 'https://api.dataforseo.com/v3/dataforseo_labs/amazon/ranked_keywords/live';
       
-      // Create search terms from product data
-      const searchTerms = [];
-      if (asinData.title) {
-        // Extract key words from title (first few words)
-        const titleWords = asinData.title.split(' ').slice(0, 3).join(' ');
-        searchTerms.push(titleWords);
+      const payload = [{
+        asin: asin,
+        location_code: 2840, // USA
+        language_code: 'en',
+        limit: 1000 // Maximum keywords to return
+      }];
+
+      console.log('[DataForSEO] Fetching ranked keywords for ASIN:', asin);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DataForSEO] API error:', response.status, errorText);
+        return [];
       }
-      if (asinData.brand && asinData.brand !== 'Unknown') {
-        searchTerms.push(asinData.brand);
+
+      const data = await response.json();
+      
+      if (data.status_code === 20000 && data.tasks?.[0]?.result?.[0]?.items) {
+        const items = data.tasks[0].result[0].items;
+        console.log('[DataForSEO] Found', items.length, 'keywords for ASIN');
+        
+        // Map DataForSEO results to our KeywordData interface
+        return items.map((item: any, index: number) => ({
+          id: `${asin}-${index}`, // Generate unique ID
+          keyword: item.keyword_data?.keyword || item.keyword || '',
+          search_volume: item.keyword_data?.search_volume || 0,
+          relevancy_score: item.keyword_data?.keyword_difficulty || 50, // Use difficulty as relevancy proxy
+          monthly_trend: 0, // DataForSEO doesn't provide this in same format
+          quarterly_trend: 0,
+          ppc_bid_broad: item.keyword_data?.cpc || 0,
+          ppc_bid_exact: item.keyword_data?.cpc || 0,
+          organic_product_count: item.ranked_serp_element?.serp_item?.total_count || 0,
+          sponsored_product_count: 0, // Not provided by DataForSEO
+          rank_organic: item.ranked_serp_element?.rank_absolute || null,
+          rank_sponsored: null // Not provided in this endpoint
+        }));
       }
-      if (asinData.category && asinData.category !== 'Unknown') {
-        searchTerms.push(asinData.category);
-      }
       
-      // Fetch keyword data from JungleScout
-      const keywords = await fetchDataForKeywords(searchTerms.slice(0, 3)); // Limit to 3 searches
-      
-      // Deduplicate keywords by keyword text
-      const uniqueKeywords = keywords.reduce((acc, keyword) => {
-        const existing = acc.find(k => k.keyword === keyword.keyword);
-        if (!existing) {
-          acc.push(keyword);
-        }
-        return acc;
-      }, [] as KeywordData[]);
-      
-      return uniqueKeywords;
+      console.log('[DataForSEO] No keywords found or API error');
+      return [];
     } catch (error) {
       console.error('Error fetching keywords for ASIN:', error);
       return [];
@@ -99,8 +117,19 @@ export class KeywordService {
         return false;
       }
       
+      // Deduplicate keywords by keyword text (keep the one with best rank)
+      const uniqueKeywordsMap = new Map<string, KeywordData>();
+      keywords.forEach(keyword => {
+        const existing = uniqueKeywordsMap.get(keyword.keyword);
+        if (!existing || (keyword.rank_organic && (!existing.rank_organic || keyword.rank_organic < existing.rank_organic))) {
+          uniqueKeywordsMap.set(keyword.keyword, keyword);
+        }
+      });
+      
+      console.log(`[KeywordService] Saving ${uniqueKeywordsMap.size} unique keywords (from ${keywords.length} total)`);
+      
       // Prepare keyword data for insertion with validation
-      const keywordRecords = keywords.map(keyword => ({
+      const keywordRecords = Array.from(uniqueKeywordsMap.values()).map(keyword => ({
         asin_id: asinData.id,
         keyword: keyword.keyword,
         search_volume: keyword.search_volume || 0,
@@ -110,7 +139,9 @@ export class KeywordService {
         ppc_bid_broad: keyword.ppc_bid_broad || 0,
         ppc_bid_exact: keyword.ppc_bid_exact || 0,
         organic_product_count: keyword.organic_product_count || 0,
-        sponsored_product_count: keyword.sponsored_product_count || 0
+        sponsored_product_count: keyword.sponsored_product_count || 0,
+        rank_organic: keyword.rank_organic || null,
+        rank_sponsored: keyword.rank_sponsored || null
       }));
       
       // Insert keywords (upsert to handle duplicates)

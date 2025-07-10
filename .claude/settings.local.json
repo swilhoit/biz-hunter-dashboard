@@ -132,7 +132,8 @@
       "Bash(awk:*)",
       "Bash(/Users/samwilhoit/CascadeProjects/biz-hunter-dashboard/scripts/add-render-env-vars-api.sh:*)",
       "WebFetch(domain:developer.junglescout.com)",
-      "WebFetch(domain:support.junglescout.com)"
+      "WebFetch(domain:support.junglescout.com)",
+      "WebFetch(domain:docs.dataforseo.com)"
     ],
     "deny": []
   }

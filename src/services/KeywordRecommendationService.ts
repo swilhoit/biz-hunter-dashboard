@@ -346,7 +346,7 @@ Return as a simple JSON array of strings.`;
             amazon_search_volume: metrics.amazon_search_volume || 0,
             google_search_volume: metrics.google_search_volume || 0,
             google_cpc: metrics.google_cpc || 0,
-            google_competition: metrics.google_competition || 0,
+            google_competition: typeof metrics.google_competition === 'string' ? 0 : (metrics.google_competition || 0),
             monthly_trend: 0, // DataForSEO doesn't provide trend in same format
             quarterly_trend: 0,
             ppc_bid_broad: metrics.google_cpc || 0, // Use Google CPC as estimate
