@@ -31,6 +31,28 @@ function ListingsFeed() {
   const [activeFilters, setActiveFilters] = useState({});
   const [activeTab, setActiveTab] = useState('on-market'); // 'on-market' or 'off-market'
 
+  // Restore scroll position when returning to this page
+  React.useEffect(() => {
+    const savedScrollPosition = sessionStorage.getItem('listingsFeedScrollPosition');
+    if (savedScrollPosition) {
+      const scrollPosition = parseInt(savedScrollPosition, 10);
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+      }, 0);
+      // Clear the saved position after restoring
+      sessionStorage.removeItem('listingsFeedScrollPosition');
+    }
+  }, []);
+
+  // Save scroll position before navigating away
+  const handleListingClick = (listingId) => {
+    // Save current scroll position
+    sessionStorage.setItem('listingsFeedScrollPosition', window.pageYOffset.toString());
+    // Navigate to listing detail
+    navigate(`/listings/${listingId}`);
+  };
+
   // Debug: Track when activeFilters changes
   React.useEffect(() => {
     console.log('🚨 [ACTIVE FILTERS STATE CHANGED]:', activeFilters);
@@ -64,6 +86,7 @@ function ListingsFeed() {
       console.log('  First 3 listings:');
       listings.slice(0, 3).forEach((listing, idx) => {
         console.log(`    ${idx + 1}. ${listing.name} - $${listing.asking_price?.toLocaleString() || 'N/A'} - ${listing.source}`);
+        console.log(`       Category fields: amazon_category="${listing.amazon_category}", niche="${listing.niche}", industry="${listing.industry}"`);
       });
     }
     console.log('========================================');
@@ -158,10 +181,14 @@ function ListingsFeed() {
       if (!matchesCategory) return false;
     }
     
-    // Marketplaces filter - use source or provider
+    // Marketplaces filter - use source or provider with case-insensitive partial matching
     if (activeFilters.marketplaces?.length > 0) {
       const marketplace = listing.marketplace || listing.source || listing.provider || '';
-      if (!activeFilters.marketplaces.includes(marketplace)) return false;
+      const matchesMarketplace = activeFilters.marketplaces.some(mp => 
+        marketplace.toLowerCase().includes(mp.toLowerCase()) || 
+        mp.toLowerCase().includes(marketplace.toLowerCase())
+      );
+      if (!matchesMarketplace) return false;
     }
     
     // Status filter
@@ -243,6 +270,23 @@ function ListingsFeed() {
             price: l.asking_price
           })));
         }
+      }
+      
+      // Debug category filtering
+      if (activeFilters.categories?.length > 0) {
+        console.log('🏷️ Category Filter Debug:');
+        console.log('  Selected categories:', activeFilters.categories);
+        const categoryExamples = listings.slice(0, 5).map(l => ({
+          name: l.name.substring(0, 30) + '...',
+          amazon_category: l.amazon_category || 'N/A',
+          niche: l.niche || 'N/A',
+          industry: l.industry || 'N/A',
+          wouldMatch: activeFilters.categories.some(cat => {
+            const category = l.amazon_category || l.niche || l.industry || '';
+            return category.toLowerCase().includes(cat.toLowerCase());
+          })
+        }));
+        console.table(categoryExamples);
       }
     }
   }, [activeFilters, listings, filteredListings]);
@@ -737,6 +781,7 @@ function ListingsFeed() {
                     onSelectionChange={setSelectedListings}
                     onAddToPipeline={handleAddToPipeline}
                     onDelete={handleDeleteListing}
+                    onListingClick={handleListingClick}
                   />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -746,6 +791,7 @@ function ListingsFeed() {
                         listing={listing}
                         onAddToPipeline={handleAddToPipeline}
                         onDelete={handleDeleteListing}
+                        onListingClick={handleListingClick}
                       />
                     ))}
                   </div>

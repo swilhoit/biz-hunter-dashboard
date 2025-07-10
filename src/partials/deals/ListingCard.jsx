@@ -4,7 +4,7 @@ import { ExternalLink, Plus, Building2, Calendar, DollarSign, TrendingUp, ImageI
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
-function ListingCard({ listing, onAddToPipeline, onDelete }) {
+function ListingCard({ listing, onAddToPipeline, onDelete, onListingClick }) {
   const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -60,12 +60,21 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center">
-            <Link 
-              to={`/listings/${listing.id}`}
-              className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate"
-            >
-              {listing.business_name || listing.name}
-            </Link>
+            {onListingClick ? (
+              <button
+                onClick={() => onListingClick(listing.id)}
+                className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate text-left"
+              >
+                {listing.business_name || listing.name}
+              </button>
+            ) : (
+              <Link 
+                to={`/listings/${listing.id}`}
+                className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate"
+              >
+                {listing.business_name || listing.name}
+              </Link>
+            )}
             {listing.isNew && (
               <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
                 New

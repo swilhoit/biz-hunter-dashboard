@@ -16,7 +16,10 @@ function ListingsFilters({ onFiltersChange }) {
 
   const categories = [
     'Pet Supplies', 'Home & Kitchen', 'Sports & Outdoors', 'Baby', 'Beauty', 
-    'Electronics', 'Health & Personal Care', 'Toys & Games', 'Automotive', 'Books'
+    'Electronics', 'Health & Personal Care', 'Toys & Games', 'Automotive', 'Books',
+    'Clothing & Accessories', 'Food & Beverage', 'Office Products', 'Tools & Home Improvement',
+    'Garden & Outdoor', 'Arts & Crafts', 'Industrial & Scientific', 'Jewelry',
+    'Software', 'Video Games', 'Musical Instruments', 'Cell Phones & Accessories'
   ];
 
   const marketplaces = [
@@ -183,7 +186,7 @@ function ListingsFilters({ onFiltersChange }) {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Amazon Categories
           </label>
-          <div className="max-h-40 overflow-y-auto space-y-2">
+          <div className="max-h-60 overflow-y-auto space-y-2 border border-gray-200 dark:border-gray-700 rounded-md p-2">
             {categories.map(category => (
               <label key={category} className="flex items-center">
                 <input
@@ -203,7 +206,7 @@ function ListingsFilters({ onFiltersChange }) {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Marketplaces
           </label>
-          <div className="max-h-40 overflow-y-auto space-y-2">
+          <div className="max-h-60 overflow-y-auto space-y-2 border border-gray-200 dark:border-gray-700 rounded-md p-2">
             {marketplaces.map(marketplace => (
               <label key={marketplace} className="flex items-center">
                 <input

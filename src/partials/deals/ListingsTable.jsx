@@ -4,7 +4,7 @@ import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2 
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
-function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete }) {
+function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick }) {
   const { user } = useAuth();
   const [deletingId, setDeletingId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
@@ -114,12 +114,21 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                   <div className="flex items-center">
                     <div>
                       <div className="flex items-center">
-                        <Link 
-                          to={`/listings/${listing.id}`}
-                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                        >
-                          {listing.business_name || listing.name}
-                        </Link>
+                        {onListingClick ? (
+                          <button
+                            onClick={() => onListingClick(listing.id)}
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
+                          >
+                            {listing.business_name || listing.name}
+                          </button>
+                        ) : (
+                          <Link 
+                            to={`/listings/${listing.id}`}
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          >
+                            {listing.business_name || listing.name}
+                          </Link>
+                        )}
                         {listing.isNew && (
                           <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
                             New
