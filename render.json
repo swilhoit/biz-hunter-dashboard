@@ -1,0 +1,11 @@
+{
+  "services": [
+    {
+      "type": "web",
+      "name": "biz-hunter-dashboard",
+      "runtime": "node",
+      "buildCommand": "npm install && npm run build",
+      "startCommand": "npm start"
+    }
+  ]
+}
