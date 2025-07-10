@@ -7,14 +7,6 @@ import { Deal, DealStatus, DealSource } from '../types/deal';
 import { DocumentAnalysisService, DocumentAnalysis } from '../services/AIAnalysisService';
 import PDFUploadGuide from './PDFUploadGuide';
 import { useAuth } from '../hooks/useAuth';
-import { Document, Page, pdfjs } from 'react-pdf';
-
-// Set PDF.js worker source with error handling
-if (pdfjs.GlobalWorkerOptions) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-} else {
-  console.warn('PDF.js GlobalWorkerOptions not available');
-}
 
 interface AddDealModalProps {
   isOpen: boolean;

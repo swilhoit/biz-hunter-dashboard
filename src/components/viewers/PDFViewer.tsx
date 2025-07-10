@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Loader2 } from 'lucide-react';
-
-// Set up PDF.js worker with error handling
-if (pdfjs.GlobalWorkerOptions) {
-  pdfjs.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.js`;
-} else {
-  console.warn('PDF.js GlobalWorkerOptions not available');
-}
+import { Document, Page } from '../pdf/PDFComponents';
 
 interface PDFViewerProps {
   blob: Blob;
