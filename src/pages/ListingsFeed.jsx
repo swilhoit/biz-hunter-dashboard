@@ -9,9 +9,11 @@ import { useBusinessListings, useAddToPipeline, useClearListings } from '../hook
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
+import SavedFilters from '../components/SavedFilters';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +32,36 @@ function ListingsFeed() {
   const [sitesForScraper] = useState(['quietlight', 'bizbuysell']);
   const [activeFilters, setActiveFilters] = useState({});
   const [activeTab, setActiveTab] = useState('on-market'); // 'on-market' or 'off-market'
+  const [defaultFiltersLoaded, setDefaultFiltersLoaded] = useState(false);
+  
+  const { user } = useAuth();
+
+  // Load default filter on mount
+  React.useEffect(() => {
+    const loadDefaultFilter = async () => {
+      if (!user || defaultFiltersLoaded) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('saved_filters')
+          .select('*')
+          .eq('filter_type', 'listings')
+          .eq('is_default', true)
+          .maybeSingle(); // Use maybeSingle instead of single to handle no results
+          
+        if (data) {
+          setActiveFilters(data.filters);
+          setShowFilters(true);
+        }
+      } catch (error) {
+        console.error('Error loading default filter:', error);
+      } finally {
+        setDefaultFiltersLoaded(true);
+      }
+    };
+    
+    loadDefaultFilter();
+  }, [user, defaultFiltersLoaded]);
 
   // Restore scroll position when returning to this page
   React.useEffect(() => {
@@ -106,7 +138,6 @@ function ListingsFeed() {
     handleProgressModalClose,
     handleProgressModalComplete
   } = useManualScraping();
-  const { user } = useAuth();
   const clearListingsMutation = useClearListings();
 
   // Close admin dropdown when clicking outside
@@ -665,6 +696,16 @@ function ListingsFeed() {
                     <Filter className="w-4 h-4 mr-2" />
                     Filters
                   </button>
+
+                  {/* Saved Filters */}
+                  <SavedFilters 
+                    currentFilters={activeFilters}
+                    onLoadFilters={(filters) => {
+                      setActiveFilters(filters);
+                      setShowFilters(true); // Show filters panel when loading saved filters
+                    }}
+                    filterType="listings"
+                  />
 
                   <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                     <button

@@ -593,8 +593,8 @@ export class ShareOfVoiceService {
         topCompetitors
       };
 
-      // Save the report
-      await this.saveShareOfVoiceReport(result);
+      // Don't save the report here - it should only be saved when associated with a deal
+      // This method is called from keyword analysis context without a deal_id
 
       return result;
 
@@ -607,7 +607,7 @@ export class ShareOfVoiceService {
   /**
    * Save Share of Voice report to database
    */
-  private static async saveShareOfVoiceReport(analysis: BrandKeywordAnalysis): Promise<void> {
+  private static async saveShareOfVoiceReport(analysis: BrandKeywordAnalysis, dealId?: string): Promise<void> {
     try {
       // Calculate brand rank
       const allBrands = [
@@ -621,7 +621,7 @@ export class ShareOfVoiceService {
       const brandRank = allBrands.findIndex(b => b.brand === analysis.brand) + 1;
       
       // Prepare report data
-      const reportData = {
+      const reportData: any = {
         brand_name: analysis.brand,
         analysis_date: new Date().toISOString(),
         brand_market_share: analysis.overallSalesShare,
@@ -635,6 +635,17 @@ export class ShareOfVoiceService {
         },
         top_brands: analysis.topCompetitors
       };
+      
+      // Add deal_id if provided
+      if (dealId) {
+        reportData.deal_id = dealId;
+      }
+      
+      // Only insert if we have a deal_id (required by RLS policy)
+      if (!dealId) {
+        console.log('[ShareOfVoice] Skipping report save - no deal_id provided');
+        return;
+      }
       
       // Insert main report
       const { data: report, error: reportError } = await supabase

@@ -22,64 +22,106 @@ function CSVUpload() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [targetTable, setTargetTable] = useState('deals'); // 'deals' or 'business_listings'
 
-  // Mapping of CSV fields to database fields
-  const fieldMapping = {
-    'source': 'source',
-    'name': 'name',
-    'original_price': 'asking_price',
-    'asking_price': 'asking_price',
-    'price': 'asking_price',
-    'annual_revenue': 'annual_revenue',
-    'annual_profit': 'annual_profit',
-    'revenue': 'annual_revenue',
-    'profit': 'annual_profit',
-    'url': 'original_url',
-    'link': 'original_url',
-    'website': 'original_url',
-    'listing_url': 'original_url',
-    'business_name': 'name',
-    'title': 'name',
-    'listing_name': 'name',
-    'company': 'name',
-    'location': 'location',
-    'city': 'location',
-    'state': 'location',
-    'country': 'location',
-    'industry': 'industry',
-    'category': 'industry',
-    'niche': 'niche',
-    'description': 'description',
-    'full_description': 'description',
-    'summary': 'description',
-    'business_description': 'business_description',
-    'established_date': 'established_date',
-    'founded': 'established_date',
-    'years_in_business': 'years_in_business',
-    'age': 'years_in_business',
-    'employees': 'employees',
-    'staff': 'employees',
-    'reason_for_selling': 'reason_for_selling',
-    'reason': 'reason_for_selling',
-    'seller_financing': 'seller_financing',
-    'financing': 'seller_financing',
-    'monthly_revenue': 'monthly_revenue',
-    'monthly_profit': 'monthly_profit',
-    'multiple': 'multiple',
-    'valuation_multiple': 'multiple',
-    'inventory_value': 'inventory_value',
-    'inventory': 'inventory_value',
-    'real_estate_included': 'real_estate_included',
-    'real_estate': 'real_estate_included',
-    'image_urls': 'image_urls',
-    'images': 'image_urls',
-    'scrape_timestamp': 'scraped_at',
-    'scraped_date': 'scraped_at',
-    'date_scraped': 'scraped_at',
-    'yoy_trend': 'yoy_trend_percent',
-    'yoy_growth': 'yoy_trend_percent',
-    'revenue_growth': 'yoy_trend_percent',
-    'year_over_year': 'yoy_trend_percent',
-    'growth': 'yoy_trend_percent'
+  // Mapping of CSV fields to database fields - context-aware based on target table
+  const getFieldMapping = () => {
+    if (targetTable === 'deals') {
+      return {
+        // Basic fields
+        'source': 'source',
+        'business_name': 'business_name',
+        'name': 'business_name',
+        'title': 'business_name',
+        'company': 'business_name',
+        'listing_name': 'business_name',
+        // Financial fields
+        'asking_price': 'asking_price',
+        'price': 'asking_price',
+        'original_price': 'asking_price',
+        'list_price': 'list_price',
+        'annual_revenue': 'annual_revenue',
+        'revenue': 'annual_revenue',
+        'annual_profit': 'annual_profit',
+        'profit': 'annual_profit',
+        'monthly_revenue': 'avg_monthly_revenue',
+        'monthly_profit': 'avg_monthly_profit',
+        'ttm_revenue': 'ttm_revenue',
+        'ttm_profit': 'ttm_profit',
+        'ebitda': 'ebitda',
+        'sde': 'sde',
+        'multiple': 'multiple',
+        'valuation_multiple': 'multiple',
+        'inventory': 'inventory_value',
+        'inventory_value': 'inventory_value',
+        // Business details
+        'industry': 'amazon_category',
+        'category': 'amazon_category',
+        'amazon_category': 'amazon_category',
+        'location': 'seller_location',
+        'seller_location': 'seller_location',
+        'description': 'business_description',
+        'business_description': 'business_description',
+        'summary': 'business_description',
+        // Amazon specific
+        'store_name': 'amazon_store_name',
+        'brand': 'amazon_store_name',
+        'fba_percentage': 'fba_percentage',
+        'fba_percent': 'fba_percentage',
+        // Seller info
+        'seller_name': 'seller_name',
+        'seller_email': 'seller_email',
+        'seller_phone': 'seller_phone',
+        // Operations
+        'hours_per_week': 'hours_per_week',
+        'owner_involvement': 'owner_involvement',
+        'growth_trend': 'growth_trend'
+      };
+    } else {
+      // business_listings mapping
+      return {
+        'source': 'source',
+        'name': 'name',
+        'business_name': 'name',
+        'title': 'name',
+        'company': 'name',
+        'listing_name': 'name',
+        'url': 'original_url',
+        'link': 'original_url',
+        'website': 'original_url',
+        'listing_url': 'original_url',
+        'asking_price': 'asking_price',
+        'price': 'asking_price',
+        'annual_revenue': 'annual_revenue',
+        'revenue': 'annual_revenue',
+        'annual_profit': 'annual_profit',
+        'profit': 'annual_profit',
+        'monthly_revenue': 'monthly_revenue',
+        'monthly_profit': 'monthly_profit',
+        'multiple': 'profit_multiple',
+        'valuation_multiple': 'profit_multiple',
+        'profit_multiple': 'profit_multiple',
+        'inventory': 'inventory_value',
+        'inventory_value': 'inventory_value',
+        'location': 'location',
+        'city': 'location',
+        'state': 'location',
+        'industry': 'industry',
+        'category': 'industry',
+        'description': 'description',
+        'summary': 'description',
+        'business_description': 'description',
+        'business_age_months': 'business_age_months',
+        'age': 'business_age_months',
+        'established_year': 'established_year',
+        'founded': 'established_year',
+        'seller_name': 'seller_name',
+        'owner_name': 'owner_name',
+        'image_url': 'image_url',
+        'image': 'image_url',
+        'scraped_at': 'scraped_at',
+        'scrape_timestamp': 'scraped_at',
+        'scraped_date': 'scraped_at'
+      };
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -128,16 +170,21 @@ function CSVUpload() {
   };
 
   const transformData = (row) => {
-    // Use AI mappings if available, otherwise fall back to hardcoded mappings
-    const mappingsToUse = columnMappings?.mappings || [];
-    const hasMappings = mappingsToUse.length > 0;
-    
-    const transformed = {
-      source: row.source || 'CSV Import',
-      scraped_at: row.scrape_timestamp ? new Date(row.scrape_timestamp).toISOString() : new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    try {
+      // Use AI mappings if available, otherwise fall back to hardcoded mappings
+      const mappingsToUse = columnMappings?.mappings || [];
+      const hasMappings = mappingsToUse.length > 0;
+      
+      const transformed = {
+        source: row.source || 'CSV Import',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only add scraped_at for business_listings table
+      if (targetTable === 'business_listings') {
+        transformed.scraped_at = row.scrape_timestamp ? new Date(row.scrape_timestamp).toISOString() : new Date().toISOString();
+      }
     
     // Set market status based on target table
     if (targetTable === 'deals') {
@@ -149,7 +196,16 @@ function CSVUpload() {
     // If we have AI mappings, use them
     if (hasMappings) {
       const result = CSVColumnMappingService.transformDataWithMapping([row], mappingsToUse)[0];
-      Object.assign(transformed, result);
+      
+      // Clean up field names - remove any that have spaces or capital letters
+      const cleanedResult = {};
+      Object.entries(result).forEach(([key, value]) => {
+        // Convert field names to snake_case and lowercase
+        const cleanKey = key.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        cleanedResult[cleanKey] = value;
+      });
+      
+      Object.assign(transformed, cleanedResult);
       
       // Post-process AI mappings to handle table-specific field names
       if (targetTable === 'deals') {
@@ -187,14 +243,25 @@ function CSVUpload() {
       }
     } else {
       // Fall back to original logic with hardcoded mappings
+      const fieldMapping = getFieldMapping();
       Object.entries(row).forEach(([key, value]) => {
         const dbField = fieldMapping[key.toLowerCase()];
         if (dbField && value && value.trim() !== '') {
-        // Handle numeric fields
-        if (['asking_price', 'annual_revenue', 'annual_profit', 'monthly_revenue', 'monthly_profit', 'inventory_value'].includes(dbField)) {
-          const numValue = parseFloat(value.replace(/[$,]/g, ''));
+        // Handle numeric fields based on target table and data type
+        const financialFields = targetTable === 'deals' 
+          ? ['asking_price', 'list_price', 'annual_revenue', 'annual_profit', 'avg_monthly_revenue', 'avg_monthly_profit', 'ttm_revenue', 'ttm_profit', 'ebitda', 'sde', 'inventory_value']
+          : ['asking_price', 'annual_revenue', 'annual_profit', 'monthly_revenue', 'monthly_profit', 'inventory_value'];
+          
+        if (financialFields.includes(dbField)) {
+          const numValue = parseFloat(value.toString().replace(/[$,]/g, ''));
           if (!isNaN(numValue)) {
-            transformed[dbField] = Math.round(numValue);
+            // For business_listings: asking_price, annual_revenue, annual_profit are BIGINT (need integers)
+            // For deals: all financial fields are NUMERIC (can have decimals)
+            if (targetTable === 'business_listings' && ['asking_price', 'annual_revenue', 'annual_profit'].includes(dbField)) {
+              transformed[dbField] = Math.round(numValue);
+            } else {
+              transformed[dbField] = numValue;
+            }
           }
         }
         // Handle location combining
@@ -211,24 +278,39 @@ function CSVUpload() {
             transformed[dbField] = value.trim();
           }
         }
-        // Handle boolean fields
-        else if (['seller_financing', 'real_estate_included'].includes(dbField)) {
+        // Handle boolean fields (only for deals table)
+        else if (targetTable === 'deals' && ['brand_registry', 'training_included', 'verified_revenue', 'verified_profit'].includes(dbField)) {
           transformed[dbField] = value.toLowerCase() === 'true' || value.toLowerCase() === 'yes' || value === '1';
         }
-        // Handle array fields (image_urls)
-        else if (dbField === 'image_urls') {
+        // Handle boolean for business_listings
+        else if (targetTable === 'business_listings' && dbField === 'is_off_market') {
+          transformed[dbField] = value.toLowerCase() === 'true' || value.toLowerCase() === 'yes' || value === '1';
+        }
+        // Handle array fields (image_url for business_listings)
+        else if (dbField === 'image_url' && targetTable === 'business_listings') {
           try {
-            const urls = value.startsWith('[') ? JSON.parse(value) : value.split(';').map(url => url.trim()).filter(url => url);
-            if (urls.length > 0) {
-              transformed.image_url = urls[0]; // Use first image as main image
-              transformed.image_urls = urls;
+            // If value looks like an array, take the first item
+            if (value.startsWith('[')) {
+              const urls = JSON.parse(value);
+              if (urls.length > 0) {
+                transformed.image_url = urls[0];
+              }
+            } else if (value.includes(';') || value.includes(',')) {
+              // Handle semicolon or comma separated URLs
+              const urls = value.split(/[;,]/).map(url => url.trim()).filter(url => url);
+              if (urls.length > 0) {
+                transformed.image_url = urls[0];
+              }
+            } else {
+              transformed.image_url = value.trim();
             }
           } catch (e) {
             console.warn('Failed to parse image URLs:', e);
+            transformed.image_url = value.trim(); // Fallback to raw value
           }
         }
-        // Handle numeric fields like years_in_business, employees
-        else if (['years_in_business', 'employees'].includes(dbField)) {
+        // Handle numeric fields for business age
+        else if (dbField === 'business_age_months') {
           const numValue = parseInt(value);
           if (!isNaN(numValue)) {
             transformed[dbField] = numValue;
@@ -241,9 +323,17 @@ function CSVUpload() {
             transformed[dbField] = numValue;
           }
         }
-        // Handle YoY trend percentage
-        else if (dbField === 'yoy_trend_percent') {
+        // Handle percentage fields for deals
+        else if (targetTable === 'deals' && ['gross_margin', 'operating_margin', 'net_margin', 'profit_margin', 'fba_percentage', 'tacos', 'acos', 'cogs_percentage'].includes(dbField)) {
           // Remove % sign if present and parse
+          const cleanValue = value.toString().replace('%', '').trim();
+          const numValue = parseFloat(cleanValue);
+          if (!isNaN(numValue)) {
+            transformed[dbField] = numValue;
+          }
+        }
+        // Handle profit_margin for business_listings
+        else if (targetTable === 'business_listings' && dbField === 'profit_margin') {
           const cleanValue = value.toString().replace('%', '').trim();
           const numValue = parseFloat(cleanValue);
           if (!isNaN(numValue)) {
@@ -252,19 +342,7 @@ function CSVUpload() {
         }
         // Default text fields
         else {
-          // Special handling for fields based on target table
-          if (dbField === 'description' && targetTable === 'deals') {
-            transformed['business_description'] = value.trim();
-          } else if (dbField === 'business_description' && targetTable === 'business_listings') {
-            transformed['description'] = value.trim();
-          } else if (dbField === 'niche' && targetTable === 'deals') {
-            // Deals table doesn't have niche, use industry instead
-            if (!transformed['industry']) {
-              transformed['industry'] = value.trim();
-            }
-          } else {
-            transformed[dbField] = value.trim();
-          }
+          transformed[dbField] = value.trim();
         }
       }
     });
@@ -283,23 +361,80 @@ function CSVUpload() {
 
     // Final safety check: ensure no invalid fields for the target table
     if (targetTable === 'deals') {
-      // Remove fields that don't exist in deals table
-      delete transformed.description;
-      delete transformed.niche;
-      delete transformed.is_off_market;
-      delete transformed.original_url;
-      delete transformed.normalized_name;
-      delete transformed.company_website;
+      // Define allowed fields for deals table (verified against actual schema)
+      const allowedDealFields = [
+        // Basic information
+        'business_name', 'dba_names', 'entity_type', 'business_description',
+        // Financial metrics (all NUMERIC in database)
+        'asking_price', 'list_price', 'annual_revenue', 'annual_profit', 
+        'ebitda', 'sde', 'multiple', 'inventory_value',
+        'avg_monthly_revenue', 'avg_monthly_profit', 'ttm_revenue', 'ttm_profit',
+        'gross_margin', 'operating_margin', 'net_margin', 'profit_margin',
+        // Business details
+        'business_age', 'business_age_years', 'business_age_months', 
+        'employee_count', 'business_started_date', 'pricing_period',
+        // Amazon specific
+        'amazon_store_name', 'amazon_store_url', 'amazon_category', 
+        'amazon_subcategory', 'seller_account_health', 'fba_percentage',
+        'sku_count', 'parent_asin_count', 'brand_registry', 
+        'tacos', 'acos', 'cogs_percentage', 
+        'top_seller_retail_price', 'avg_retail_price',
+        // Seller info
+        'seller_name', 'seller_email', 'seller_phone', 'seller_location',
+        // Operations
+        'hours_per_week', 'owner_involvement', 'growth_trend',
+        'transfer_period_days', 'training_included', 'support_period_days',
+        // Metadata
+        'date_listed', 'priority', 'is_on_market', 'source', 'stage',
+        // Additional JSONB fields that exist
+        'top_skus', 'assets_included', 'monthly_financials', 
+        'revenue_sources', 'traffic_breakdown',
+        // Verification fields
+        'last_month_revenue', 'last_month_profit', 
+        'verified_revenue', 'verified_profit', 'verification_date'
+      ];
+      
+      // Remove any fields not in the allowed list
+      Object.keys(transformed).forEach(key => {
+        if (!allowedDealFields.includes(key) && 
+            !['source', 'created_at', 'updated_at'].includes(key)) {
+          delete transformed[key];
+        }
+      });
+      
       // Ensure is_on_market is set
       if (transformed.is_on_market === undefined) {
         transformed.is_on_market = true;
       }
     } else if (targetTable === 'business_listings') {
-      // Remove fields that don't exist in business_listings table
-      delete transformed.business_description;
-      delete transformed.is_on_market;
-      delete transformed.ttm_revenue;
-      delete transformed.ttm_profit;
+      // Define allowed fields for business_listings table (verified against actual schema)
+      const allowedListingFields = [
+        // Basic fields
+        'name', 'source', 'original_url',
+        // Financial fields (asking_price, annual_revenue, annual_profit are BIGINT)
+        'asking_price', 'annual_revenue', 'annual_profit', 
+        'monthly_revenue', 'monthly_profit', 'gross_revenue', 
+        'net_revenue', 'inventory_value', 'profit_multiple', 'profit_margin',
+        // Business details
+        'industry', 'location', 'description', 'business_age_months', 
+        'established_year', 'revenue_trend', 'asin_count',
+        // Seller/Owner info
+        'seller_name', 'owner_name', 'owner_title', 
+        'owner_email', 'owner_phone', 'owner_linkedin', 'company_website',
+        // Status fields
+        'is_off_market', 'listing_status', 'status',
+        // Other fields
+        'image_url', 'scraped_at', 'highlights'
+      ];
+      
+      // Remove any fields not in the allowed list
+      Object.keys(transformed).forEach(key => {
+        if (!allowedListingFields.includes(key) && 
+            !['created_at', 'updated_at'].includes(key)) {
+          delete transformed[key];
+        }
+      });
+      
       // Ensure is_off_market is set
       if (transformed.is_off_market === undefined) {
         transformed.is_off_market = false;
@@ -307,6 +442,10 @@ function CSVUpload() {
     }
     
     return transformed;
+    } catch (error) {
+      console.error('Error transforming row:', error);
+      throw new Error(`Failed to transform row: ${error.message}`);
+    }
   };
 
   const handleUpload = async () => {
@@ -394,7 +533,32 @@ function CSVUpload() {
               .select();
 
             if (error) {
-              setErrors([`Database error: ${error.message}`]);
+              console.error('Database error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+              });
+              
+              // Provide more helpful error messages
+              let errorMessage = `Database error: ${error.message}`;
+              
+              // Check for common schema errors
+              if (error.message.includes('column') && error.message.includes('does not exist')) {
+                const match = error.message.match(/column "(.+?)" of relation "(.+?)"/);
+                if (match) {
+                  errorMessage = `Field "${match[1]}" doesn't exist in the ${match[2]} table. Please check your CSV column mappings.`;
+                }
+              } else if (error.message.includes('invalid input syntax')) {
+                errorMessage = `Data type error: ${error.message}. Please check that numeric fields contain only numbers.`;
+              } else if (error.message.includes('null value in column')) {
+                const match = error.message.match(/null value in column "(.+?)"/);
+                if (match) {
+                  errorMessage = `Required field "${match[1]}" is missing. Please ensure all required fields are provided.`;
+                }
+              }
+              
+              setErrors([errorMessage]);
             } else {
               setUploadResults({
                 total: results.data.length,
@@ -404,6 +568,7 @@ function CSVUpload() {
               });
             }
           } catch (error) {
+            console.error('Upload error:', error);
             setErrors([`Upload error: ${error.message}`]);
           }
         } else {
