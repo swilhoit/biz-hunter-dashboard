@@ -145,6 +145,26 @@ function CSVUpload() {
       const result = CSVColumnMappingService.transformDataWithMapping([row], mappingsToUse)[0];
       Object.assign(transformed, result);
       
+      // Post-process AI mappings to handle table-specific field names
+      if (targetTable === 'deals') {
+        // For deals table, rename description to business_description
+        if (transformed.description && !transformed.business_description) {
+          transformed.business_description = transformed.description;
+          delete transformed.description;
+        }
+        // Remove niche field as it doesn't exist in deals table
+        if (transformed.niche && !transformed.industry) {
+          transformed.industry = transformed.niche;
+        }
+        delete transformed.niche;
+      } else if (targetTable === 'business_listings') {
+        // For business_listings table, rename business_description to description
+        if (transformed.business_description && !transformed.description) {
+          transformed.description = transformed.business_description;
+          delete transformed.business_description;
+        }
+      }
+      
       // Ensure source is always set
       if (!transformed.source) {
         transformed.source = 'CSV Import';
@@ -245,6 +265,16 @@ function CSVUpload() {
       }
     }
 
+    // Final safety check: ensure no invalid fields for the target table
+    if (targetTable === 'deals') {
+      // Remove fields that don't exist in deals table
+      delete transformed.description;
+      delete transformed.niche;
+    } else if (targetTable === 'business_listings') {
+      // Remove fields that don't exist in business_listings table
+      delete transformed.business_description;
+    }
+    
     return transformed;
   };
 
@@ -310,6 +340,10 @@ function CSVUpload() {
         }
 
         if (listings.length > 0) {
+          // Debug: log first listing to see what's being sent
+          console.log('First listing being sent to database:', listings[0]);
+          console.log('All fields:', Object.keys(listings[0]));
+          
           try {
             const { data, error } = await supabase
               .from(targetTable)
