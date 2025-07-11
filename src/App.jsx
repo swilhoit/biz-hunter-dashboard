@@ -14,6 +14,7 @@ import './utils/testJungleScout';
 import './utils/testDataForSEO';
 import './utils/testDataForSEOBoth';
 import './utils/testDataForSEOASIN';
+import './utils/checkCategories';
 
 // Import pages
 import Dashboard from './pages/Dashboard';

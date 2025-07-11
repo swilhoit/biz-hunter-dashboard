@@ -63,6 +63,11 @@ Common categories for online businesses:
 - Subscription Box
 - Print on Demand
 - Dropshipping
+- DTC Brand (Direct to Consumer)
+- B2B Services
+- Affiliate Marketing
+
+IMPORTANT: Do NOT return "Unknown" or "Unknown Category" as the category. Always make your best determination based on available information.
 
 Return as JSON with this structure:
 {
@@ -237,7 +242,7 @@ Return as JSON with this structure:
       const { data: listings, error } = await supabase
         .from(table)
         .select('id, name, description, source, annual_revenue, asking_price, industry')
-        .or('industry.is.null,industry.eq.Unknown,industry.eq.unknown,industry.eq.')
+        .or('industry.is.null,industry.eq.Unknown,industry.eq.unknown,industry.eq.,industry.eq.Unknown Category,industry.eq.unknown category')
         .limit(limit);
         
       if (error) {

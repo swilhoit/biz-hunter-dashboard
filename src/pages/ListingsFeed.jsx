@@ -110,8 +110,8 @@ function ListingsFeed() {
     try {
       const result = await CategoryAnalysisService.analyzeAndUpdateUnknownCategories({
         table: 'business_listings',
-        limit: 30, // Process 30 at a time
-        confidenceThreshold: 65
+        limit: 50, // Process 50 at a time
+        confidenceThreshold: 60 // Lower threshold to categorize more listings
       });
       
       setCategoryAnalysisResults(result);
