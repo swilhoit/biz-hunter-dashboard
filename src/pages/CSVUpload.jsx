@@ -51,6 +51,7 @@ function CSVUpload() {
     'description': 'description',
     'full_description': 'description',
     'summary': 'description',
+    'business_description': 'business_description',
     'established_date': 'established_date',
     'founded': 'established_date',
     'years_in_business': 'years_in_business',
@@ -215,7 +216,19 @@ function CSVUpload() {
         }
         // Default text fields
         else {
-          transformed[dbField] = value.trim();
+          // Special handling for fields based on target table
+          if (dbField === 'description' && targetTable === 'deals') {
+            transformed['business_description'] = value.trim();
+          } else if (dbField === 'business_description' && targetTable === 'business_listings') {
+            transformed['description'] = value.trim();
+          } else if (dbField === 'niche' && targetTable === 'deals') {
+            // Deals table doesn't have niche, use industry instead
+            if (!transformed['industry']) {
+              transformed['industry'] = value.trim();
+            }
+          } else {
+            transformed[dbField] = value.trim();
+          }
         }
       }
     });
