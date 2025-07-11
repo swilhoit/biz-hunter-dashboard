@@ -136,9 +136,15 @@ function CSVUpload() {
       source: row.source || 'CSV Import',
       scraped_at: row.scrape_timestamp ? new Date(row.scrape_timestamp).toISOString() : new Date().toISOString(),
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      is_off_market: false // CSV imports are on-market listings
+      updated_at: new Date().toISOString()
     };
+    
+    // Set market status based on target table
+    if (targetTable === 'deals') {
+      transformed.is_on_market = true; // CSV imports are on-market listings
+    } else {
+      transformed.is_off_market = false; // CSV imports are on-market listings
+    }
 
     // If we have AI mappings, use them
     if (hasMappings) {
@@ -157,11 +163,21 @@ function CSVUpload() {
           transformed.industry = transformed.niche;
         }
         delete transformed.niche;
+        // Handle market status field
+        if (transformed.is_off_market !== undefined) {
+          transformed.is_on_market = !transformed.is_off_market;
+          delete transformed.is_off_market;
+        }
       } else if (targetTable === 'business_listings') {
         // For business_listings table, rename business_description to description
         if (transformed.business_description && !transformed.description) {
           transformed.description = transformed.business_description;
           delete transformed.business_description;
+        }
+        // Handle market status field
+        if (transformed.is_on_market !== undefined) {
+          transformed.is_off_market = !transformed.is_on_market;
+          delete transformed.is_on_market;
         }
       }
       
@@ -270,9 +286,24 @@ function CSVUpload() {
       // Remove fields that don't exist in deals table
       delete transformed.description;
       delete transformed.niche;
+      delete transformed.is_off_market;
+      delete transformed.original_url;
+      delete transformed.normalized_name;
+      delete transformed.company_website;
+      // Ensure is_on_market is set
+      if (transformed.is_on_market === undefined) {
+        transformed.is_on_market = true;
+      }
     } else if (targetTable === 'business_listings') {
       // Remove fields that don't exist in business_listings table
       delete transformed.business_description;
+      delete transformed.is_on_market;
+      delete transformed.ttm_revenue;
+      delete transformed.ttm_profit;
+      // Ensure is_off_market is set
+      if (transformed.is_off_market === undefined) {
+        transformed.is_off_market = false;
+      }
     }
     
     return transformed;
@@ -320,14 +351,23 @@ function CSVUpload() {
             const hasRequiredName = targetTable === 'deals' 
               ? transformed.business_name 
               : transformed.name;
-            const hasRequiredSource = transformed.original_url || transformed.source;
+            
+            // For deals, we only need source (no URL field in deals table)
+            // For business_listings, we need original_url or source
+            const hasRequiredSource = targetTable === 'deals'
+              ? transformed.source
+              : (transformed.original_url || transformed.source);
             
             if (hasRequiredName && hasRequiredSource) {
+              // For deals table, remove original_url as it doesn't exist
+              if (targetTable === 'deals') {
+                delete transformed.original_url;
+              }
               listings.push(transformed);
             } else {
               const missingFields = [];
               if (!hasRequiredName) missingFields.push(targetTable === 'deals' ? 'business_name' : 'name');
-              if (!hasRequiredSource) missingFields.push('url or source');
+              if (!hasRequiredSource) missingFields.push(targetTable === 'deals' ? 'source' : 'url or source');
               parseErrors.push(`Row ${index + 2}: Missing required fields (${missingFields.join(' and ')})`);
             }
           } catch (error) {
