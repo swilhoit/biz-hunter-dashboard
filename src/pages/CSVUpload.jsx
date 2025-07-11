@@ -28,33 +28,57 @@ function CSVUpload() {
     'name': 'name',
     'original_price': 'asking_price',
     'asking_price': 'asking_price',
+    'price': 'asking_price',
     'annual_revenue': 'annual_revenue',
     'annual_profit': 'annual_profit',
+    'revenue': 'annual_revenue',
+    'profit': 'annual_profit',
     'url': 'original_url',
+    'link': 'original_url',
+    'website': 'original_url',
+    'listing_url': 'original_url',
     'business_name': 'name',
+    'title': 'name',
+    'listing_name': 'name',
+    'company': 'name',
     'location': 'location',
     'city': 'location',
     'state': 'location',
     'country': 'location',
     'industry': 'industry',
+    'category': 'industry',
+    'niche': 'niche',
     'description': 'description',
     'full_description': 'description',
+    'summary': 'description',
     'established_date': 'established_date',
+    'founded': 'established_date',
     'years_in_business': 'years_in_business',
+    'age': 'years_in_business',
     'employees': 'employees',
+    'staff': 'employees',
     'reason_for_selling': 'reason_for_selling',
+    'reason': 'reason_for_selling',
     'seller_financing': 'seller_financing',
+    'financing': 'seller_financing',
     'monthly_revenue': 'monthly_revenue',
     'monthly_profit': 'monthly_profit',
     'multiple': 'multiple',
+    'valuation_multiple': 'multiple',
     'inventory_value': 'inventory_value',
+    'inventory': 'inventory_value',
     'real_estate_included': 'real_estate_included',
+    'real_estate': 'real_estate_included',
     'image_urls': 'image_urls',
+    'images': 'image_urls',
     'scrape_timestamp': 'scraped_at',
+    'scraped_date': 'scraped_at',
+    'date_scraped': 'scraped_at',
     'yoy_trend': 'yoy_trend_percent',
     'yoy_growth': 'yoy_trend_percent',
     'revenue_growth': 'yoy_trend_percent',
-    'year_over_year': 'yoy_trend_percent'
+    'year_over_year': 'yoy_trend_percent',
+    'growth': 'yoy_trend_percent'
   };
 
   const handleFileSelect = (e) => {
@@ -119,6 +143,11 @@ function CSVUpload() {
     if (hasMappings) {
       const result = CSVColumnMappingService.transformDataWithMapping([row], mappingsToUse)[0];
       Object.assign(transformed, result);
+      
+      // Ensure source is always set
+      if (!transformed.source) {
+        transformed.source = 'CSV Import';
+      }
     } else {
       // Fall back to original logic with hardcoded mappings
       Object.entries(row).forEach(([key, value]) => {
@@ -220,16 +249,43 @@ function CSVUpload() {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
+        console.log('CSV Parse Results:', {
+          rowCount: results.data.length,
+          headers: results.data.length > 0 ? Object.keys(results.data[0]) : [],
+          firstRow: results.data[0]
+        });
+        
         const listings = [];
         const parseErrors = [];
 
         results.data.forEach((row, index) => {
           try {
             const transformed = transformData(row);
-            if (transformed.name && (transformed.original_url || transformed.source)) {
+            
+            // Debug first few rows
+            if (index < 3) {
+              console.log(`Row ${index + 1} transformed:`, {
+                targetTable,
+                business_name: transformed.business_name,
+                name: transformed.name,
+                original_url: transformed.original_url,
+                source: transformed.source
+              });
+            }
+            
+            // Check required fields based on target table
+            const hasRequiredName = targetTable === 'deals' 
+              ? transformed.business_name 
+              : transformed.name;
+            const hasRequiredSource = transformed.original_url || transformed.source;
+            
+            if (hasRequiredName && hasRequiredSource) {
               listings.push(transformed);
             } else {
-              parseErrors.push(`Row ${index + 2}: Missing required fields (name and url/source)`);
+              const missingFields = [];
+              if (!hasRequiredName) missingFields.push(targetTable === 'deals' ? 'business_name' : 'name');
+              if (!hasRequiredSource) missingFields.push('url or source');
+              parseErrors.push(`Row ${index + 2}: Missing required fields (${missingFields.join(' and ')})`);
             }
           } catch (error) {
             parseErrors.push(`Row ${index + 2}: ${error.message}`);
@@ -264,7 +320,15 @@ function CSVUpload() {
             setErrors([`Upload error: ${error.message}`]);
           }
         } else {
-          setErrors(['No valid listings found in the CSV file']);
+          const helpMessage = targetTable === 'deals' 
+            ? 'Please ensure your CSV has columns for business name (e.g., "name", "business_name", "title") and URL/source (e.g., "url", "link", "website", "source").'
+            : 'Please ensure your CSV has columns for name (e.g., "name", "business_name", "title") and URL/source (e.g., "url", "link", "website", "source").';
+          
+          setErrors([
+            'No valid listings found in the CSV file',
+            helpMessage,
+            'Common column names: name, business_name, title, url, link, website, price, asking_price, revenue, profit, location, industry, description'
+          ]);
         }
 
         setUploading(false);
