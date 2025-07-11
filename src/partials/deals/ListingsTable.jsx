@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
-function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick }) {
+function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick, sortBy, sortDirection, onSort }) {
   const { user } = useAuth();
   const [deletingId, setDeletingId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
@@ -59,6 +59,15 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
     }
   };
 
+  const renderSortIcon = (column) => {
+    if (sortBy !== column) {
+      return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="w-4 h-4 text-indigo-600" />
+      : <ChevronDown className="w-4 h-4 text-indigo-600" />;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="overflow-x-auto">
@@ -80,16 +89,34 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 Marketplace
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Price & Multiple
+                <button
+                  onClick={() => onSort && onSort('asking_price')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Price & Multiple
+                  {onSort && renderSortIcon('asking_price')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Revenue & Profit
+                <button
+                  onClick={() => onSort && onSort('annual_revenue')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Revenue & Profit
+                  {onSort && renderSortIcon('annual_revenue')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 YoY Trend
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Listed
+                <button
+                  onClick={() => onSort && onSort('created_at')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Listed
+                  {onSort && renderSortIcon('created_at')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Status

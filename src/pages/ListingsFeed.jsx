@@ -33,6 +33,8 @@ function ListingsFeed() {
   const [activeFilters, setActiveFilters] = useState({});
   const [activeTab, setActiveTab] = useState('on-market'); // 'on-market' or 'off-market'
   const [defaultFiltersLoaded, setDefaultFiltersLoaded] = useState(false);
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
   
   const { user } = useAuth();
 
@@ -85,6 +87,18 @@ function ListingsFeed() {
     navigate(`/listings/${listingId}`);
   };
 
+  // Handle sorting
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to descending for price, ascending for others
+      setSortBy(column);
+      setSortDirection(column === 'asking_price' ? 'desc' : 'asc');
+    }
+  };
+
   // Debug: Track when activeFilters changes
   React.useEffect(() => {
     console.log('🚨 [ACTIVE FILTERS STATE CHANGED]:', activeFilters);
@@ -105,7 +119,7 @@ function ListingsFeed() {
     isLoading, 
     error, 
     refetch 
-  } = useBusinessListings({ hideDuplicates });
+  } = useBusinessListings({ hideDuplicates, sortBy, sortDirection });
   
   // Log listings data when it changes
   React.useEffect(() => {
@@ -823,6 +837,9 @@ function ListingsFeed() {
                     onAddToPipeline={handleAddToPipeline}
                     onDelete={handleDeleteListing}
                     onListingClick={handleListingClick}
+                    sortBy={sortBy}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
                   />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

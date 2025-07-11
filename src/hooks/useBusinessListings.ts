@@ -103,20 +103,28 @@ const transformToMarketListing = (listing: any): BusinessListing => {
   };
 };
 
-export const useBusinessListings = (options?: { hideDuplicates?: boolean }) => {
+export const useBusinessListings = (options?: { 
+  hideDuplicates?: boolean;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+}) => {
   return useQuery({
-    queryKey: ['business-listings', options?.hideDuplicates],
+    queryKey: ['business-listings', options?.hideDuplicates, options?.sortBy, options?.sortDirection],
     queryFn: async () => {
       console.log('\n========================================');
       console.log('🔍 [FRONTEND] Fetching business listings from database...');
       console.log(`🕒 [FRONTEND] Query time: ${new Date().toISOString()}`);
-      console.log(`🔧 [FRONTEND] Options: hideDuplicates=${options?.hideDuplicates}`);
+      console.log(`🔧 [FRONTEND] Options: hideDuplicates=${options?.hideDuplicates}, sortBy=${options?.sortBy}, sortDirection=${options?.sortDirection}`);
       
       let query = supabase
         .from('business_listings')
         .select('*')
-        .not('name', 'eq', 'Unknown Business') // Exclude invalid demo listings
-        .order('created_at', { ascending: false });
+        .not('name', 'eq', 'Unknown Business'); // Exclude invalid demo listings
+      
+      // Apply sorting
+      const sortColumn = options?.sortBy || 'created_at';
+      const sortAscending = options?.sortDirection === 'asc';
+      query = query.order(sortColumn, { ascending: sortAscending });
       
       // Filter out non-primary duplicates if requested
       if (options?.hideDuplicates) {
