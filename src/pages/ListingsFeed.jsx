@@ -14,8 +14,9 @@ import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
 import SavedFilters from '../components/SavedFilters';
+import { CategoryAnalysisService } from '../services/CategoryAnalysisService';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users, Upload } from 'lucide-react';
+import { Search, Filter, Grid, List, Plus, RefreshCw, Loader2, Download, Brain, AlertTriangle, Eye, EyeOff, Settings, ChevronDown, Trash2, Store, Users, Upload, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 function ListingsFeed() {
@@ -35,6 +36,8 @@ function ListingsFeed() {
   const [defaultFiltersLoaded, setDefaultFiltersLoaded] = useState(false);
   const [sortBy, setSortBy] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [isAnalyzingCategories, setIsAnalyzingCategories] = useState(false);
+  const [categoryAnalysisResults, setCategoryAnalysisResults] = useState(null);
   
   const { user } = useAuth();
 
@@ -96,6 +99,37 @@ function ListingsFeed() {
       // New column, default to descending for price, ascending for others
       setSortBy(column);
       setSortDirection(column === 'asking_price' ? 'desc' : 'asc');
+    }
+  };
+
+  // Handle category analysis
+  const handleAnalyzeCategories = async () => {
+    setIsAnalyzingCategories(true);
+    setCategoryAnalysisResults(null);
+    
+    try {
+      const result = await CategoryAnalysisService.analyzeAndUpdateUnknownCategories({
+        table: 'business_listings',
+        limit: 30, // Process 30 at a time
+        confidenceThreshold: 65
+      });
+      
+      setCategoryAnalysisResults(result);
+      
+      if (result.updated > 0) {
+        showSuccess(`Successfully categorized ${result.updated} listings`);
+        refetch(); // Refresh to show updated categories
+      } else if (result.analyzed > 0) {
+        showSuccess(`Analyzed ${result.analyzed} listings but none met confidence threshold`);
+      } else {
+        showSuccess('No listings with unknown categories found');
+      }
+    } catch (error) {
+      console.error('Category analysis error:', error);
+      showError('Failed to analyze categories');
+    } finally {
+      setIsAnalyzingCategories(false);
+      setShowAdminDropdown(false);
     }
   };
 
@@ -610,6 +644,25 @@ function ListingsFeed() {
                             <>
                               <EyeOff className="w-4 h-4 mr-3 text-gray-600" />
                               Hide Duplicate Listings
+                            </>
+                          )}
+                        </button>
+
+                        {/* Category Analysis Button */}
+                        <button 
+                          onClick={handleAnalyzeCategories}
+                          disabled={isAnalyzingCategories}
+                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isAnalyzingCategories ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-3 animate-spin text-purple-600" />
+                              Analyzing Categories...
+                            </>
+                          ) : (
+                            <>
+                              <Tag className="w-4 h-4 mr-3 text-purple-600" />
+                              AI Categorize Unknown
                             </>
                           )}
                         </button>
