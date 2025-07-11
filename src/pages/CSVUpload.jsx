@@ -7,9 +7,11 @@ import Papa from 'papaparse';
 import { CSVColumnMappingService } from '../services/CSVColumnMappingService';
 import { Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import CSVMappingEditor from '../components/CSVMappingEditor';
+import { useAuth } from '../hooks/useAuth';
 
 function CSVUpload() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -180,6 +182,11 @@ function CSVUpload() {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+      
+      // Add user_id for deals table (required by RLS policy)
+      if (targetTable === 'deals' && user) {
+        transformed.user_id = user.id;
+      }
       
       // Only add scraped_at for business_listings table
       if (targetTable === 'business_listings') {
@@ -391,7 +398,9 @@ function CSVUpload() {
         'revenue_sources', 'traffic_breakdown',
         // Verification fields
         'last_month_revenue', 'last_month_profit', 
-        'verified_revenue', 'verified_profit', 'verification_date'
+        'verified_revenue', 'verified_profit', 'verification_date',
+        // User reference (required by RLS)
+        'user_id'
       ];
       
       // Remove any fields not in the allowed list
@@ -451,6 +460,12 @@ function CSVUpload() {
   const handleUpload = async () => {
     if (!file) {
       setErrors(['Please select a file first']);
+      return;
+    }
+    
+    // Check if user is authenticated for deals import
+    if (targetTable === 'deals' && !user) {
+      setErrors(['You must be logged in to import deals']);
       return;
     }
 
