@@ -593,12 +593,12 @@ export class BrandKeywordService {
             // Filter ready tasks by our tag pattern
             const tagFilter = `parallel-${brandName}-`;
             const relevantReadyTasks = readyData.tasks.filter((task: any) => {
-              // Check multiple possible tag locations based on DataForSEO response structure
-              const taskTag = task.data?.tag || task.tag || task.postData?.tag;
+              // According to DataForSEO docs, tag is at the root level of task object
+              const taskTag = task.tag;
               if (taskTag) {
-                console.log(`[BrandKeywords] Task ${task.id} has tag:`, taskTag);
+                console.log(`[BrandKeywords] Task ${task.id} has tag: "${taskTag}", checking against filter: "${tagFilter}"`);
               }
-              return taskTag && taskTag.startsWith(tagFilter);
+              return taskTag && typeof taskTag === 'string' && taskTag.startsWith(tagFilter);
             });
             
             console.log(`[BrandKeywords] Total ready tasks:`, readyTaskIds.length, 'Relevant tasks:', relevantReadyTasks.length);
