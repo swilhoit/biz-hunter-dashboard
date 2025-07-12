@@ -203,7 +203,7 @@ export class ASINService {
             current_bsr: asinData.rank_current,
             monthly_revenue: asinData.monthly_revenue,
             monthly_units: asinData.monthly_units,
-            main_image_url: asinData.image_url
+            main_image_url: this.transformImageUrl(asinData.image_url)
           })
           .select()
           .single();
@@ -234,7 +234,7 @@ export class ASINService {
             current_bsr: asinData.rank_current,
             monthly_revenue: asinData.monthly_revenue,
             monthly_units: asinData.monthly_units,
-            main_image_url: asinData.image_url
+            main_image_url: this.transformImageUrl(asinData.image_url)
           })
           .eq('id', asinId);
           
@@ -559,13 +559,20 @@ export class ASINService {
   private static transformJungleScoutProduct(product: any): ASINData {
     const attributes = product.attributes || {};
     
-    // Log available image fields
-    console.log('Product image fields:', {
-      image_url: attributes.image_url,
-      image: attributes.image,
-      main_image: attributes.main_image,
-      images: attributes.images,
-      product_image_url: attributes.product_image_url
+    // Log available image fields for debugging
+    console.log('JungleScout Product Data:', {
+      asin: product.id,
+      title: attributes.title,
+      all_attributes: Object.keys(attributes),
+      image_fields: {
+        image_url: attributes.image_url,
+        image: attributes.image,
+        main_image: attributes.main_image,
+        images: attributes.images,
+        product_image_url: attributes.product_image_url,
+        thumbnail: attributes.thumbnail,
+        photo: attributes.photo
+      }
     });
     
     // Extract ASIN from id which may include marketplace prefix (e.g., "us/B079HFZ2Z1")
@@ -595,8 +602,52 @@ export class ASINService {
       fba: attributes.fulfillment === 'FBA',
       listing_quality: this.calculateListingQuality(attributes.rating, attributes.reviews),
       competition_level: this.calculateCompetitionLevel(attributes.rank),
-      image_url: attributes.image_url || attributes.image || attributes.main_image || attributes.product_image_url
+      // Transform thumbnail URLs to larger sizes if needed
+      image_url: this.getValidImageUrl(attributes)
     };
+  }
+
+  /**
+   * Transform image URL to ensure we get larger sizes
+   */
+  private static transformImageUrl(imageUrl: string | null | undefined): string | null {
+    if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined') {
+      return null;
+    }
+    
+    // If it's an Amazon image URL with a small size, transform it to a larger size
+    if (imageUrl.includes('amazon') && imageUrl.includes('_SL')) {
+      return imageUrl.replace(/_SL\d+_/, '_SL500_');
+    }
+    
+    return imageUrl;
+  }
+
+  /**
+   * Get a valid image URL from JungleScout attributes, transforming small thumbnails to larger sizes
+   */
+  private static getValidImageUrl(attributes: any): string | null {
+    // Try various image fields from JungleScout
+    const possibleImageFields = [
+      attributes.image_url,
+      attributes.image,
+      attributes.main_image,
+      attributes.product_image_url,
+      attributes.thumbnail,
+      attributes.photo
+    ];
+    
+    for (const imageUrl of possibleImageFields) {
+      if (imageUrl && typeof imageUrl === 'string' && imageUrl !== 'null' && imageUrl !== 'undefined') {
+        // If it's an Amazon image URL with a small size, transform it to a larger size
+        if (imageUrl.includes('amazon') && imageUrl.includes('_SL')) {
+          return imageUrl.replace(/_SL\d+_/, '_SL500_');
+        }
+        return imageUrl;
+      }
+    }
+    
+    return null;
   }
 
   /**

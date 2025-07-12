@@ -134,7 +134,8 @@
       "WebFetch(domain:developer.junglescout.com)",
       "WebFetch(domain:support.junglescout.com)",
       "WebFetch(domain:docs.dataforseo.com)",
-      "mcp__supabase__generate_typescript_types"
+      "mcp__supabase__generate_typescript_types",
+      "WebFetch(domain:localhost)"
     ],
     "deny": []
   }

@@ -560,7 +560,8 @@ function ASINDetail() {
                       <div className="space-y-4">
                         <div className="relative">
                           <ASINImage
-                            src={asinData.main_image_url || asinData.image_url || galleryImages[selectedImage]}
+                            src={asinData.main_image_url || asinData.image_url}
+                            asin={asinData.asin}
                             alt={asinData.title || asinData.product_name || 'Product Image'}
                             className="w-full md:w-96 h-64 md:h-96 object-cover rounded-lg"
                             fallbackText={asinData.asin}
@@ -577,6 +578,7 @@ function ASINDetail() {
                             >
                               <ASINImage
                                 src={img}
+                                asin={asinData.asin}
                                 alt={`${asinData.title} ${index + 1}`}
                                 className="w-20 h-20 object-cover"
                                 fallbackText={`${index + 1}`}

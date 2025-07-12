@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Star, TrendingUp, TrendingDown, Package, Search, Filter, Download, Store, AlertCircle, CheckCircle } from 'lucide-react';
-import { getProductPlaceholderImage } from '../../utils/asinImageUtils';
 import ASINImage from '../../components/ASINImage';
-import { getAmazonImageUrl } from '../../utils/amazonImageUrl';
 import { ASINService } from '../../services/ASINService';
 import { KeywordService } from '../../services/KeywordService';
 
@@ -29,6 +27,8 @@ function DealASINsTable({ dealId }) {
   // Keyword fetching states
   const [isFetchingKeywords, setIsFetchingKeywords] = useState(false);
   const [keywordFetchMessage, setKeywordFetchMessage] = useState('');
+  
+  // Removed image fetching states - images now load automatically
 
   // Load ASINs when component mounts or dealId changes
   useEffect(() => {
@@ -550,6 +550,7 @@ function DealASINsTable({ dealId }) {
           </div>
         </div>
       )}
+      
 
       {/* ASINs Table */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -647,7 +648,8 @@ function DealASINsTable({ dealId }) {
                       <div className="relative inline-flex mr-3 flex-shrink-0">
                         <ASINImage
                           className="w-16 h-16 rounded-lg object-cover"
-                          src={asin.image_url || getProductPlaceholderImage(asin.category, asin.asin)} 
+                          src={asin.image_url}
+                          asin={asin.asin}
                           alt={asin.product_name}
                           fallbackText={asin.asin.substring(0, 6)}
                           loading="lazy"
