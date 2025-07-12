@@ -510,14 +510,26 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
       {/* Progress Modal */}
       {showProgressModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full mx-4 max-h-[85vh] overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-violet-500" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Tracking Keyword Rankings
-                  </h3>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Activity className="w-6 h-6 text-violet-500" />
+                    {trackingRankings && (
+                      <div className="absolute -bottom-1 -right-1">
+                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      Tracking Keyword Rankings
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {brandName} • {keywords.length} keywords
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={clearProgress}
@@ -533,67 +545,96 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
               {/* Progress Bar */}
               {progress && (
                 <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {progress.stage}
-                    </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {progress.current}/{progress.total} ({Math.round((progress.current / progress.total) * 100)}%)
-                    </span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        {progress.stage}
+                      </span>
+                      {progress.stage === 'Processing' && (
+                        <div className="flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        {Math.round((progress.current / progress.total) * 100)}%
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                        {progress.current}/{progress.total}
+                      </span>
+                    </div>
                   </div>
                   
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                    <div
-                      className="bg-gradient-to-r from-violet-500 to-purple-600 h-3 rounded-full transition-all duration-300 ease-out"
-                      style={{ width: `${Math.min((progress.current / progress.total) * 100, 100)}%` }}
-                    />
+                  <div className="relative">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-violet-500 to-purple-600 h-full rounded-full transition-all duration-500 ease-out relative"
+                        style={{ width: `${Math.min((progress.current / progress.total) * 100, 100)}%` }}
+                      >
+                        <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                      </div>
+                    </div>
                   </div>
                   
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    {progress.message}
-                  </p>
-                  
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                    Last updated: {progress.timestamp}
-                  </p>
+                  <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      {progress.message}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Started at {new Date().toLocaleTimeString()} • {progress.timestamp}
+                    </p>
+                  </div>
                 </div>
               )}
 
               {/* Real-time Logs */}
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 max-h-60 overflow-y-auto">
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Real-time Logs
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Activity Log
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {logs.length} entries
                   </span>
                 </div>
                 
-                <div className="space-y-1 font-mono text-xs">
-                  {logs.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400">Waiting for logs...</p>
-                  ) : (
-                    logs.map((log) => (
-                      <div key={log.id} className="flex items-start gap-2">
-                        <span className="text-gray-400 dark:text-gray-500 min-w-[60px]">
-                          {log.timestamp}
-                        </span>
-                        <div className="flex items-center gap-1 min-w-[16px]">
-                          {log.level === 'success' && <CheckCircle className="w-3 h-3 text-green-500" />}
-                          {log.level === 'error' && <AlertTriangle className="w-3 h-3 text-red-500" />}
-                          {log.level === 'warning' && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
-                          {log.level === 'info' && <div className="w-3 h-3 rounded-full bg-blue-500" />}
-                        </div>
-                        <span className={`flex-1 ${
-                          log.level === 'success' ? 'text-green-600 dark:text-green-400' :
-                          log.level === 'error' ? 'text-red-600 dark:text-red-400' :
-                          log.level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-gray-600 dark:text-gray-300'
-                        }`}>
-                          {log.message}
-                        </span>
+                <div className="p-4 max-h-52 overflow-y-auto custom-scrollbar">
+                  <div className="space-y-2 font-mono text-xs">
+                    {logs.length === 0 ? (
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" />
+                        <p>Initializing tracking system...</p>
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      logs.map((log) => (
+                        <div key={log.id} className="flex items-start gap-3 group hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2">
+                          <span className="text-gray-400 dark:text-gray-500 min-w-[65px] tabular-nums">
+                            {log.timestamp}
+                          </span>
+                          <div className="flex items-center gap-1.5 min-w-[18px]">
+                            {log.level === 'success' && <CheckCircle className="w-3.5 h-3.5 text-green-500" />}
+                            {log.level === 'error' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+                            {log.level === 'warning' && <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />}
+                            {log.level === 'info' && <div className="w-3 h-3 rounded-full bg-blue-500/80" />}
+                          </div>
+                          <span className={`flex-1 leading-relaxed ${
+                            log.level === 'success' ? 'text-green-600 dark:text-green-400' :
+                            log.level === 'error' ? 'text-red-600 dark:text-red-400' :
+                            log.level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-gray-700 dark:text-gray-300'
+                          }`}>
+                            {log.message}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 

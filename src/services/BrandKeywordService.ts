@@ -286,7 +286,8 @@ export class BrandKeywordService {
       }
 
       console.log(`[BrandKeywords] Starting parallel ranking tracking for ${keywordsToTrack.length} keywords`);
-      onProgress?.('Submitting Tasks', 20, 100, `Found ${keywordsToTrack.length} keywords to track`);
+      onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
+      onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
 
       const credentials = btoa(`${username}:${password}`);
       
@@ -334,7 +335,8 @@ export class BrandKeywordService {
 
       // Wait for all task submissions to complete
       console.log(`[BrandKeywords] Submitting ${allTaskPromises.length} parallel batches`);
-      onProgress?.('Submitting Tasks', 30, 100, `Submitting ${allTaskPromises.length} task batches to DataForSEO...`);
+      onProgress?.('Submitting', 30, 100, `Submitting ${batches.length} batch${batches.length > 1 ? 'es' : ''} (${keywordsToTrack.length} keywords) to DataForSEO...`);
+      onProgress?.('Submitting', 32, 100, `Using ${maxParallelBatches} parallel connections for maximum speed...`);
       
       const allTaskResults = await Promise.allSettled(allTaskPromises);
       
@@ -352,16 +354,18 @@ export class BrandKeywordService {
 
       if (failedBatches > 0) {
         console.warn(`[BrandKeywords] ${failedBatches} batches failed to submit`);
+        onProgress?.('Warning', 35, 100, `⚠️ ${failedBatches} batch${failedBatches > 1 ? 'es' : ''} failed to submit`);
       }
 
       if (allTasks.length === 0) {
         console.error('[BrandKeywords] No SERP tasks were successfully submitted');
-        onProgress?.('Error', 0, 100, 'Failed to submit any SERP tasks');
+        onProgress?.('Error', 0, 100, '❌ Failed to submit any SERP tasks - check API credentials');
         return false;
       }
 
       console.log(`[BrandKeywords] Successfully submitted ${allTasks.length} SERP tasks. Starting parallel processing...`);
-      onProgress?.('Processing Tasks', 40, 100, `Successfully submitted ${allTasks.length} tasks. Waiting for results...`);
+      onProgress?.('Submitted', 38, 100, `✅ Successfully submitted ${allTasks.length} keyword${allTasks.length > 1 ? 's' : ''} for tracking`);
+      onProgress?.('Processing', 40, 100, `Starting parallel processing with ${maxConcurrentProcessing} concurrent connections...`);
 
       // Process all tasks in parallel with optimized polling
       await this.processAllSerpTasksInParallelWithProgress(allTasks, brandName, credentials, onProgress);
@@ -544,7 +548,10 @@ export class BrandKeywordService {
     onProgress?: ProgressCallback
   ): Promise<void> {
     console.log(`[BrandKeywords] Starting parallel processing of ${allTasks.length} SERP tasks`);
-    onProgress?.('Processing Tasks', 45, 100, `Starting parallel processing of ${allTasks.length} tasks...`);
+    onProgress?.('Processing', 45, 100, `🔄 Beginning result collection for ${allTasks.length} keywords...`);
+    
+    let failedTasks = 0;
+    let processedKeywords: string[] = [];
     
     const maxWaitTime = 180000; // 3 minutes max (longer for more tasks)
     const pollInterval = 2000; // Check every 2 seconds for faster response
@@ -557,7 +564,11 @@ export class BrandKeywordService {
     while (completedTasks.size < allTasks.length && (Date.now() - startTime) < maxWaitTime) {
       try {
         // Check which tasks are ready
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
         console.log(`[BrandKeywords] Polling for ready tasks... (${completedTasks.size}/${allTasks.length} completed)`);
+        onProgress?.('Polling', 45 + Math.round((completedTasks.size / allTasks.length) * 45), 100, 
+          `⏱️ Checking task status... (${completedTasks.size}/${allTasks.length} complete, ${elapsedSeconds}s elapsed)`);
+        
         const readyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/tasks_ready', {
           method: 'GET',
           headers: {
@@ -597,22 +608,27 @@ export class BrandKeywordService {
               ).then(() => {
                 completedTasks.add(task.taskId);
                 processingPromises.delete(task.taskId);
+                processedKeywords.push(task.keyword.keyword);
                 console.log(`[BrandKeywords] Completed ${completedTasks.size}/${allTasks.length} tasks`);
                 
                 // Update progress as tasks complete
                 const progressPercent = 45 + Math.round((completedTasks.size / allTasks.length) * 45); // 45-90%
-                onProgress?.('Processing Tasks', progressPercent, 100, 
-                  `Processed ${completedTasks.size}/${allTasks.length} keywords (${processingPromises.size} in progress)`);
+                const remainingTime = completedTasks.size > 0 ? 
+                  Math.round(((Date.now() - startTime) / completedTasks.size) * (allTasks.length - completedTasks.size) / 1000) : 0;
+                  
+                onProgress?.('Processing', progressPercent, 100, 
+                  `📊 Processed "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length} complete, ~${remainingTime}s remaining)`);
               }).catch((error) => {
                 console.error(`[BrandKeywords] Error processing task ${task.taskId}:`, error);
                 processingPromises.delete(task.taskId);
                 // Still mark as completed to avoid infinite loop
                 completedTasks.add(task.taskId);
+                failedTasks++;
                 
                 // Update progress even for failed tasks
                 const progressPercent = 45 + Math.round((completedTasks.size / allTasks.length) * 45);
-                onProgress?.('Processing Tasks', progressPercent, 100, 
-                  `Processed ${completedTasks.size}/${allTasks.length} keywords (${processingPromises.size} in progress, 1 failed)`);
+                onProgress?.('Warning', progressPercent, 100, 
+                  `⚠️ Failed to process "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length}, ${failedTasks} failed)`);
               });
               
               processingPromises.set(task.taskId, processingPromise);
@@ -663,10 +679,16 @@ export class BrandKeywordService {
       const completionPercent = ((finalCompletedCount/totalTasks)*100).toFixed(1);
       console.warn(`[BrandKeywords] Completed ${finalCompletedCount}/${totalTasks} tasks (${completionPercent}%) in ${Math.round(elapsedTime/1000)}s`);
       onProgress?.('Partial Complete', 90, 100, 
-        `Completed ${finalCompletedCount}/${totalTasks} tasks (${completionPercent}%)`);
+        `⚠️ Partial completion: ${finalCompletedCount}/${totalTasks} keywords processed (${completionPercent}%) in ${Math.round(elapsedTime/1000)}s`);
     } else {
+      const avgTimePerKeyword = (elapsedTime / totalTasks / 1000).toFixed(1);
       console.log(`[BrandKeywords] Successfully completed all ${totalTasks} SERP tasks in parallel in ${Math.round(elapsedTime/1000)}s! 🚀`);
-      onProgress?.('Tasks Complete', 90, 100, `Successfully processed all ${totalTasks} keywords! 🚀`);
+      onProgress?.('Complete', 90, 100, 
+        `✅ Successfully processed all ${totalTasks} keywords in ${Math.round(elapsedTime/1000)}s (${avgTimePerKeyword}s per keyword)! 🚀`);
+    }
+    
+    if (failedTasks > 0) {
+      onProgress?.('Summary', 91, 100, `⚠️ Note: ${failedTasks} keyword${failedTasks > 1 ? 's' : ''} failed to process`);
     }
   }
 
