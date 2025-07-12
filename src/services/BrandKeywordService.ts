@@ -1202,6 +1202,29 @@ export class BrandKeywordService {
   }
 
   /**
+   * Get actual product data for a brand from the database
+   */
+  static async getBrandProducts(brandName: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('asins')
+        .select('asin, title, category, subcategory, features')
+        .eq('brand', brandName)
+        .limit(10); // Get up to 10 products for context
+
+      if (error) {
+        console.error('Error fetching brand products:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching brand products:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get keyword suggestions from AI based on brand analysis (NON-BRANDED ONLY)
    */
   static async generateKeywordRecommendations(
@@ -1216,31 +1239,40 @@ export class BrandKeywordService {
         return [];
       }
 
-      const prompt = `You are an Amazon keyword researcher. Generate generic product keywords that customers would search for when they DON'T know about specific brands yet.
+      // Get actual product data for better recommendations
+      const brandProducts = await this.getBrandProducts(brandName);
+      
+      let productDetails = '';
+      if (brandProducts.length > 0) {
+        productDetails = brandProducts.map(p => 
+          `- ${p.title || 'Unknown Product'} (${p.category || 'No category'}${p.subcategory ? ' > ' + p.subcategory : ''})`
+        ).join('\n');
+      } else if (products.length > 0) {
+        productDetails = `Generic products: ${products.join(', ')}`;
+      }
 
-Products/Category: ${products.join(', ')}
+      const prompt = `You are an Amazon keyword researcher. Generate SPECIFIC product keywords that customers would search for when looking for these EXACT types of products (but without knowing the brand).
+
+Actual Products Being Sold:
+${productDetails}
 ${targetAudience ? `Target Audience: ${targetAudience}` : ''}
 
 🚫 DO NOT INCLUDE THE BRAND NAME: "${brandName}"
 - Do not use "${brandName}" in any keyword
 - Do not use variations like "${brandName.replace(/\s+/g, '')}" or "${brandName.replace(/\s+/g, '-')}"
 
-✅ GENERATE GENERIC KEYWORDS:
-- Product categories (e.g., "scented candles", "soy candles")
-- Feature-based terms (e.g., "natural wax candles", "long lasting candles")
-- Problem-solving keywords (e.g., "strong scented candles", "clean burning candles")
-- Use-case keywords (e.g., "aromatherapy candles", "relaxation candles")
+✅ GENERATE SPECIFIC KEYWORDS BASED ON THE ACTUAL PRODUCTS:
+- Look at the specific product titles and categories above
+- Extract key features, materials, and uses from the actual products
+- Create keywords that match what customers would search for these specific items
+- Focus on the unique characteristics of THESE products, not generic terms
 
-EXAMPLES OF GOOD KEYWORDS:
-- "scented candles"
-- "soy wax candles"
-- "aromatherapy candles" 
-- "natural candles"
-- "cotton wick candles"
-- "home fragrance"
-- "essential oil candles"
-- "vanilla scented candles"
-- "long burning candles"
+Instructions:
+1. Analyze the actual product titles and categories provided
+2. Extract specific features, materials, scents, sizes, uses from the products
+3. Generate keywords that are specific to these exact products
+4. Include variations like "[material] [product]", "[feature] [product]", "[use case] [product]"
+5. DO NOT generate generic category keywords unless they specifically match the products
 
 Return ONLY valid JSON array:
 [

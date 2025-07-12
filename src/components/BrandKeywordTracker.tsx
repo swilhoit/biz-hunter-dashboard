@@ -208,10 +208,10 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
         .map(k => k.keyword)
         .slice(0, 5);
       
-      addLog('info', 'Generating AI keyword recommendations...');
+      addLog('info', 'Fetching actual product data for AI recommendations...');
       const recommendations = await BrandKeywordService.generateKeywordRecommendations(
         brandName,
-        productContext.length > 0 ? productContext : ['candles'] // Use generic product instead of brand
+        productContext.length > 0 ? productContext : [] // Will fetch actual ASINs from database
       );
       
       if (recommendations.length > 0) {
