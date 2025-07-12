@@ -162,9 +162,16 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        <Building2 className="w-4 h-4 mr-1" />
-                        {listing.amazon_category || listing.industry || 'Unknown Category'}
+                      <div className="flex flex-col gap-1 mt-1">
+                        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                          <Building2 className="w-4 h-4 mr-1" />
+                          {listing.industry || 'Unknown Type'}
+                        </div>
+                        {listing.amazon_category && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {listing.amazon_category}
+                          </span>
+                        )}
                       </div>
                       {listing.tags && (
                         <div className="flex flex-wrap gap-1 mt-1">

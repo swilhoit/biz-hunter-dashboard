@@ -74,7 +74,7 @@ const transformToMarketListing = (listing: any): BusinessListing => {
     annual_revenue: sanitizedRevenue,
     business_name: listing.name,
     marketplace: listing.source || 'Unknown',
-    amazon_category: listing.industry,
+    amazon_category: listing.amazon_category || null, // Use actual amazon_category field from database
     date_listed: listing.created_at?.split('T')[0],
     listing_url: listing.original_url,
     broker_company: listing.source,
@@ -401,7 +401,7 @@ export const useAddToPipeline = () => {
         listing_url: listing.listing_url || listing.original_url,
         broker_name: listing.broker_name,
         broker_company: listing.broker_company || listing.source,
-        amazon_category: listing.amazon_category || listing.industry,
+        amazon_category: listing.amazon_category,
         business_age: listing.business_age,
         status: 'prospecting', // This will be mapped to 'stage' by the adapter
         tags: listing.tags,

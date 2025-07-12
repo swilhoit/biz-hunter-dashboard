@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
 
 interface CategoryAnalysisResult {
-  category: string;
+  businessType: string;
+  amazonCategory: string;
   confidence: number;
   reasoning: string;
   subcategories?: string[];
@@ -46,10 +47,21 @@ Source: ${listing.source || 'Unknown'}
 Annual Revenue: ${listing.annual_revenue ? `$${listing.annual_revenue.toLocaleString()}` : 'Not provided'}
 Asking Price: ${listing.asking_price ? `$${listing.asking_price.toLocaleString()}` : 'Not provided'}
 
-Based on the business name and description, determine the PRIMARY AMAZON PRODUCT CATEGORY.
-Focus on what products are being sold, not the business model.
+Analyze this business and determine TWO things:
 
-1. The primary Amazon product category from this list:
+1. BUSINESS TYPE - The type of business model:
+   - Amazon FBA (if selling physical products on Amazon)
+   - E-commerce (Shopify, WooCommerce, etc.)
+   - SaaS (Software as a Service)
+   - Content/Publishing
+   - Digital Products
+   - Services
+   - Marketplace
+   - Subscription Box
+   - Print on Demand
+   - Dropshipping
+
+2. AMAZON CATEGORY - If it's an Amazon FBA business, what product category:
    - Pet Supplies
    - Home & Kitchen
    - Sports & Outdoors
@@ -70,29 +82,19 @@ Focus on what products are being sold, not the business model.
    - Kitchen & Dining
    - Patio, Lawn & Garden
    - Sports & Fitness
-   
-2. Your confidence level (0-100)
-3. Brief reasoning for your categorization
-4. Any relevant subcategories
 
-Look for product keywords in the business name:
-- Words like "pet", "dog", "cat" → Pet Supplies
-- Words like "kitchen", "home", "decor", "furniture" → Home & Kitchen
-- Words like "sports", "fitness", "outdoor", "camping" → Sports & Outdoors
-- Words like "baby", "infant", "nursery" → Baby
-- Words like "beauty", "cosmetics", "skincare" → Beauty
-- Words like "electronic", "tech", "gadget", "phone" → Electronics
-- Words like "health", "wellness", "supplement", "vitamin" → Health & Personal Care
-- Words like "toy", "game", "play" → Toys & Games
+Look for clues:
+- If it mentions FBA, Amazon, or product brands → likely Amazon FBA
+- Product keywords help identify the Amazon category
+- If no clear Amazon connection → identify the business type
 
-IMPORTANT: Choose the most specific product category that matches the business, NOT "Amazon FBA" or general business types.
-
-Return as JSON with this structure:
+Return as JSON:
 {
-  "category": "Primary Category",
+  "businessType": "Amazon FBA",
+  "amazonCategory": "Pet Supplies",
   "confidence": 85,
-  "reasoning": "Brief explanation",
-  "subcategories": ["Subcategory 1", "Subcategory 2"]
+  "reasoning": "Business name mentions dog toys, indicating Amazon FBA pet products",
+  "subcategories": []
 }`;
 
       const response = await client.chat.completions.create({
@@ -100,7 +102,7 @@ Return as JSON with this structure:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert at categorizing Amazon FBA businesses by their PRODUCT CATEGORY. Focus on identifying what products are being sold based on the business name and description. Always choose a specific Amazon product category like "Pet Supplies" or "Home & Kitchen", never generic business types like "Amazon FBA" or "E-commerce".'
+            content: 'You are an expert at categorizing online businesses. First identify the business type (Amazon FBA, E-commerce, SaaS, etc.), then if it\'s Amazon FBA, identify the specific product category. Always provide both businessType and amazonCategory fields. For non-Amazon businesses, set amazonCategory to null.'
           },
           {
             role: 'user',
@@ -121,74 +123,49 @@ Return as JSON with this structure:
     } catch (error) {
       console.error('Error analyzing category:', error);
       
-      // Fallback logic based on product keywords
+      // Fallback logic
       const name = listing.name.toLowerCase();
       const description = (listing.description || '').toLowerCase();
       const combined = `${name} ${description}`;
       
-      // Product category keyword mapping
-      if (combined.match(/\b(pet|dog|cat|animal|puppy|kitten)\b/)) {
-        return {
-          category: 'Pet Supplies',
-          confidence: 70,
-          reasoning: 'Detected pet-related keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(kitchen|home|decor|furniture|household)\b/)) {
-        return {
-          category: 'Home & Kitchen',
-          confidence: 70,
-          reasoning: 'Detected home/kitchen keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(sport|fitness|outdoor|camping|exercise|gym)\b/)) {
-        return {
-          category: 'Sports & Outdoors',
-          confidence: 70,
-          reasoning: 'Detected sports/outdoor keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(baby|infant|nursery|toddler)\b/)) {
-        return {
-          category: 'Baby',
-          confidence: 70,
-          reasoning: 'Detected baby-related keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(beauty|cosmetic|skincare|makeup)\b/)) {
-        return {
-          category: 'Beauty',
-          confidence: 70,
-          reasoning: 'Detected beauty keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(electronic|tech|gadget|phone|computer)\b/)) {
-        return {
-          category: 'Electronics',
-          confidence: 70,
-          reasoning: 'Detected electronics keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(health|wellness|supplement|vitamin|medical)\b/)) {
-        return {
-          category: 'Health & Personal Care',
-          confidence: 70,
-          reasoning: 'Detected health-related keywords',
-          subcategories: []
-        };
-      } else if (combined.match(/\b(toy|game|play|puzzle)\b/)) {
-        return {
-          category: 'Toys & Games',
-          confidence: 70,
-          reasoning: 'Detected toy/game keywords',
-          subcategories: []
-        };
+      // Determine business type
+      let businessType = 'Online Business';
+      let amazonCategory = null;
+      
+      if (combined.includes('amazon') || combined.includes('fba')) {
+        businessType = 'Amazon FBA';
+        
+        // Try to determine Amazon category
+        if (combined.match(/\b(pet|dog|cat|animal|puppy|kitten)\b/)) {
+          amazonCategory = 'Pet Supplies';
+        } else if (combined.match(/\b(kitchen|home|decor|furniture|household)\b/)) {
+          amazonCategory = 'Home & Kitchen';
+        } else if (combined.match(/\b(sport|fitness|outdoor|camping|exercise|gym)\b/)) {
+          amazonCategory = 'Sports & Outdoors';
+        } else if (combined.match(/\b(baby|infant|nursery|toddler)\b/)) {
+          amazonCategory = 'Baby';
+        } else if (combined.match(/\b(beauty|cosmetic|skincare|makeup)\b/)) {
+          amazonCategory = 'Beauty';
+        } else if (combined.match(/\b(electronic|tech|gadget|phone|computer)\b/)) {
+          amazonCategory = 'Electronics';
+        } else if (combined.match(/\b(health|wellness|supplement|vitamin|medical)\b/)) {
+          amazonCategory = 'Health & Personal Care';
+        } else if (combined.match(/\b(toy|game|play|puzzle)\b/)) {
+          amazonCategory = 'Toys & Games';
+        } else {
+          amazonCategory = 'General Merchandise';
+        }
+      } else if (combined.includes('shopify') || combined.includes('ecommerce')) {
+        businessType = 'E-commerce';
+      } else if (combined.includes('saas') || combined.includes('software')) {
+        businessType = 'SaaS';
       }
       
       return {
-        category: 'General Merchandise',
-        confidence: 40,
-        reasoning: 'Unable to determine specific product category',
+        businessType,
+        amazonCategory,
+        confidence: 70,
+        reasoning: 'Determined from keywords',
         subcategories: []
       };
     }
@@ -218,12 +195,13 @@ Return as JSON with this structure:
       const batchPromises = batch.map(async (listing) => {
         try {
           const result = await this.analyzeListingCategory(listing);
-          console.log(`✓ Analyzed "${listing.name}": ${result.category} (${result.confidence}% confidence)`);
+          console.log(`✓ Analyzed "${listing.name}": ${result.businessType}${result.amazonCategory ? ` / ${result.amazonCategory}` : ''} (${result.confidence}% confidence)`);
           results.set(listing.id, result);
         } catch (error) {
           console.error(`✗ Error analyzing listing ${listing.id} "${listing.name}":`, error);
           results.set(listing.id, {
-            category: 'Unknown',
+            businessType: 'Unknown',
+            amazonCategory: null,
             confidence: 0,
             reasoning: 'Analysis failed',
             subcategories: []
@@ -247,7 +225,7 @@ Return as JSON with this structure:
   /**
    * Update listing categories in the database
    */
-  static async updateListingCategories(updates: Array<{ id: string; category: string }>, table: 'business_listings' | 'deals' = 'business_listings'): Promise<{ success: number; failed: number }> {
+  static async updateListingCategories(updates: Array<{ id: string; businessType: string; amazonCategory: string | null }>, table: 'business_listings' | 'deals' = 'business_listings'): Promise<{ success: number; failed: number }> {
     let success = 0;
     let failed = 0;
     
@@ -256,7 +234,8 @@ Return as JSON with this structure:
         const { error } = await supabase
           .from(table)
           .update({ 
-            industry: update.category,
+            industry: update.businessType,
+            amazon_category: update.amazonCategory,
             updated_at: new Date().toISOString()
           })
           .eq('id', update.id);
@@ -289,7 +268,7 @@ Return as JSON with this structure:
     analyzed: number;
     updated: number;
     failed: number;
-    results: Array<{ id: string; name: string; category: string; confidence: number }>;
+    results: Array<{ id: string; name: string; businessType: string; amazonCategory: string | null; confidence: number }>;
   }> {
     const { 
       table = 'business_listings', 
@@ -298,11 +277,11 @@ Return as JSON with this structure:
     } = options;
     
     try {
-      // Fetch listings with unknown or empty categories
+      // Fetch listings with unknown or empty categories (either industry or amazon_category)
       const { data: listings, error } = await supabase
         .from(table)
-        .select('id, name, description, source, annual_revenue, asking_price, industry')
-        .or('industry.is.null,industry.eq.Unknown,industry.eq.unknown,industry.eq.,industry.eq.Unknown Category,industry.eq.unknown category')
+        .select('id, name, description, source, annual_revenue, asking_price, industry, amazon_category')
+        .or('industry.is.null,industry.eq.Unknown,industry.eq.unknown,industry.eq.,industry.eq.Unknown Category,industry.eq.unknown category,amazon_category.is.null')
         .limit(limit);
         
       if (error) {
@@ -319,8 +298,8 @@ Return as JSON with this structure:
       const analysisResults = await this.analyzeBatch(listings);
       
       // Filter by confidence threshold and prepare updates
-      const updates: Array<{ id: string; category: string }> = [];
-      const results: Array<{ id: string; name: string; category: string; confidence: number }> = [];
+      const updates: Array<{ id: string; businessType: string; amazonCategory: string | null }> = [];
+      const results: Array<{ id: string; name: string; businessType: string; amazonCategory: string | null; confidence: number }> = [];
       
       console.log(`\nFiltering results by confidence threshold (${confidenceThreshold}%)...`);
       
@@ -330,15 +309,16 @@ Return as JSON with this structure:
           results.push({
             id,
             name: listing.name,
-            category: result.category,
+            businessType: result.businessType,
+            amazonCategory: result.amazonCategory,
             confidence: result.confidence
           });
           
-          if (result.confidence >= confidenceThreshold && result.category !== 'Unknown') {
-            updates.push({ id, category: result.category });
-            console.log(`✓ Will update "${listing.name}" to "${result.category}" (${result.confidence}% confidence)`);
+          if (result.confidence >= confidenceThreshold && result.businessType !== 'Unknown') {
+            updates.push({ id, businessType: result.businessType, amazonCategory: result.amazonCategory });
+            console.log(`✓ Will update "${listing.name}" to "${result.businessType}${result.amazonCategory ? ` / ${result.amazonCategory}` : ''}" (${result.confidence}% confidence)`);
           } else {
-            console.log(`✗ Skipping "${listing.name}": ${result.category} (${result.confidence}% confidence) - ${result.confidence < confidenceThreshold ? 'below threshold' : 'unknown category'}`);
+            console.log(`✗ Skipping "${listing.name}": ${result.businessType}${result.amazonCategory ? ` / ${result.amazonCategory}` : ''} (${result.confidence}% confidence) - ${result.confidence < confidenceThreshold ? 'below threshold' : 'unknown category'}`);
           }
         }
       });
