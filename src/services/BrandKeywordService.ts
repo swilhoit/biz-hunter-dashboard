@@ -614,20 +614,10 @@ export class BrandKeywordService {
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
             
-            // If no tasks are ready but we haven't processed all tasks, try fetching them directly
+            // Don't try direct fetch - only process tasks that appear in ready list
             if (newlyReady.length === 0 && completedTasks.size < allTasks.length) {
-              console.log(`[BrandKeywords] No ready tasks found, trying direct fetch for unprocessed tasks...`);
-              
-              // Try to process some unprocessed tasks directly
-              const unprocessedTasks = allTasks.filter(task => 
-                !completedTasks.has(task.taskId) && 
-                !processingPromises.has(task.taskId)
-              ).slice(0, 5); // Try 5 at a time
-              
-              if (unprocessedTasks.length > 0) {
-                console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
-                newlyReady.push(...unprocessedTasks);
-              }
+              const remaining = allTasks.length - completedTasks.size;
+              console.log(`[BrandKeywords] No ready tasks found. ${remaining} tasks still pending.`);
             }
             
             // Process tasks in batches to limit concurrent connections
@@ -656,14 +646,23 @@ export class BrandKeywordService {
               }).catch((error) => {
                 console.error(`[BrandKeywords] Error processing task ${task.taskId}:`, error);
                 processingPromises.delete(task.taskId);
-                // Still mark as completed to avoid infinite loop
-                completedTasks.add(task.taskId);
-                failedTasks++;
                 
-                // Update progress even for failed tasks
-                const progressPercent = 45 + Math.round((completedTasks.size / allTasks.length) * 45);
-                onProgress?.('Warning', progressPercent, 100, 
-                  `⚠️ Failed to process "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length}, ${failedTasks} failed)`);
+                // Only mark as completed if it's not a temporary error
+                const isTemporaryError = error.message?.includes('in queue') || error.message?.includes('in progress');
+                
+                if (!isTemporaryError) {
+                  // Permanent failure - mark as completed to avoid infinite loop
+                  completedTasks.add(task.taskId);
+                  failedTasks++;
+                  
+                  // Update progress for failed tasks
+                  const progressPercent = 45 + Math.round((completedTasks.size / allTasks.length) * 45);
+                  onProgress?.('Warning', progressPercent, 100, 
+                    `⚠️ Failed to process "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length}, ${failedTasks} failed)`);
+                } else {
+                  // Temporary error - task will be retried later
+                  console.log(`[BrandKeywords] Task ${task.taskId} will be retried later (${error.message})`);
+                }
               });
               
               processingPromises.set(task.taskId, processingPromise);
@@ -851,10 +850,10 @@ export class BrandKeywordService {
       const task = result.tasks[0];
       console.log(`[BrandKeywords] Task ${taskId} status:`, task.status_code, task.status_message);
       
-      // Check if task is still processing
-      if (task.status_code === 20100) {
-        console.log(`[BrandKeywords] Task ${taskId} is still in progress`);
-        throw new Error('Task still in progress'); // This will be caught and retried
+      // Check if task is still processing or in queue
+      if (task.status_code === 20100 || task.status_code === 40602) {
+        console.log(`[BrandKeywords] Task ${taskId} is still ${task.status_code === 40602 ? 'in queue' : 'in progress'}`);
+        throw new Error(`Task still ${task.status_code === 40602 ? 'in queue' : 'in progress'}`); // This will be caught and retried
       }
       
       if (task.status_code !== 20000) {
