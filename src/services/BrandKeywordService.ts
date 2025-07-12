@@ -366,7 +366,7 @@ export class BrandKeywordService {
 
       console.log(`[BrandKeywords] Successfully submitted ${allTasks.length} SERP tasks. Starting parallel processing...`);
       onProgress?.('Submitted', 38, 100, `✅ Successfully submitted ${allTasks.length} keyword${allTasks.length > 1 ? 's' : ''} for tracking`);
-      onProgress?.('Processing', 40, 100, `Starting parallel processing with ${maxConcurrentProcessing} concurrent connections...`);
+      onProgress?.('Processing', 40, 100, `🔄 Starting parallel processing to check rankings...`);
 
       // Process all tasks in parallel with optimized polling
       await this.processAllSerpTasksInParallelWithProgress(allTasks, brandName, credentials, onProgress);
