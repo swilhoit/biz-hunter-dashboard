@@ -46,28 +46,46 @@ Source: ${listing.source || 'Unknown'}
 Annual Revenue: ${listing.annual_revenue ? `$${listing.annual_revenue.toLocaleString()}` : 'Not provided'}
 Asking Price: ${listing.asking_price ? `$${listing.asking_price.toLocaleString()}` : 'Not provided'}
 
-Based on the business name and any available information, determine:
-1. The primary business category (e.g., "Amazon FBA", "SaaS", "E-commerce", "Content/Publishing", "Services", "Retail", "Manufacturing", etc.)
+Based on the business name and description, determine the PRIMARY AMAZON PRODUCT CATEGORY.
+Focus on what products are being sold, not the business model.
+
+1. The primary Amazon product category from this list:
+   - Pet Supplies
+   - Home & Kitchen
+   - Sports & Outdoors
+   - Baby
+   - Beauty
+   - Electronics
+   - Health & Personal Care
+   - Toys & Games
+   - Clothing, Shoes & Jewelry
+   - Garden & Outdoor
+   - Tools & Home Improvement
+   - Grocery & Gourmet Food
+   - Office Products
+   - Automotive
+   - Arts, Crafts & Sewing
+   - Industrial & Scientific
+   - Books
+   - Kitchen & Dining
+   - Patio, Lawn & Garden
+   - Sports & Fitness
+   
 2. Your confidence level (0-100)
 3. Brief reasoning for your categorization
 4. Any relevant subcategories
 
-Common categories for online businesses:
-- Amazon FBA (if it mentions Amazon, FBA, or product selling on Amazon)
-- E-commerce (general online retail, Shopify stores, etc.)
-- SaaS (Software as a Service)
-- Content/Publishing (blogs, newsletters, info products)
-- Digital Products (courses, templates, downloads)
-- Services (agencies, consulting, freelancing)
-- Marketplace (platforms connecting buyers/sellers)
-- Subscription Box
-- Print on Demand
-- Dropshipping
-- DTC Brand (Direct to Consumer)
-- B2B Services
-- Affiliate Marketing
+Look for product keywords in the business name:
+- Words like "pet", "dog", "cat" → Pet Supplies
+- Words like "kitchen", "home", "decor", "furniture" → Home & Kitchen
+- Words like "sports", "fitness", "outdoor", "camping" → Sports & Outdoors
+- Words like "baby", "infant", "nursery" → Baby
+- Words like "beauty", "cosmetics", "skincare" → Beauty
+- Words like "electronic", "tech", "gadget", "phone" → Electronics
+- Words like "health", "wellness", "supplement", "vitamin" → Health & Personal Care
+- Words like "toy", "game", "play" → Toys & Games
 
-IMPORTANT: Do NOT return "Unknown" or "Unknown Category" as the category. Always make your best determination based on available information.
+IMPORTANT: Choose the most specific product category that matches the business, NOT "Amazon FBA" or general business types.
 
 Return as JSON with this structure:
 {
@@ -82,7 +100,7 @@ Return as JSON with this structure:
         messages: [
           {
             role: 'system',
-            content: 'You are an expert at categorizing online businesses based on limited information. Always provide a category even with minimal data, using the business name as the primary clue.'
+            content: 'You are an expert at categorizing Amazon FBA businesses by their PRODUCT CATEGORY. Focus on identifying what products are being sold based on the business name and description. Always choose a specific Amazon product category like "Pet Supplies" or "Home & Kitchen", never generic business types like "Amazon FBA" or "E-commerce".'
           },
           {
             role: 'user',
@@ -103,38 +121,74 @@ Return as JSON with this structure:
     } catch (error) {
       console.error('Error analyzing category:', error);
       
-      // Fallback logic based on keywords
+      // Fallback logic based on product keywords
       const name = listing.name.toLowerCase();
       const description = (listing.description || '').toLowerCase();
       const combined = `${name} ${description}`;
       
-      if (combined.includes('amazon') || combined.includes('fba')) {
+      // Product category keyword mapping
+      if (combined.match(/\b(pet|dog|cat|animal|puppy|kitten)\b/)) {
         return {
-          category: 'Amazon FBA',
+          category: 'Pet Supplies',
           confidence: 70,
-          reasoning: 'Detected Amazon/FBA keywords in listing',
+          reasoning: 'Detected pet-related keywords',
           subcategories: []
         };
-      } else if (combined.includes('saas') || combined.includes('software')) {
+      } else if (combined.match(/\b(kitchen|home|decor|furniture|household)\b/)) {
         return {
-          category: 'SaaS',
+          category: 'Home & Kitchen',
           confidence: 70,
-          reasoning: 'Detected software-related keywords',
+          reasoning: 'Detected home/kitchen keywords',
           subcategories: []
         };
-      } else if (combined.includes('ecommerce') || combined.includes('online store') || combined.includes('shopify')) {
+      } else if (combined.match(/\b(sport|fitness|outdoor|camping|exercise|gym)\b/)) {
         return {
-          category: 'E-commerce',
+          category: 'Sports & Outdoors',
           confidence: 70,
-          reasoning: 'Detected e-commerce keywords',
+          reasoning: 'Detected sports/outdoor keywords',
+          subcategories: []
+        };
+      } else if (combined.match(/\b(baby|infant|nursery|toddler)\b/)) {
+        return {
+          category: 'Baby',
+          confidence: 70,
+          reasoning: 'Detected baby-related keywords',
+          subcategories: []
+        };
+      } else if (combined.match(/\b(beauty|cosmetic|skincare|makeup)\b/)) {
+        return {
+          category: 'Beauty',
+          confidence: 70,
+          reasoning: 'Detected beauty keywords',
+          subcategories: []
+        };
+      } else if (combined.match(/\b(electronic|tech|gadget|phone|computer)\b/)) {
+        return {
+          category: 'Electronics',
+          confidence: 70,
+          reasoning: 'Detected electronics keywords',
+          subcategories: []
+        };
+      } else if (combined.match(/\b(health|wellness|supplement|vitamin|medical)\b/)) {
+        return {
+          category: 'Health & Personal Care',
+          confidence: 70,
+          reasoning: 'Detected health-related keywords',
+          subcategories: []
+        };
+      } else if (combined.match(/\b(toy|game|play|puzzle)\b/)) {
+        return {
+          category: 'Toys & Games',
+          confidence: 70,
+          reasoning: 'Detected toy/game keywords',
           subcategories: []
         };
       }
       
       return {
-        category: 'Online Business',
+        category: 'General Merchandise',
         confidence: 40,
-        reasoning: 'Unable to determine specific category',
+        reasoning: 'Unable to determine specific product category',
         subcategories: []
       };
     }
