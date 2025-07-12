@@ -1206,18 +1206,34 @@ export class BrandKeywordService {
    */
   static async getBrandProducts(brandName: string): Promise<any[]> {
     try {
+      // First try with common columns that should exist
       const { data, error } = await supabase
         .from('asins')
-        .select('asin, title, category, subcategory, features')
+        .select('asin, product_name, title, category, subcategory')
         .eq('brand', brandName)
         .limit(10); // Get up to 10 products for context
 
       if (error) {
         console.error('Error fetching brand products:', error);
-        return [];
+        // Fallback to minimal columns
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('asins')
+          .select('asin, category')
+          .eq('brand', brandName)
+          .limit(10);
+          
+        if (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          return [];
+        }
+        return fallbackData || [];
       }
 
-      return data || [];
+      // Normalize the data to handle both product_name and title fields
+      return (data || []).map(product => ({
+        ...product,
+        title: product.title || product.product_name || 'Unknown Product'
+      }));
     } catch (error) {
       console.error('Error fetching brand products:', error);
       return [];
