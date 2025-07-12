@@ -208,29 +208,6 @@ export class ReviewAnalysisService {
       
       console.log('[DataForSEO] No critical reviews found');
       return [];
-      }
-      
-      // Check if this is a live response with immediate results (fallback)
-      else if (data.status_code === 20000 && data.tasks?.[0]?.result?.[0]?.reviews) {
-        const reviews = data.tasks[0].result[0].reviews;
-        console.log('[DataForSEO] Found', reviews.length, 'reviews');
-        
-        // Map DataForSEO review format to our format based on official documentation
-        return reviews.map((review: any, index: number) => ({
-          id: `${asin}-review-${index}`,
-          title: review.title || '',
-          body: review.text || '',
-          rating: review.rating || 0,
-          verified_purchase: review.verified_purchase || false,
-          helpful_votes: 0, // Not provided in standard response
-          date: review.publication_date || new Date().toISOString(),
-          author: review.author_name || 'Anonymous',
-          variant: undefined
-        }));
-      }
-      
-      console.log('[DataForSEO] No reviews found or API error');
-      return [];
     } catch (error) {
       console.error('Error fetching reviews from DataForSEO:', error);
       return [];
