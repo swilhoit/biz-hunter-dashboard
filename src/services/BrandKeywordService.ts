@@ -231,9 +231,10 @@ export class BrandKeywordService {
   static async trackKeywordRankingsWithProgress(
     brandName: string, 
     keywords?: string[], 
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    depth: number = 100 // Allow customizable depth
   ): Promise<boolean> {
-    return this.trackKeywordRankingsInternal(brandName, keywords, onProgress);
+    return this.trackKeywordRankingsInternal(brandName, keywords, onProgress, depth);
   }
 
   /**
@@ -249,7 +250,8 @@ export class BrandKeywordService {
   private static async trackKeywordRankingsInternal(
     brandName: string, 
     keywords?: string[], 
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    depth: number = 100
   ): Promise<boolean> {
     try {
       const username = import.meta.env.VITE_DATAFORSEO_USERNAME;
@@ -290,25 +292,44 @@ export class BrandKeywordService {
       
       // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks)
       const maxBatchSize = 100;
-      const allTaskPromises: Promise<any>[] = [];
+      // Increase parallel batch submissions for better throughput
+      const maxParallelBatches = 10; // Submit up to 10 batches simultaneously (1000 keywords)
       
       onProgress?.('Submitting Tasks', 25, 100, 'Creating task batches...');
       
+      // Split keywords into batches
+      const batches: BrandKeyword[][] = [];
       for (let i = 0; i < keywordsToTrack.length; i += maxBatchSize) {
-        const batch = keywordsToTrack.slice(i, i + maxBatchSize);
+        batches.push(keywordsToTrack.slice(i, i + maxBatchSize));
+      }
+      
+      // Process batches in parallel groups
+      const allTaskPromises: Promise<any>[] = [];
+      for (let i = 0; i < batches.length; i += maxParallelBatches) {
+        const parallelGroup = batches.slice(i, i + maxParallelBatches);
         
-        // Create Amazon SERP API requests for this batch
-        const serpRequests = batch.map(kw => ({
-          keyword: kw.keyword,
-          location_code: 2840, // United States
-          language_code: "en_US", // Amazon merchant API requires full locale
-          depth: 100, // Track top 100 Amazon results
-          tag: `parallel-${brandName}-${Date.now()}-${kw.keyword.replace(/\s+/g, '-').substring(0, 20)}`
-        }));
-
-        // Submit this batch in parallel
-        const batchPromise = this.submitSerpBatch(serpRequests, batch, brandName, credentials);
-        allTaskPromises.push(batchPromise);
+        // Submit this group of batches in parallel
+        const groupPromises = parallelGroup.map(batch => {
+          // Create Amazon SERP API requests for this batch
+          const serpRequests = batch.map(kw => ({
+            keyword: kw.keyword,
+            location_code: 2840, // United States
+            language_code: "en_US", // Amazon merchant API requires full locale
+            depth: depth, // Configurable depth (default 100)
+            tag: `parallel-${brandName}-${Date.now()}-${kw.keyword.replace(/\s+/g, '-').substring(0, 20)}`
+          }));
+          
+          return this.submitSerpBatch(serpRequests, batch, brandName, credentials);
+        });
+        
+        // Wait for this group before proceeding to avoid rate limits
+        const groupResults = await Promise.allSettled(groupPromises);
+        allTaskPromises.push(...groupPromises);
+        
+        // Minimal delay between groups to respect rate limits
+        if (i + maxParallelBatches < batches.length) {
+          await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms
+        }
       }
 
       // Wait for all task submissions to complete
@@ -345,6 +366,10 @@ export class BrandKeywordService {
       // Process all tasks in parallel with optimized polling
       await this.processAllSerpTasksInParallelWithProgress(allTasks, brandName, credentials, onProgress);
 
+      // Ensure all pending database operations are completed
+      onProgress?.('Finalizing', 90, 100, 'Completing database operations...');
+      await this.executeBatchInsert();
+      
       // Update brand ranking summary
       onProgress?.('Finalizing', 95, 100, 'Updating brand ranking summary...');
       await this.updateBrandRankingSummary(brandName);
@@ -522,11 +547,12 @@ export class BrandKeywordService {
     onProgress?.('Processing Tasks', 45, 100, `Starting parallel processing of ${allTasks.length} tasks...`);
     
     const maxWaitTime = 180000; // 3 minutes max (longer for more tasks)
-    const pollInterval = 5000; // Check every 5 seconds (more frequent)
+    const pollInterval = 2000; // Check every 2 seconds for faster response
     const startTime = Date.now();
     
     let completedTasks = new Set<string>();
     const processingPromises = new Map<string, Promise<void>>();
+    const maxConcurrentProcessing = 20; // Process up to 20 results simultaneously
     
     while (completedTasks.size < allTasks.length && (Date.now() - startTime) < maxWaitTime) {
       try {
@@ -558,8 +584,11 @@ export class BrandKeywordService {
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
             
-            // Start processing all newly ready tasks in parallel
-            for (const task of newlyReady) {
+            // Process tasks in batches to limit concurrent connections
+            const tasksToProcess = newlyReady.slice(0, maxConcurrentProcessing - processingPromises.size);
+            
+            // Start processing newly ready tasks in parallel
+            const newProcessingPromises = tasksToProcess.map(task => {
               const processingPromise = this.processSingleSerpResult(
                 task.taskId, 
                 task.keyword, 
@@ -587,7 +616,11 @@ export class BrandKeywordService {
               });
               
               processingPromises.set(task.taskId, processingPromise);
-            }
+              return processingPromise;
+            });
+            
+            // Process in parallel
+            await Promise.allSettled(newProcessingPromises);
             
             if (newlyReady.length > 0) {
               console.log(`[BrandKeywords] Started processing ${newlyReady.length} newly ready tasks (${processingPromises.size} in progress)`);
@@ -602,9 +635,12 @@ export class BrandKeywordService {
         console.warn('[BrandKeywords] Error in parallel polling:', error);
       }
       
+      // If we're processing tasks, poll more aggressively
+      const currentPollInterval = processingPromises.size > 0 ? pollInterval / 2 : pollInterval;
+      
       // Wait before next poll if not all tasks are complete
       if (completedTasks.size < allTasks.length) {
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        await new Promise(resolve => setTimeout(resolve, currentPollInterval));
       }
     }
     
@@ -632,6 +668,88 @@ export class BrandKeywordService {
       console.log(`[BrandKeywords] Successfully completed all ${totalTasks} SERP tasks in parallel in ${Math.round(elapsedTime/1000)}s! 🚀`);
       onProgress?.('Tasks Complete', 90, 100, `Successfully processed all ${totalTasks} keywords! 🚀`);
     }
+  }
+
+  /**
+   * Batch database operations for better performance
+   */
+  private static pendingRankings: Partial<KeywordRanking>[] = [];
+  private static pendingSerpFeatures: Partial<SerpFeature>[] = [];
+  private static batchInsertPromise: Promise<void> | null = null;
+  private static batchInsertTimeout: NodeJS.Timeout | null = null;
+
+  /**
+   * Add rankings to batch and trigger batch insert
+   */
+  private static async addToBatch(
+    rankings: Partial<KeywordRanking>[], 
+    serpFeatures: Partial<SerpFeature>[]
+  ): Promise<void> {
+    this.pendingRankings.push(...rankings);
+    this.pendingSerpFeatures.push(...serpFeatures);
+    
+    // Clear existing timeout
+    if (this.batchInsertTimeout) {
+      clearTimeout(this.batchInsertTimeout);
+    }
+    
+    // If we have enough data, insert immediately
+    if (this.pendingRankings.length >= 500 || this.pendingSerpFeatures.length >= 200) {
+      await this.executeBatchInsert();
+    } else {
+      // Otherwise, wait a bit to collect more data
+      this.batchInsertTimeout = setTimeout(() => {
+        this.executeBatchInsert();
+      }, 1000);
+    }
+  }
+
+  /**
+   * Execute batch database insert
+   */
+  private static async executeBatchInsert(): Promise<void> {
+    if (this.batchInsertPromise) {
+      return this.batchInsertPromise;
+    }
+    
+    this.batchInsertPromise = (async () => {
+      try {
+        // Insert rankings in batches
+        if (this.pendingRankings.length > 0) {
+          const rankingsToInsert = [...this.pendingRankings];
+          this.pendingRankings = [];
+          
+          // Split into smaller batches if needed (Supabase has limits)
+          const chunkSize = 500;
+          for (let i = 0; i < rankingsToInsert.length; i += chunkSize) {
+            const chunk = rankingsToInsert.slice(i, i + chunkSize);
+            const { error } = await supabase.from('keyword_rankings').insert(chunk);
+            if (error) {
+              console.error(`[BrandKeywords] Error batch inserting rankings:`, error);
+            } else {
+              console.log(`[BrandKeywords] Batch inserted ${chunk.length} rankings`);
+            }
+          }
+        }
+        
+        // Insert SERP features in batches
+        if (this.pendingSerpFeatures.length > 0) {
+          const featuresToInsert = [...this.pendingSerpFeatures];
+          this.pendingSerpFeatures = [];
+          
+          const { error } = await supabase.from('keyword_serp_features').insert(featuresToInsert);
+          if (error) {
+            console.error(`[BrandKeywords] Error batch inserting SERP features:`, error);
+          } else {
+            console.log(`[BrandKeywords] Batch inserted ${featuresToInsert.length} SERP features`);
+          }
+        }
+      } finally {
+        this.batchInsertPromise = null;
+      }
+    })();
+    
+    return this.batchInsertPromise;
   }
 
   /**
@@ -706,14 +824,10 @@ export class BrandKeywordService {
           }
         }
 
-        // Batch insert rankings (much faster than individual inserts)
-        if (rankingsBatch.length > 0) {
-          const { error } = await supabase.from('keyword_rankings').insert(rankingsBatch);
-          if (error) {
-            console.error(`[BrandKeywords] Error batch saving rankings for ${keyword.keyword}:`, error);
-          } else {
-            console.log(`[BrandKeywords] Saved ${rankingsBatch.length} rankings for keyword: ${keyword.keyword}`);
-          }
+        // Add to batch instead of immediate insert
+        if (rankingsBatch.length > 0 || featuresBatch.length > 0) {
+          await this.addToBatch(rankingsBatch, featuresBatch);
+          console.log(`[BrandKeywords] Added ${rankingsBatch.length} rankings and ${featuresBatch.length} features to batch for keyword: ${keyword.keyword}`);
         }
 
         // Log brand matches
@@ -750,13 +864,7 @@ export class BrandKeywordService {
           featuresBatch.push(serpFeature);
         }
 
-        // Batch insert SERP features
-        if (featuresBatch.length > 0) {
-          const { error } = await supabase.from('keyword_serp_features').insert(featuresBatch);
-          if (error) {
-            console.error(`[BrandKeywords] Error batch saving SERP features:`, error);
-          }
-        }
+        // SERP features are now handled by the batch insert system
 
         console.log(`[BrandKeywords] Successfully processed ${organicResults.length} rankings for keyword: ${keyword.keyword}`);
       } else {
