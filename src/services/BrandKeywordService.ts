@@ -286,15 +286,16 @@ export class BrandKeywordService {
       }
 
       console.log(`[BrandKeywords] Starting parallel ranking tracking for ${keywordsToTrack.length} keywords`);
-      onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
-      onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
-
-      const credentials = btoa(`${username}:${password}`);
       
       // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks)
       const maxBatchSize = 100;
       // Increase parallel batch submissions for better throughput
       const maxParallelBatches = 10; // Submit up to 10 batches simultaneously (1000 keywords)
+      
+      onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
+      onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
+
+      const credentials = btoa(`${username}:${password}`);
       
       onProgress?.('Submitting Tasks', 25, 100, 'Creating task batches...');
       
