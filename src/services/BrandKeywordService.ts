@@ -51,6 +51,7 @@ interface BrandRankingSummary {
   total_search_volume: number;
   estimated_traffic: number;
   check_date: string;
+  check_date_only: string;
 }
 
 export class BrandKeywordService {
@@ -333,6 +334,7 @@ export class BrandKeywordService {
         return score + (p.search_volume || 0) * positionWeight;
       }, 0);
 
+      const now = new Date();
       const summary: Partial<BrandRankingSummary> = {
         brand_name: brandName,
         total_keywords: totalKeywords,
@@ -343,31 +345,15 @@ export class BrandKeywordService {
         visibility_score: Math.round(visibilityScore * 100) / 100,
         total_search_volume: totalSearchVolume,
         estimated_traffic: Math.round(estimatedTraffic),
-        check_date: new Date().toISOString()
+        check_date: now.toISOString(),
+        check_date_only: now.toISOString().split('T')[0]
       };
 
-      // First try to update existing record for today
-      const today = new Date().toISOString().split('T')[0];
-      const { data: existing } = await supabase
+      await supabase
         .from('brand_ranking_summary')
-        .select('id')
-        .eq('brand_name', brandName)
-        .gte('check_date', `${today}T00:00:00.000Z`)
-        .lt('check_date', `${today}T23:59:59.999Z`)
-        .single();
-
-      if (existing) {
-        // Update existing record
-        await supabase
-          .from('brand_ranking_summary')
-          .update(summary)
-          .eq('id', existing.id);
-      } else {
-        // Insert new record
-        await supabase
-          .from('brand_ranking_summary')
-          .insert(summary);
-      }
+        .upsert(summary, { 
+          onConflict: 'brand_name,check_date_only' 
+        });
 
       console.log(`[BrandKeywords] Updated ranking summary for ${brandName}`);
     } catch (error) {
