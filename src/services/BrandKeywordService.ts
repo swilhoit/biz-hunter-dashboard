@@ -1206,34 +1206,19 @@ export class BrandKeywordService {
    */
   static async getBrandProducts(brandName: string): Promise<any[]> {
     try {
-      // First try with common columns that should exist
+      // Use the correct columns from the actual schema
       const { data, error } = await supabase
         .from('asins')
-        .select('asin, product_name, title, category, subcategory')
+        .select('asin, title, category, subcategory, current_price, review_rating, review_count')
         .eq('brand', brandName)
         .limit(10); // Get up to 10 products for context
 
       if (error) {
         console.error('Error fetching brand products:', error);
-        // Fallback to minimal columns
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('asins')
-          .select('asin, category')
-          .eq('brand', brandName)
-          .limit(10);
-          
-        if (fallbackError) {
-          console.error('Fallback query also failed:', fallbackError);
-          return [];
-        }
-        return fallbackData || [];
+        return [];
       }
 
-      // Normalize the data to handle both product_name and title fields
-      return (data || []).map(product => ({
-        ...product,
-        title: product.title || product.product_name || 'Unknown Product'
-      }));
+      return data || [];
     } catch (error) {
       console.error('Error fetching brand products:', error);
       return [];
@@ -1260,11 +1245,21 @@ export class BrandKeywordService {
       
       let productDetails = '';
       if (brandProducts.length > 0) {
-        productDetails = brandProducts.map(p => 
-          `- ${p.title || 'Unknown Product'} (${p.category || 'No category'}${p.subcategory ? ' > ' + p.subcategory : ''})`
-        ).join('\n');
+        console.log(`[BrandKeywords] Found ${brandProducts.length} actual products for brand: ${brandName}`);
+        productDetails = brandProducts.map(p => {
+          const parts = [
+            `- ${p.title || 'Unknown Product'}`,
+            p.category ? `Category: ${p.category}` : null,
+            p.subcategory ? `Subcategory: ${p.subcategory}` : null,
+            p.current_price ? `Price: $${p.current_price}` : null,
+            p.review_rating ? `Rating: ${p.review_rating}/5 (${p.review_count || 0} reviews)` : null
+          ].filter(Boolean);
+          return parts.join(' | ');
+        }).join('\n');
       } else if (products.length > 0) {
         productDetails = `Generic products: ${products.join(', ')}`;
+      } else {
+        productDetails = 'No specific product data available';
       }
 
       const prompt = `You are an Amazon keyword researcher. Generate SPECIFIC product keywords that customers would search for when looking for these EXACT types of products (but without knowing the brand).
