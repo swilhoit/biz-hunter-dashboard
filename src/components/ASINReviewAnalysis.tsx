@@ -11,6 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { ReviewAnalysisService } from '../services/ReviewAnalysisService';
+import { QuickReviewService } from '../services/QuickReviewService';
 
 interface ReviewAnalysisProps {
   asin: string;
@@ -47,7 +48,8 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
         setAnalysis(existingAnalysis);
       }
     } catch (err) {
-      console.error('Error loading existing analysis:', err);
+      console.warn('No existing analysis found or error loading:', err);
+      // Don't set error state for this, as missing analysis is normal
     }
   };
 
@@ -56,21 +58,18 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
     setError(null);
     
     try {
-      const { reviews: fetchedReviews, analysis: newAnalysis } = 
-        await ReviewAnalysisService.performFullReviewAnalysis(asin);
+      const result = await QuickReviewService.getQuickAnalysis(asin, asinId);
       
-      setReviews(fetchedReviews);
-      setAnalysis(newAnalysis);
-      
-      if (!newAnalysis) {
-        if (fetchedReviews.length === 0) {
-          setError('DataForSEO Reviews API is currently unavailable. Please try again later.');
-        } else {
-          setError('Reviews fetched but AI analysis failed. Please try again.');
-        }
+      if (result.status === 'cached' && result.analysis) {
+        setAnalysis(result.analysis);
+        setError(null);
+      } else if (result.status === 'processing') {
+        setError(result.message);
+      } else {
+        setError(result.message);
       }
     } catch (err) {
-      setError('Failed to analyze reviews');
+      setError('Failed to start analysis. Please try again later.');
       console.error(err);
     } finally {
       setLoading(false);

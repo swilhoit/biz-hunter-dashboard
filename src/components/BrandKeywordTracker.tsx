@@ -11,7 +11,12 @@ import {
   Zap,
   ArrowUp,
   ArrowDown,
-  Minus
+  Minus,
+  Activity,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { BrandKeywordService } from '../services/BrandKeywordService';
 
@@ -25,7 +30,6 @@ interface KeywordPerformance {
   search_volume: number;
   position?: number;
   ranking_tier: string;
-  estimated_traffic: number;
   relevance_score: number;
   keyword_type: string;
   asin?: string;
@@ -39,7 +43,21 @@ interface BrandSummary {
   top_3_keywords: number;
   avg_position: number;
   visibility_score: number;
-  estimated_traffic: number;
+}
+
+interface ProgressUpdate {
+  stage: string;
+  current: number;
+  total: number;
+  message: string;
+  timestamp: string;
+}
+
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
 }
 
 export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywordTrackerProps) {
@@ -50,12 +68,45 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const [showAddKeywords, setShowAddKeywords] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
+  const [cleaningKeywords, setCleaningKeywords] = useState(false);
+  
+  // Progress tracking state
+  const [progress, setProgress] = useState<ProgressUpdate | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showProgressModal, setShowProgressModal] = useState(false);
 
   useEffect(() => {
     if (brandName) {
       loadBrandPerformance();
     }
   }, [brandName]);
+
+  // Progress tracking functions
+  const addLog = (level: LogEntry['level'], message: string) => {
+    const logEntry: LogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID with timestamp + random
+      timestamp: new Date().toLocaleTimeString(),
+      level,
+      message
+    };
+    setLogs(prev => [logEntry, ...prev.slice(0, 49)]); // Keep last 50 logs
+  };
+
+  const updateProgress = (stage: string, current: number, total: number, message: string) => {
+    setProgress({
+      stage,
+      current,
+      total,
+      message,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    addLog('info', `${stage}: ${message} (${current}/${total})`);
+  };
+
+  const clearProgress = () => {
+    setProgress(null);
+    setShowProgressModal(false);
+  };
 
   const loadBrandPerformance = async () => {
     setLoading(true);
@@ -82,13 +133,42 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
 
   const trackKeywordRankings = async () => {
     setTrackingRankings(true);
+    setShowProgressModal(true);
+    setLogs([]); // Clear previous logs
+    
     try {
-      await BrandKeywordService.trackKeywordRankings(brandName);
-      await loadBrandPerformance();
+      addLog('info', `Starting keyword ranking tracking for ${brandName}`);
+      updateProgress('Initializing', 0, 100, 'Preparing keyword tracking...');
+      
+      // Create a progress callback
+      const progressCallback = (stage: string, current: number, total: number, message: string) => {
+        updateProgress(stage, current, total, message);
+      };
+      
+      const result = await BrandKeywordService.trackKeywordRankingsWithProgress(
+        brandName, 
+        undefined, 
+        progressCallback
+      );
+      
+      if (result) {
+        addLog('success', 'Keyword ranking tracking completed successfully!');
+        updateProgress('Complete', 100, 100, 'All rankings updated');
+        await loadBrandPerformance();
+      } else {
+        addLog('error', 'Keyword ranking tracking failed');
+      }
     } catch (error) {
       console.error('Error tracking rankings:', error);
+      addLog('error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setTrackingRankings(false);
+      // Keep modal open for 2 seconds to show completion
+      setTimeout(() => {
+        if (progress?.current === progress?.total) {
+          clearProgress();
+        }
+      }, 2000);
     }
   };
 
@@ -115,25 +195,56 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const generateRecommendations = async () => {
     setGeneratingRecommendations(true);
     try {
+      // First, clean up any existing branded keywords
+      addLog('info', 'Cleaning up existing branded keywords...');
+      const cleanedCount = await BrandKeywordService.cleanupBrandedKeywords(brandName);
+      if (cleanedCount > 0) {
+        addLog('warning', `Removed ${cleanedCount} branded keywords from database`);
+      }
+      
       // Get some product names from existing keywords for context
       const productContext = keywords
         .filter(k => k.keyword_type === 'product')
         .map(k => k.keyword)
         .slice(0, 5);
       
+      addLog('info', 'Generating AI keyword recommendations...');
       const recommendations = await BrandKeywordService.generateKeywordRecommendations(
         brandName,
-        productContext.length > 0 ? productContext : [brandName]
+        productContext.length > 0 ? productContext : ['candles'] // Use generic product instead of brand
       );
       
       if (recommendations.length > 0) {
+        addLog('success', `Generated ${recommendations.length} non-branded keyword recommendations`);
         await BrandKeywordService.addBrandKeywords(brandName, recommendations);
         await loadBrandPerformance();
+        addLog('success', 'Successfully added non-branded keywords to tracking list');
+      } else {
+        addLog('warning', 'No valid non-branded keywords were generated');
       }
     } catch (error) {
       console.error('Error generating recommendations:', error);
+      addLog('error', `Error generating recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setGeneratingRecommendations(false);
+    }
+  };
+
+  const cleanupBrandedKeywords = async () => {
+    setCleaningKeywords(true);
+    try {
+      const cleanedCount = await BrandKeywordService.cleanupBrandedKeywords(brandName);
+      if (cleanedCount > 0) {
+        await loadBrandPerformance();
+        alert(`Successfully removed ${cleanedCount} branded keywords from the tracking list.`);
+      } else {
+        alert('No branded keywords found to remove.');
+      }
+    } catch (error) {
+      console.error('Error cleaning branded keywords:', error);
+      alert('Error cleaning up branded keywords.');
+    } finally {
+      setCleaningKeywords(false);
     }
   };
 
@@ -194,6 +305,19 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
               AI Recommendations
             </button>
             <button
+              onClick={cleanupBrandedKeywords}
+              disabled={cleaningKeywords}
+              className="btn bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+              title="Remove any branded keywords from tracking list"
+            >
+              {cleaningKeywords ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Clean Branded
+            </button>
+            <button
               onClick={trackKeywordRankings}
               disabled={trackingRankings}
               className="btn bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
@@ -252,9 +376,9 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
             <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600 dark:text-purple-400">Est. Traffic</p>
+                  <p className="text-sm text-purple-600 dark:text-purple-400">Visibility Score</p>
                   <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">
-                    {summary.estimated_traffic.toLocaleString()}
+                    {Math.round(summary.visibility_score).toLocaleString()}
                   </p>
                 </div>
                 <Eye className="w-8 h-8 text-purple-500" />
@@ -302,7 +426,6 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                   <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Volume</th>
                   <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Position</th>
                   <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Ranking</th>
-                  <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Est. Traffic</th>
                   <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Product</th>
                 </tr>
               </thead>
@@ -354,9 +477,6 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 text-gray-600 dark:text-gray-300">
-                      {Math.round(keyword.estimated_traffic).toLocaleString()}
-                    </td>
                     <td className="py-3">
                       {keyword.asin ? (
                         <div className="max-w-xs">
@@ -386,6 +506,121 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
           </div>
         )}
       </div>
+
+      {/* Progress Modal */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-violet-500" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Tracking Keyword Rankings
+                  </h3>
+                </div>
+                <button
+                  onClick={clearProgress}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  disabled={trackingRankings}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Progress Bar */}
+              {progress && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {progress.stage}
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {progress.current}/{progress.total} ({Math.round((progress.current / progress.total) * 100)}%)
+                    </span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                    <div
+                      className="bg-gradient-to-r from-violet-500 to-purple-600 h-3 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.min((progress.current / progress.total) * 100, 100)}%` }}
+                    />
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    {progress.message}
+                  </p>
+                  
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Last updated: {progress.timestamp}
+                  </p>
+                </div>
+              )}
+
+              {/* Real-time Logs */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 max-h-60 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Real-time Logs
+                  </span>
+                </div>
+                
+                <div className="space-y-1 font-mono text-xs">
+                  {logs.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400">Waiting for logs...</p>
+                  ) : (
+                    logs.map((log) => (
+                      <div key={log.id} className="flex items-start gap-2">
+                        <span className="text-gray-400 dark:text-gray-500 min-w-[60px]">
+                          {log.timestamp}
+                        </span>
+                        <div className="flex items-center gap-1 min-w-[16px]">
+                          {log.level === 'success' && <CheckCircle className="w-3 h-3 text-green-500" />}
+                          {log.level === 'error' && <AlertTriangle className="w-3 h-3 text-red-500" />}
+                          {log.level === 'warning' && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
+                          {log.level === 'info' && <div className="w-3 h-3 rounded-full bg-blue-500" />}
+                        </div>
+                        <span className={`flex-1 ${
+                          log.level === 'success' ? 'text-green-600 dark:text-green-400' :
+                          log.level === 'error' ? 'text-red-600 dark:text-red-400' :
+                          log.level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-gray-600 dark:text-gray-300'
+                        }`}>
+                          {log.message}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2 mt-6">
+                {progress?.current === progress?.total && !trackingRankings ? (
+                  <button
+                    onClick={clearProgress}
+                    className="btn bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Complete
+                  </button>
+                ) : (
+                  <button
+                    onClick={clearProgress}
+                    disabled={trackingRankings}
+                    className="btn bg-gray-500 hover:bg-gray-600 text-white disabled:opacity-50"
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

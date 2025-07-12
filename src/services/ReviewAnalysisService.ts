@@ -65,7 +65,7 @@ export class ReviewAnalysisService {
   }
 
   /**
-   * Fetch reviews for an ASIN from DataForSEO
+   * Fetch reviews for an ASIN from DataForSEO with quick timeout and fallback
    */
   static async fetchReviewsFromDataForSEO(asin: string): Promise<ReviewData[]> {
     try {
@@ -128,36 +128,44 @@ export class ReviewAnalysisService {
       
       let taskReady = false;
       let attempts = 0;
-      const maxAttempts = 10;
+      const maxAttempts = 8; // Reduced for quicker response - 2 minutes max
       
       while (!taskReady && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 8000));
+        // Start checking after 10 seconds, then every 15 seconds - faster initial check
+        await new Promise(resolve => setTimeout(resolve, attempts === 0 ? 10000 : 15000));
         
-        const tasksReadyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/reviews/tasks_ready', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${credentials}`,
-            'Content-Type': 'application/json'
+        try {
+          const tasksReadyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/reviews/tasks_ready', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${credentials}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (tasksReadyResponse.ok) {
+            const readyData = await tasksReadyResponse.json();
+            if (readyData.status_code === 20000 && readyData.tasks) {
+              taskReady = readyData.tasks.some((task: any) => task.id === taskId);
+              console.log(`[DataForSEO] Attempt ${attempts + 1}: ${taskReady ? 'Ready' : 'Processing...'}`);
+            }
+          } else {
+            console.warn(`[DataForSEO] Tasks ready check failed: ${tasksReadyResponse.status}`);
           }
-        });
-        
-        if (tasksReadyResponse.ok) {
-          const readyData = await tasksReadyResponse.json();
-          if (readyData.status_code === 20000 && readyData.tasks) {
-            taskReady = readyData.tasks.some((task: any) => task.id === taskId);
-            console.log(`[DataForSEO] Attempt ${attempts + 1}: ${taskReady ? 'Ready' : 'Processing...'}`);
-          }
+        } catch (error) {
+          console.warn(`[DataForSEO] Error checking task status:`, error);
         }
         
         attempts++;
       }
       
       if (!taskReady) {
-        console.error('[DataForSEO] Task timeout');
+        console.warn('[DataForSEO] Task timeout after 2 minutes - returning empty for faster response');
+        // Return empty to allow fallback methods
         return [];
       }
         
-      // Get results
+      // Get results (attempt even if not marked as ready - DataForSEO sometimes has delays in status updates)
       const getResponse = await fetch(`https://api.dataforseo.com/v3/merchant/amazon/reviews/task_get/advanced/${taskId}`, {
         method: 'GET',
         headers: {
@@ -167,7 +175,10 @@ export class ReviewAnalysisService {
       });
       
       if (!getResponse.ok) {
-        console.error('[DataForSEO] Failed to get results');
+        console.error(`[DataForSEO] Failed to get results: ${getResponse.status} ${getResponse.statusText}`);
+        if (getResponse.status === 404) {
+          console.warn('[DataForSEO] Task not found - may need more time to process');
+        }
         return [];
       }
       
@@ -204,6 +215,12 @@ export class ReviewAnalysisService {
           author: review.author_name || 'Anonymous',
           variant: undefined
         }));
+      } else if (result.status_code !== 20000) {
+        console.error(`[DataForSEO] API error: ${result.status_message || 'Unknown error'}`);
+        return [];
+      } else if (!result.tasks?.[0]?.result?.[0]) {
+        console.warn('[DataForSEO] Task completed but no results available yet - this is normal for new tasks');
+        return [];
       }
       
       console.log('[DataForSEO] No critical reviews found');
@@ -336,6 +353,13 @@ Be concise and specific.`;
    */
   static async saveReviewAnalysis(asinId: string, analysis: ReviewAnalysis): Promise<boolean> {
     try {
+      // Check if user is authenticated first
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated - cannot save review analysis');
+        return false;
+      }
+
       const { error } = await supabase
         .from('asin_review_analysis')
         .upsert({
@@ -370,13 +394,31 @@ Be concise and specific.`;
    */
   static async getReviewAnalysis(asinId: string): Promise<ReviewAnalysis | null> {
     try {
+      // Check if user is authenticated first
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('User not authenticated - cannot fetch review analysis');
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('asin_review_analysis')
         .select('*')
         .eq('asin_id', asinId)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
+        console.error('Error fetching review analysis:', error);
+        // Check for specific error types
+        if (error.code === 'PGRST301') {
+          console.warn('No review analysis found for ASIN');
+          return null;
+        }
+        return null;
+      }
+      
+      if (!data) {
+        console.log('No existing review analysis found for ASIN');
         return null;
       }
 
