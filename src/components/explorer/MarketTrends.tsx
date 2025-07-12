@@ -6,60 +6,6 @@ import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
 import { useThemeProvider } from '../../utils/ThemeContext';
 import { chartColors } from '../../charts/ChartjsConfig';
 
-// Card components for template styling
-const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`bg-white dark:bg-gray-800 shadow-sm rounded-xl ${className}`}>
-    {children}
-  </div>
-);
-
-const CardHeader = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`px-5 py-4 border-b border-gray-100 dark:border-gray-700/60 ${className}`}>
-    {children}
-  </div>
-);
-
-const CardTitle = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <h3 className={`font-semibold text-gray-800 dark:text-gray-100 ${className}`}>
-    {children}
-  </h3>
-);
-
-const CardDescription = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <p className={`text-sm text-gray-500 dark:text-gray-400 ${className}`}>
-    {children}
-  </p>
-);
-
-const CardContent = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`p-5 ${className}`}>
-    {children}
-  </div>
-);
-
-const Button = ({ children, onClick, variant = "default", size = "default", className = "" }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: "default" | "outline";
-  size?: "default" | "sm";
-  className?: string;
-}) => {
-  const baseClasses = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
-  const sizeClasses = size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2 text-sm";
-  const variantClasses = variant === "outline" 
-    ? "border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-    : "bg-violet-600 text-white hover:bg-violet-700 focus:ring-violet-500";
-  
-  return (
-    <button 
-      onClick={onClick}
-      className={`${baseClasses} ${sizeClasses} ${variantClasses} ${className}`}
-    >
-      {children}
-    </button>
-  );
-};
-
 interface MarketTrendsProps {
   products: any[];
   keywords: string;
@@ -105,7 +51,7 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
   // Market insights calculations
   const insights = {
     growthRate: trendData.length > 1 
-      ? ((trendData[trendData.length - 1]?.revenue - trendData[0]?.revenue) / trendData[0]?.revenue * 100).toFixed(1)
+      ? Number(((trendData[trendData.length - 1]?.revenue - trendData[0]?.revenue) / trendData[0]?.revenue * 100).toFixed(1))
       : 0,
     avgMonthlyRevenue: trendData.length > 0
       ? Math.round(trendData.reduce((sum, d) => sum + d.revenue, 0) / trendData.length)
@@ -115,11 +61,11 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
           const cat = p.category || 'Unknown';
           acc[cat] = (acc[cat] || 0) + 1;
           return acc;
-        }, {})).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A'
+        }, {})).sort(([,a], [,b]) => (b as number) - (a as number))[0]?.[0] || 'N/A'
       : 'N/A',
     marketConcentration: products.length > 0
-      ? (products.slice(0, 5).reduce((sum, p) => sum + p.revenue, 0) / 
-         products.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1)
+      ? Number((products.slice(0, 5).reduce((sum, p) => sum + p.revenue, 0) / 
+         products.reduce((sum, p) => sum + p.revenue, 0) * 100).toFixed(1))
       : 0
   };
 
@@ -169,130 +115,150 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
     <div className="space-y-6">
       {/* Market Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
             <div className="flex items-center justify-between">
-              <CardDescription>Market Growth</CardDescription>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Market Growth</p>
               <TrendingUp className="w-5 h-5 text-violet-500" />
             </div>
-            <CardTitle className="text-2xl">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">
               {insights.growthRate > 0 ? '+' : ''}{insights.growthRate}%
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </header>
+          <div className="p-5">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               vs. {timeRange === '30d' ? 'last month' : timeRange === '90d' ? 'last quarter' : 'last year'}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-3">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
             <div className="flex items-center justify-between">
-              <CardDescription>Avg Monthly Revenue</CardDescription>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Monthly Revenue</p>
               <DollarSign className="w-5 h-5 text-green-500" />
             </div>
-            <CardTitle className="text-2xl">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">
               ${formatNumberWithCommas(insights.avgMonthlyRevenue)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </header>
+          <div className="p-5">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Across all products
+              Based on {timeRange === '30d' ? '1 month' : timeRange === '90d' ? '3 months' : '12 months'} avg
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-3">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
             <div className="flex items-center justify-between">
-              <CardDescription>Top Category</CardDescription>
-              <Globe className="w-5 h-5 text-blue-500" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">Top Category</p>
+              <BarChart3 className="w-5 h-5 text-blue-500" />
             </div>
-            <CardTitle className="text-lg line-clamp-2">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
               {insights.topCategory}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardDescription>Market Concentration</CardDescription>
-              <BarChart3 className="w-5 h-5 text-orange-500" />
-            </div>
-            <CardTitle className="text-2xl">
-              {insights.marketConcentration}%
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </header>
+          <div className="p-5">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Top 5 products
+              Most products in this category
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Market Concentration</p>
+              <Globe className="w-5 h-5 text-orange-500" />
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">
+              {insights.marketConcentration}%
+            </h3>
+          </header>
+          <div className="p-5">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Top 5 products' share
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Revenue & Sales Trend */}
-      <Card>
-        <CardHeader>
+      {/* Time Range Selector */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+        <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
           <div className="flex items-center justify-between">
-            <CardTitle>Revenue & Sales Trend</CardTitle>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Market Trends</h3>
             <div className="flex gap-2">
-              {(['30d', '90d', '1y'] as const).map((range) => (
-                <Button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  variant={timeRange === range ? 'default' : 'outline'}
-                  size="sm"
-                >
-                  {range === '30d' ? '30 Days' : range === '90d' ? '90 Days' : '1 Year'}
-                </Button>
-              ))}
+              <button
+                onClick={() => setTimeRange('30d')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  timeRange === '30d'
+                    ? 'bg-violet-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                30D
+              </button>
+              <button
+                onClick={() => setTimeRange('90d')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  timeRange === '90d'
+                    ? 'bg-violet-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                90D
+              </button>
+              <button
+                onClick={() => setTimeRange('1y')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  timeRange === '1y'
+                    ? 'bg-violet-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                1Y
+              </button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </header>
+        <div className="p-5">
           <ChartContainer config={chartConfig} className="h-[300px]">
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="date" className="text-muted-foreground" />
-              <YAxis yAxisId="left" className="text-muted-foreground" />
-              <YAxis yAxisId="right" orientation="right" className="text-muted-foreground" />
+              <YAxis className="text-muted-foreground" />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Line 
-                yAxisId="left"
                 type="monotone" 
                 dataKey="revenue" 
-                stroke="var(--color-revenue)"
+                stroke="var(--color-revenue)" 
                 strokeWidth={2}
                 name="Revenue ($)"
-                dot={{ r: 4 }}
               />
               <Line 
-                yAxisId="right"
                 type="monotone" 
                 dataKey="sales" 
-                stroke="var(--color-sales)"
+                stroke="var(--color-sales)" 
                 strokeWidth={2}
-                name="Sales (units)"
-                dot={{ r: 4 }}
+                name="Sales"
               />
             </LineChart>
           </ChartContainer>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Seasonal Trends and Price Distribution */}
+      {/* Seasonal Analysis & Price Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Seasonal Index</CardTitle>
-            <CardDescription>
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Seasonal Index</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               100 = Average, Higher values indicate peak seasons
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </header>
+          <div className="p-5">
             <ChartContainer config={chartConfig} className="h-[250px]">
               <AreaChart data={seasonalData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -309,15 +275,15 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
                 />
               </AreaChart>
             </ChartContainer>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Price Distribution</CardTitle>
-            <CardDescription>Product count by price range</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Price Distribution</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Product count by price range</p>
+          </header>
+          <div className="p-5">
             <ChartContainer config={chartConfig} className="h-[250px]">
               <BarChart data={priceDistribution}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -327,80 +293,59 @@ export function MarketTrends({ products, keywords, keywordData }: MarketTrendsPr
                 <Bar dataKey="count" fill="var(--color-count)" name="Products" />
               </BarChart>
             </ChartContainer>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Market Insights */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Market Insights</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+        <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+          <h3 className="font-semibold text-gray-800 dark:text-gray-100">Market Insights</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Key metrics and trends for "{keywords}"</p>
+        </header>
+        <div className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Top Performing Products</h4>
-              <div className="space-y-2">
-                {products
-                  .sort((a, b) => b.revenue - a.revenue)
-                  .slice(0, 5)
-                  .map((product, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                      <span className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1">
-                        {product.title}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 ml-2">
-                        ${formatNumberWithCommas(product.revenue)}
-                      </span>
-                    </div>
-                  ))}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-green-500" />
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Growth Trajectory</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">
+                    {insights.growthRate > 0 ? 'Positive' : 'Negative'} growth trend
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-blue-500" />
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Best Season</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">November - December</p>
+                </div>
               </div>
             </div>
-
-            <div>
-              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Market Opportunities</h4>
-              <ul className="space-y-3">
-                <li className="flex items-start gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    High-growth segments showing {insights.growthRate}% increase
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Peak season approaching in Q4 with 25% higher demand
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <div className="w-2 h-2 rounded-full bg-violet-500 mt-1.5 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Premium segment ($100+) showing strong margins
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <div className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Emerging brands capturing market share from incumbents
-                  </span>
-                </li>
-              </ul>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Globe className="w-5 h-5 text-orange-500" />
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Market Structure</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">
+                    {insights.marketConcentration > 70 ? 'Concentrated' : 'Fragmented'} market
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <DollarSign className="w-5 h-5 text-green-500" />
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Revenue Potential</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">
+                    ${formatNumberWithCommas(insights.avgMonthlyRevenue * 12)}/year
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Empty State */}
-      {products.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <TrendingUp className="w-12 h-12 text-gray-400 mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">
-              Search for products to see market trends and insights
-            </p>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

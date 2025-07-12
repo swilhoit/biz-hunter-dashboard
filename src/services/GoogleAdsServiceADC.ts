@@ -112,8 +112,8 @@ export async function fetchGoogleAdsKeywordDataADC(
     const service = new GoogleAdsServiceADC();
     
     // Get customer ID and developer token from environment or use defaults
-    const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID || '';
-    const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '';
+    const customerId = import.meta.env.VITE_GOOGLE_ADS_CUSTOMER_ID || '';
+    const developerToken = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || '';
     
     if (!customerId || !developerToken) {
       console.warn('Google Ads credentials not fully configured, using mock data');

@@ -75,16 +75,21 @@ export class KeywordService {
         const items = data.tasks[0].result[0].items;
         console.log('[DataForSEO] Found', items.length, 'keywords for ASIN');
         
+        // Log first item to debug structure
+        if (items.length > 0) {
+          console.log('[DataForSEO] Sample item structure:', JSON.stringify(items[0], null, 2));
+        }
+        
         // Map DataForSEO results to our KeywordData interface
         return items.map((item: any, index: number) => ({
           id: `${asin}-${index}`, // Generate unique ID
           keyword: item.keyword_data?.keyword || item.keyword || '',
-          search_volume: item.keyword_data?.search_volume || 0,
-          relevancy_score: item.keyword_data?.keyword_difficulty || 50, // Use difficulty as relevancy proxy
+          search_volume: item.keyword_data?.keyword_info?.search_volume || 0,
+          relevancy_score: item.keyword_data?.keyword_info?.keyword_difficulty || 50, // Use difficulty as relevancy proxy
           monthly_trend: 0, // DataForSEO doesn't provide this in same format
           quarterly_trend: 0,
-          ppc_bid_broad: item.keyword_data?.cpc || 0,
-          ppc_bid_exact: item.keyword_data?.cpc || 0,
+          ppc_bid_broad: item.keyword_data?.keyword_info?.cpc || 0,
+          ppc_bid_exact: item.keyword_data?.keyword_info?.cpc || 0,
           organic_product_count: item.ranked_serp_element?.serp_item?.total_count || 0,
           sponsored_product_count: 0, // Not provided by DataForSEO
           rank_organic: item.ranked_serp_element?.rank_absolute || null,

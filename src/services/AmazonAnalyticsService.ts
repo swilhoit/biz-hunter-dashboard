@@ -1,14 +1,12 @@
 import axios from 'axios';
 import OpenAIService from './OpenAIService';
+import DataForSEOService from './DataForSEOService';
 
 interface JungleScoutConfig {
   apiKey: string;
   keyName: string;
 }
 
-interface RainforestConfig {
-  apiKey: string;
-}
 
 interface ProductData {
   asin: string;
@@ -46,19 +44,17 @@ interface StoreAnalysis {
 
 export class AmazonAnalyticsService {
   private jungleScoutConfig: JungleScoutConfig;
-  private rainforestConfig: RainforestConfig;
+  private dataForSEOService: DataForSEOService;
   private openAIService: OpenAIService;
   private cache: Map<string, { data: any; timestamp: number; expiresAt: number }>;
   private readonly CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   constructor() {
     this.jungleScoutConfig = {
-      apiKey: process.env.REACT_APP_JUNGLE_SCOUT_API_KEY || '',
-      keyName: process.env.REACT_APP_JUNGLE_SCOUT_KEY_NAME || ''
+      apiKey: import.meta.env.VITE_JUNGLE_SCOUT_API_KEY || '',
+      keyName: import.meta.env.VITE_JUNGLE_SCOUT_KEY_NAME || ''
     };
-    this.rainforestConfig = {
-      apiKey: process.env.REACT_APP_RAINFOREST_API_KEY || ''
-    };
+    this.dataForSEOService = new DataForSEOService();
     this.openAIService = new OpenAIService();
     this.cache = new Map();
   }
@@ -111,8 +107,8 @@ export class AmazonAnalyticsService {
       // Use Jungle Scout for bulk product data
       const products = await this.fetchJungleScoutProductData(asins);
       
-      // Enrich with Rainforest if needed (for detailed attributes)
-      const enrichedProducts = products.length > 0 ? products : await this.fetchRainforestProductData(asins);
+      // Enrich with DataForSEO if needed (for detailed attributes)
+      const enrichedProducts = products.length > 0 ? products : await this.fetchDataForSEOProductData(asins);
       
       this.setCache(cacheKey, enrichedProducts);
       return enrichedProducts;
@@ -158,28 +154,28 @@ export class AmazonAnalyticsService {
     }
   }
 
-  private async fetchRainforestProductData(asins: string[]): Promise<ProductData[]> {
+  private async fetchDataForSEOProductData(asins: string[]): Promise<ProductData[]> {
     const results: ProductData[] = [];
     
-    for (const asin of asins) {
-      try {
-        const response = await this.fetchWithExponentialBackoff(
-          () => axios.get('https://api.rainforestapi.com/request', {
-            params: {
-              api_key: this.rainforestConfig.apiKey,
-              type: 'product',
-              amazon_domain: 'amazon.com',
-              asin: asin
-            }
-          })
-        );
-
-        if (response.data?.product) {
-          results.push(this.processRainforestItem(response.data.product));
+    // DataForSEO can search for multiple ASINs at once
+    try {
+      // Process in batches of 10 ASINs
+      const batchSize = 10;
+      for (let i = 0; i < asins.length; i += batchSize) {
+        const batch = asins.slice(i, i + batchSize);
+        const batchResults = await this.dataForSEOService.fetchBulkProductData(batch);
+        
+        if (batchResults && batchResults.length > 0) {
+          results.push(...batchResults.map(item => this.processDataForSEOItem(item)));
         }
-      } catch (error) {
-        console.error(`Error fetching ASIN ${asin}:`, error);
+        
+        // Small delay between batches
+        if (i + batchSize < asins.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+    } catch (error) {
+      console.error('Error fetching ASINs from DataForSEO:', error);
     }
 
     return results;
@@ -226,17 +222,24 @@ export class AmazonAnalyticsService {
     };
   }
 
-  private processRainforestItem(product: any): ProductData {
+  private processDataForSEOItem(product: any): ProductData {
     return {
       asin: product.asin,
-      title: product.title,
-      price: parseFloat(product.buybox_price) || 0,
-      rating: product.rating,
-      reviews: product.ratings_total,
-      imageUrl: product.images?.[0]?.link || '',
-      amazonUrl: `https://www.amazon.com/dp/${product.asin}`,
-      featureBullets: product.feature_bullets || [],
-      attributes: product.specifications || []
+      title: product.title || '',
+      brand: product.brand || '',
+      price: product.price?.current || 0,
+      rating: product.rating?.value || 0,
+      reviews: product.rating?.votes_count || 0,
+      sales: 0, // DataForSEO doesn't provide sales estimates
+      revenue: 0, // DataForSEO doesn't provide revenue estimates
+      category: product.main_category || '',
+      imageUrl: product.image_url || '',
+      amazonUrl: product.url || `https://www.amazon.com/dp/${product.asin}`,
+      sellerCountry: '',
+      fulfillment: product.delivery ? 'FBA' : 'FBM',
+      dateFirstAvailable: '',
+      attributes: [],
+      featureBullets: []
     };
   }
 

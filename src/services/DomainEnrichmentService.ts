@@ -42,9 +42,9 @@ class DomainEnrichmentService {
   private credentials: string;
 
   constructor() {
-    const username = process.env.DATAFORSEO_USERNAME || '';
-    const password = process.env.DATAFORSEO_PASSWORD || '';
-    this.credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    const username = import.meta.env.VITE_DATAFORSEO_USERNAME || '';
+    const password = import.meta.env.VITE_DATAFORSEO_PASSWORD || '';
+    this.credentials = btoa(`${username}:${password}`);
   }
 
   // Main method to enrich domains with WHOIS data

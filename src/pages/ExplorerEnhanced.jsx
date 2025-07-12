@@ -4,7 +4,7 @@ import Sidebar from '../partials/Sidebar';
 import { 
   Search, TrendingUp, Package, BarChart3, Settings, Filter, Download, 
   AlertCircle, Brain, Key, Eye, FileText, Upload, Zap, Database,
-  LineChart, Layers, ArrowUpDown, Globe, DollarSign
+  LineChart, Layers, ArrowUpDown, Globe, DollarSign, X, SlidersHorizontal
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ExplorerProvider, useExplorer } from '../contexts/ExplorerContext';
@@ -35,6 +35,8 @@ function ExplorerContent() {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [segments, setSegments] = useState([]);
   const [keywordData, setKeywordData] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
 
   // Smart caching system
   const cache = useCallback(() => {
@@ -379,14 +381,6 @@ function ExplorerContent() {
                   <Eye className="w-4 h-4" />
                   Ad Creatives
                 </TabsTrigger>
-                <TabsTrigger value="import-export" className="flex items-center gap-2">
-                  <Database className="w-4 h-4" />
-                  Import/Export
-                </TabsTrigger>
-                <TabsTrigger value="filters" className="flex items-center gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filters
-                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="search" className="space-y-4">
@@ -397,6 +391,8 @@ function ExplorerContent() {
                   onDeleteProduct={handleDeleteProduct}
                   onExport={exportToCSV}
                   isLoading={isLoading}
+                  onShowFilters={() => setShowFilters(true)}
+                  onShowImportExport={() => setShowImportExport(true)}
                 />
               </TabsContent>
 
@@ -470,114 +466,180 @@ function ExplorerContent() {
                 />
               </TabsContent>
 
-              <TabsContent value="import-export">
-                <DataImportExport 
-                  onDataImport={(data) => {
-                    const processedData = processData(data);
-                    const summary = updateSummary(processedData);
-                    setSearchResults(processedData);
-                    setSummaryData(summary);
-                    setActiveTab('search');
-                  }}
-                  exportData={filteredResults}
-                  segments={segments}
-                />
-              </TabsContent>
+            </Tabs>
 
-              <TabsContent value="filters">
-                <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl">
-                  <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
-                    <h2 className="font-semibold text-gray-800 dark:text-gray-100">Search Filters</h2>
-                  </header>
-                  <div className="p-5 space-y-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Price Range: ${priceRange[0]} - ${priceRange[1]}
-                      </label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="number"
-                          value={priceRange[0]}
-                          onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
-                          className="form-input w-24"
-                          placeholder="Min"
-                        />
-                        <input
-                          type="range"
-                          min="0"
-                          max="5000"
-                          value={priceRange[1]}
-                          onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
-                          className="flex-1"
-                        />
-                        <input
-                          type="number"
-                          value={priceRange[1]}
-                          onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
-                          className="form-input w-24"
-                          placeholder="Max"
-                        />
+            {/* Filters Modal */}
+            {showFilters && (
+              <div className="fixed inset-0 bg-gray-900 bg-opacity-30 z-50 transition-opacity">
+                <div className="fixed inset-0 z-50 overflow-hidden">
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                      <div className="pointer-events-auto w-screen max-w-md">
+                        <div className="flex h-full flex-col overflow-y-scroll bg-white dark:bg-gray-800 shadow-xl">
+                          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+                            <div className="flex items-start justify-between">
+                              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                Search Filters
+                              </h2>
+                              <div className="ml-3 flex h-7 items-center">
+                                <button
+                                  onClick={() => setShowFilters(false)}
+                                  className="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 focus:outline-none"
+                                >
+                                  <span className="sr-only">Close panel</span>
+                                  <X className="h-6 w-6" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-8 space-y-6">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Price Range: ${priceRange[0]} - ${priceRange[1]}
+                                </label>
+                                <div className="flex items-center gap-4">
+                                  <input
+                                    type="number"
+                                    value={priceRange[0]}
+                                    onChange={(e) => setPriceRange([Number(e.target.value), priceRange[1]])}
+                                    className="form-input w-24"
+                                    placeholder="Min"
+                                  />
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="5000"
+                                    value={priceRange[1]}
+                                    onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
+                                    className="flex-1"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={priceRange[1]}
+                                    onChange={(e) => setPriceRange([priceRange[0], Number(e.target.value)])}
+                                    className="form-input w-24"
+                                    placeholder="Max"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Sales Range: {salesRange[0]} - {salesRange[1]}
+                                </label>
+                                <div className="flex items-center gap-4">
+                                  <input
+                                    type="number"
+                                    value={salesRange[0]}
+                                    onChange={(e) => setSalesRange([Number(e.target.value), salesRange[1]])}
+                                    className="form-input w-24"
+                                    placeholder="Min"
+                                  />
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="50000"
+                                    value={salesRange[1]}
+                                    onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
+                                    className="flex-1"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={salesRange[1]}
+                                    onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
+                                    className="form-input w-24"
+                                    placeholder="Max"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Marketplace
+                                </label>
+                                <select 
+                                  value={settings.marketplace}
+                                  className="form-select w-full"
+                                  disabled
+                                >
+                                  <option value="us">United States</option>
+                                  <option value="uk">United Kingdom</option>
+                                  <option value="ca">Canada</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <button
+                                  onClick={() => cache().clear()}
+                                  className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300 w-full"
+                                >
+                                  <Zap className="w-4 h-4 mr-2" />
+                                  Clear Cache
+                                </button>
+                              </div>
+
+                              <div className="border-t pt-6">
+                                <button
+                                  onClick={() => setShowFilters(false)}
+                                  className="btn bg-violet-500 hover:bg-violet-600 text-white w-full"
+                                >
+                                  Apply Filters
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Sales Range: {salesRange[0]} - {salesRange[1]}
-                      </label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="number"
-                          value={salesRange[0]}
-                          onChange={(e) => setSalesRange([Number(e.target.value), salesRange[1]])}
-                          className="form-input w-24"
-                          placeholder="Min"
-                        />
-                        <input
-                          type="range"
-                          min="0"
-                          max="50000"
-                          value={salesRange[1]}
-                          onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
-                          className="flex-1"
-                        />
-                        <input
-                          type="number"
-                          value={salesRange[1]}
-                          onChange={(e) => setSalesRange([salesRange[0], Number(e.target.value)])}
-                          className="form-input w-24"
-                          placeholder="Max"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Marketplace
-                      </label>
-                      <select 
-                        value={settings.marketplace}
-                        className="form-select w-full"
-                        disabled
-                      >
-                        <option value="us">United States</option>
-                        <option value="uk">United Kingdom</option>
-                        <option value="ca">Canada</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <button
-                        onClick={() => cache().clear()}
-                        className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300 w-full"
-                      >
-                        <Zap className="w-4 h-4 mr-2" />
-                        Clear Cache
-                      </button>
                     </div>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+            )}
+
+            {/* Import/Export Modal */}
+            {showImportExport && (
+              <div className="fixed inset-0 bg-gray-900 bg-opacity-30 z-50 transition-opacity">
+                <div className="fixed inset-0 z-50 overflow-hidden">
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                      <div className="pointer-events-auto w-screen max-w-2xl">
+                        <div className="flex h-full flex-col overflow-y-scroll bg-white dark:bg-gray-800 shadow-xl">
+                          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+                            <div className="flex items-start justify-between mb-6">
+                              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                Import/Export Data
+                              </h2>
+                              <div className="ml-3 flex h-7 items-center">
+                                <button
+                                  onClick={() => setShowImportExport(false)}
+                                  className="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 focus:outline-none"
+                                >
+                                  <span className="sr-only">Close panel</span>
+                                  <X className="h-6 w-6" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <DataImportExport 
+                              onDataImport={(data) => {
+                                const processedData = processData(data);
+                                const summary = updateSummary(processedData);
+                                setSearchResults(processedData);
+                                setSummaryData(summary);
+                                setShowImportExport(false);
+                                setActiveTab('search');
+                              }}
+                              exportData={filteredResults}
+                              segments={segments}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

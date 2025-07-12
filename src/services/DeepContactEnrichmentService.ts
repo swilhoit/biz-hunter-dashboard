@@ -56,21 +56,21 @@ class DeepContactEnrichmentService {
   private providers: ContactEnrichmentProvider[] = [
     {
       name: 'hunter',
-      apiKey: process.env.HUNTER_API_KEY || '',
+      apiKey: import.meta.env.VITE_HUNTER_API_KEY || '',
       baseUrl: 'https://api.hunter.io/v2',
       costPerLookup: 0.05, // Approximate cost
       dailyLimit: 100 // Free tier limit
     },
     {
       name: 'clearbit',
-      apiKey: process.env.CLEARBIT_API_KEY || '',
+      apiKey: import.meta.env.VITE_CLEARBIT_API_KEY || '',
       baseUrl: 'https://person.clearbit.com/v1',
       costPerLookup: 0.10,
       dailyLimit: 50
     },
     {
       name: 'rocketreach',
-      apiKey: process.env.ROCKETREACH_API_KEY || '',
+      apiKey: import.meta.env.VITE_ROCKETREACH_API_KEY || '',
       baseUrl: 'https://api.rocketreach.co/v1',
       costPerLookup: 0.15,
       dailyLimit: 25

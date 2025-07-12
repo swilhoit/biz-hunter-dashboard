@@ -6020,6 +6020,11 @@ async function startServer() {
       console.log('🚫 Auto-scraping disabled - listings will only be added via manual scraping');
     });
     
+    // Set server timeout to 2 minutes to handle long OpenAI requests
+    server.timeout = 120000; // 2 minutes
+    server.keepAliveTimeout = 125000; // Slightly longer than timeout
+    server.headersTimeout = 130000; // Even longer to ensure proper cleanup
+    
     // Handle server errors gracefully
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {

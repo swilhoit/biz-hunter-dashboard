@@ -7,13 +7,17 @@ interface ProductData {
   revenue?: number;
   brand?: string;
   description?: string;
+  rating?: number;
 }
 
 interface MarketSegment {
   name: string;
+  description?: string;
+  features?: string[];
   products: ProductData[];
   totalRevenue: number;
   averagePrice: number;
+  averageRating?: number;
   marketShare: number;
 }
 
@@ -41,32 +45,71 @@ export class OpenAIService {
     }
 
     try {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
+      
+      console.log(`Fetching segments from: ${this.apiUrl}/segment-portfolio`);
+      console.log('Request body:', { products: products.length, batchSize });
+      
       const response = await fetch(`${this.apiUrl}/segment-portfolio`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ products, batchSize }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
+      console.log('Response status:', response.status, response.statusText);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to segment portfolio');
+        // Handle timeout specifically
+        if (response.status === 408) {
+          console.warn('Request timed out. Using fallback segmentation.');
+          throw new Error('Request timed out');
+        }
+        
+        // Try to parse error response, but handle cases where body might be empty
+        let errorMessage = 'Failed to segment portfolio';
+        try {
+          const errorData = await response.json();
+          // Handle server error response format { success: false, error: "message" }
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          
+          // If it's specifically an OpenAI API key error, use fallback
+          if (errorMessage.includes('OpenAI API key not configured')) {
+            console.log('OpenAI API key not configured, using fallback segmentation');
+            return this.createFallbackSegments(products);
+          }
+        } catch (e) {
+          // If JSON parsing fails, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      return { segments: data.segments };
+      console.log('Response data:', { success: data.success, segmentsCount: data.segments?.length });
+      
+      // Handle server response format
+      if (data.success && data.segments) {
+        console.log('Returning segments from server');
+        return { segments: data.segments };
+      } else if (data.segments) {
+        console.log('Returning segments (no success flag)');
+        return { segments: data.segments };
+      } else {
+        console.error('Invalid response format:', data);
+        throw new Error('Invalid response format from server');
+      }
     } catch (error) {
       console.error("Error in portfolio segmentation:", error);
-      return { 
-        segments: [{ 
-          name: "All Products", 
-          products, 
-          totalRevenue: products.reduce((sum, p) => sum + (p.revenue || 0), 0),
-          averagePrice: products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length,
-          marketShare: 100 
-        }] 
-      };
+      
+      // Fallback: Create intelligent segments based on available data
+      return this.createFallbackSegments(products);
     }
   }
 
@@ -130,6 +173,111 @@ export class OpenAIService {
       const matches = text.match(asinPattern) || [];
       return matches.filter(asin => /[A-Z]/.test(asin));
     }
+  }
+
+  private createFallbackSegments(products: ProductData[]): { segments: MarketSegment[] } {
+    console.log("Using fallback segmentation logic");
+    
+    // Group products by category and price range
+    const segments: Map<string, MarketSegment> = new Map();
+    
+    products.forEach(product => {
+      // Determine segment based on category and price
+      let segmentKey = '';
+      let segmentName = '';
+      
+      // Price-based segmentation
+      const price = product.price || 0;
+      let priceRange = '';
+      if (price < 20) priceRange = 'Budget';
+      else if (price < 50) priceRange = 'Mid-Range';
+      else if (price < 100) priceRange = 'Premium';
+      else priceRange = 'Luxury';
+      
+      // Category-based segmentation
+      const category = product.category || 'General';
+      const categoryWords = category.toLowerCase().split(/[\s&,/-]+/);
+      
+      // Look for key category indicators
+      if (categoryWords.some(w => ['electronics', 'gadgets', 'tech', 'computer', 'phone', 'tablet'].includes(w))) {
+        segmentName = `${priceRange} Electronics & Tech`;
+        segmentKey = `tech-${priceRange}`;
+      } else if (categoryWords.some(w => ['home', 'kitchen', 'garden', 'furniture', 'decor'].includes(w))) {
+        segmentName = `${priceRange} Home & Living`;
+        segmentKey = `home-${priceRange}`;
+      } else if (categoryWords.some(w => ['health', 'beauty', 'personal', 'care', 'fitness'].includes(w))) {
+        segmentName = `${priceRange} Health & Beauty`;
+        segmentKey = `health-${priceRange}`;
+      } else if (categoryWords.some(w => ['toys', 'games', 'kids', 'baby', 'children'].includes(w))) {
+        segmentName = `${priceRange} Kids & Toys`;
+        segmentKey = `kids-${priceRange}`;
+      } else if (categoryWords.some(w => ['sports', 'outdoor', 'camping', 'hiking', 'fitness'].includes(w))) {
+        segmentName = `${priceRange} Sports & Outdoors`;
+        segmentKey = `sports-${priceRange}`;
+      } else if (categoryWords.some(w => ['office', 'business', 'professional', 'work'].includes(w))) {
+        segmentName = `${priceRange} Office & Business`;
+        segmentKey = `office-${priceRange}`;
+      } else {
+        segmentName = `${priceRange} ${category}`;
+        segmentKey = `${category.toLowerCase()}-${priceRange}`;
+      }
+      
+      // Get or create segment
+      if (!segments.has(segmentKey)) {
+        segments.set(segmentKey, {
+          name: segmentName,
+          description: `Products in the ${segmentName} category`,
+          features: [],
+          products: [],
+          totalRevenue: 0,
+          averagePrice: 0,
+          averageRating: 0,
+          marketShare: 0
+        });
+      }
+      
+      const segment = segments.get(segmentKey)!;
+      segment.products.push(product);
+    });
+    
+    // Calculate metrics for each segment
+    const totalRevenue = products.reduce((sum, p) => sum + (p.revenue || 0), 0);
+    
+    const segmentArray = Array.from(segments.values()).map(segment => {
+      const segmentRevenue = segment.products.reduce((sum, p) => sum + (p.revenue || 0), 0);
+      const avgPrice = segment.products.reduce((sum, p) => sum + (p.price || 0), 0) / segment.products.length;
+      const avgRating = segment.products.reduce((sum, p) => sum + (p.rating || 0), 0) / segment.products.length;
+      
+      // Extract features from product titles and descriptions
+      const commonWords = new Map<string, number>();
+      segment.products.forEach(p => {
+        const words = (p.title || '').toLowerCase().split(/\s+/)
+          .filter(w => w.length > 4 && !['with', 'from', 'that', 'this', 'have'].includes(w));
+        words.forEach(w => commonWords.set(w, (commonWords.get(w) || 0) + 1));
+      });
+      
+      // Get top 3 most common features
+      const features = Array.from(commonWords.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([word]) => word.charAt(0).toUpperCase() + word.slice(1));
+      
+      return {
+        ...segment,
+        features,
+        totalRevenue: segmentRevenue,
+        averagePrice: avgPrice || 0,
+        averageRating: avgRating || 0,
+        marketShare: totalRevenue > 0 ? (segmentRevenue / totalRevenue) * 100 : 0
+      };
+    });
+    
+    // Sort by revenue and filter out empty segments
+    return { 
+      segments: segmentArray
+        .filter(s => s.products.length > 0)
+        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    };
   }
 }
 

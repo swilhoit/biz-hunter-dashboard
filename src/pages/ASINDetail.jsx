@@ -11,6 +11,7 @@ import { KeywordService } from '../services/KeywordService';
 import { getAmazonImageUrl } from '../utils/amazonImageUrl';
 import KeywordRecommendationService from '../services/KeywordRecommendationService';
 import { testJungleScoutAPI } from '../utils/explorer/junglescout';
+import { ASINReviewAnalysis } from '../components/ASINReviewAnalysis';
 
 // Chart components
 import LineChart01 from '../charts/LineChart01';
@@ -37,7 +38,7 @@ function ASINDetail() {
   const [keywordSearchTerm, setKeywordSearchTerm] = useState('');
   const [minSearchVolume, setMinSearchVolume] = useState('');
   const [minRelevancy, setMinRelevancy] = useState('');
-  const [sortField, setSortField] = useState('relevancy_score');
+  const [sortField, setSortField] = useState('search_volume');
   const [sortDirection, setSortDirection] = useState('desc');
   
   // Keyword selection state
@@ -721,6 +722,14 @@ function ASINDetail() {
                 }>
                   History
                 </Tab>
+                <Tab className={({ selected }) =>
+                  `btn ${selected 
+                    ? 'bg-violet-500 hover:bg-violet-600 text-white' 
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-300'
+                  } m-1`
+                }>
+                  Reviews
+                </Tab>
               </Tab.List>
 
               <Tab.Panels>
@@ -1312,6 +1321,14 @@ function ASINDetail() {
                       )}
                     </div>
                   </div>
+                </Tab.Panel>
+
+                {/* Reviews Tab */}
+                <Tab.Panel>
+                  <ASINReviewAnalysis 
+                    asin={asinData.asin} 
+                    asinId={asinData.id}
+                  />
                 </Tab.Panel>
               </Tab.Panels>
             </Tab.Group>

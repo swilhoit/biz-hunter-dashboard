@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Layers, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import ASINImage from '../ASINImage';
 
 interface ProductComparisonProps {
   products: any[];
@@ -83,13 +84,11 @@ export function ProductComparison({ products, selectedProducts, onProductSelect 
           {comparisonProducts.map((product, index) => (
             <div key={`${product.asin}-${index}`} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="relative mb-3">
-                <img
-                  src={product.imageUrl || 'https://via.placeholder.com/150'}
+                <ASINImage
+                  src={product.imageUrl}
+                  asin={product.asin}
                   alt={product.title}
                   className="w-full h-32 object-cover rounded"
-                  onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/150';
-                  }}
                 />
                 <button
                   onClick={() => onProductSelect(product.asin)}

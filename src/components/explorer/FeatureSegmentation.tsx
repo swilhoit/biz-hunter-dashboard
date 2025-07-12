@@ -1,24 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Brain, Layers, TrendingUp, Package, AlertCircle, RefreshCw, Settings } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Alert, AlertDescription } from '../ui/alert';
-import { Badge } from '../ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
+import ASINImage from '../ASINImage';
 import { extractFeatures, segmentByFeatures } from '../../utils/explorer/aiSegmentation';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
 import OpenAIService from '../../services/OpenAIService';
@@ -107,9 +89,21 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
       }
 
       onSegmentsUpdate(segmentsWithMetrics);
-    } catch (err) {
-      setError('Failed to segment products. Please check your AI provider settings.');
-      console.error(err);
+    } catch (err: any) {
+      let errorMessage = 'Failed to segment products.';
+      
+      if (err.message?.includes('OpenAI API key not configured')) {
+        errorMessage = 'OpenAI API key is not configured. The system will use intelligent category-based segmentation instead.';
+      } else if (err.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again with fewer products or check your internet connection.';
+      } else if (aiProvider === 'openai') {
+        errorMessage = 'OpenAI service is unavailable. Using fallback segmentation based on product categories and price ranges.';
+      } else {
+        errorMessage = 'Failed to segment products. Please check your AI provider settings.';
+      }
+      
+      setError(errorMessage);
+      console.error('Segmentation error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -120,119 +114,117 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
   return (
     <div className="space-y-6">
       {/* Header and Controls */}
-      <Card>
-        <CardHeader>
+      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+        <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>AI Feature Segmentation</CardTitle>
-              <CardDescription>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100">AI Feature Segmentation</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Use AI to extract product features and group similar products into market segments
-              </CardDescription>
+              </p>
             </div>
-            <Button
+            <button
               onClick={() => setShowSettings(!showSettings)}
-              variant="ghost"
-              size="sm"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
               <Settings className="w-5 h-5" />
-            </Button>
+            </button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </header>
+        <div className="p-5 space-y-4">
           {showSettings && (
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 AI Provider
               </label>
-              <Select value={aiProvider} onValueChange={(value) => setAiProvider(value as any)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic Claude</SelectItem>
-                  <SelectItem value="groq">Groq (Fast)</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={aiProvider}
+                onChange={(e) => setAiProvider(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-gray-700 dark:text-gray-100"
+              >
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="groq">Groq (Fast)</option>
+              </select>
             </div>
           )}
 
-          <Button
+          <button
             onClick={handleSegmentation}
             disabled={isLoading || products.length === 0}
-            className="w-full"
+            className="w-full px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin" />
                 Analyzing...
               </>
             ) : (
               <>
-                <Brain className="w-4 h-4 mr-2" />
+                <Brain className="w-4 h-4" />
                 Generate Segments
               </>
             )}
-          </Button>
+          </button>
 
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-red-700 dark:text-red-400">{error}</p>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Segments Overview */}
       {segments.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {segments.map((segment) => (
-            <Card
+            <div
               key={segment.id}
               onClick={() => setSelectedSegment(segment.id)}
-              className={`cursor-pointer transition-all ${
+              className={`bg-white dark:bg-gray-800 shadow-sm rounded-xl cursor-pointer transition-all ${
                 selectedSegment === segment.id
                   ? 'ring-2 ring-violet-500'
                   : 'hover:shadow-lg'
               }`}
             >
-              <CardHeader>
+              <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{segment.name}</CardTitle>
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{segment.name}</h4>
                     {segment.description && (
-                      <CardDescription className="mt-1 text-xs">
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         {segment.description}
-                      </CardDescription>
+                      </p>
                     )}
-                    <CardDescription className="mt-1">
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       {segment.metrics.productCount} products
                       {segment.metrics.marketShare && (
                         <span className="ml-2">• {segment.metrics.marketShare.toFixed(1)}% market share</span>
                       )}
-                    </CardDescription>
+                    </p>
                   </div>
                   <Layers className="w-8 h-8 text-violet-500 ml-4 flex-shrink-0" />
                 </div>
-              </CardHeader>
-              <CardContent>
+              </header>
+              <div className="p-5">
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Total Revenue</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-gray-800 dark:text-gray-100">
                       ${formatNumberWithCommas(segment.metrics.totalRevenue)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Avg Price</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-gray-800 dark:text-gray-100">
                       ${segment.metrics.avgPrice.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Avg Rating</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-gray-800 dark:text-gray-100">
                       ⭐ {segment.metrics.avgRating.toFixed(1)}
                     </span>
                   </div>
@@ -242,13 +234,12 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
                   <p className="text-xs font-medium text-gray-700 dark:text-gray-300 uppercase">Key Features</p>
                   <div className="flex flex-wrap gap-1">
                     {segment.features.slice(0, 3).map((feature, index) => (
-                      <Badge
+                      <span
                         key={index}
-                        variant="secondary"
-                        className="text-xs"
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
                       >
                         {feature}
-                      </Badge>
+                      </span>
                     ))}
                     {segment.features.length > 3 && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -257,92 +248,102 @@ export function FeatureSegmentation({ products, onSegmentsUpdate, segments }: Fe
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
       {/* Selected Segment Details */}
       {selectedSegmentData && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedSegmentData.name} - Detailed View</CardTitle>
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100">{selectedSegmentData.name} - Detailed View</h4>
             <div className="mt-2 flex flex-wrap gap-2">
               {selectedSegmentData.features.map((feature, index) => (
-                <Badge
+                <span
                   key={index}
-                  variant="secondary"
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
                 >
                   {feature}
-                </Badge>
+                </span>
               ))}
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Sales</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
-                  <TableHead className="text-right">Rating</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {selectedSegmentData.products.map((product) => (
-                  <TableRow key={product.asin}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <img 
-                          src={product.imageUrl || 'https://via.placeholder.com/40'} 
-                          alt={product.title}
-                          className="w-10 h-10 rounded object-cover"
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/40';
-                          }}
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
-                            {product.title}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {product.asin}
+          </header>
+          <div className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Product
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Price
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Sales
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Revenue
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Rating
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {selectedSegmentData.products.map((product) => (
+                    <tr key={product.asin} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-3">
+                          <ASINImage 
+                            src={product.imageUrl} 
+                            asin={product.asin}
+                            alt={product.title}
+                            className="w-10 h-10 rounded object-cover"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
+                              {product.title}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {product.asin}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${product.price.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatNumberWithCommas(product.sales)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${formatNumberWithCommas(product.revenue)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ⭐ {product.rating.toFixed(1)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">
+                        ${product.price.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">
+                        {formatNumberWithCommas(product.sales)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">
+                        ${formatNumberWithCommas(product.revenue)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100">
+                        ⭐ {product.rating.toFixed(1)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Empty State */}
       {!isLoading && segments.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Brain className="w-12 h-12 text-gray-400 mb-4" />
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
+          <div className="p-8 text-center">
+            <Brain className="w-12 h-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-500 dark:text-gray-400 text-center">
               Click "Generate Segments" to use AI for feature extraction and market segmentation
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -38,9 +38,9 @@ export class RailwayAPIWrapper {
     }
     
     // Server-side detection
-    return !!(process.env.RAILWAY_ENVIRONMENT || 
-              process.env.RAILWAY_PROJECT_ID ||
-              process.env.RAILWAY_SERVICE_ID);
+        return !!(import.meta.env.VITE_RAILWAY_ENVIRONMENT ||
+      import.meta.env.VITE_RAILWAY_PROJECT_ID ||
+      import.meta.env.VITE_RAILWAY_SERVICE_ID);
   }
   
   async callScraperAPI(url: string, options: APICallOptions = {}): Promise<Response> {
@@ -201,7 +201,7 @@ export class RailwayAPIWrapper {
   
   private getScraperAPIKey(): string | undefined {
     // Try multiple sources for the API key
-    return process.env.SCRAPER_API_KEY ||
+    return import.meta.env.VITE_SCRAPER_API_KEY ||
            (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.SCRAPER_API_KEY) ||
            undefined;
   }
@@ -209,8 +209,7 @@ export class RailwayAPIWrapper {
   private getOpenAIKey(): string | undefined {
     // Try multiple sources for the API key
     return getConfigValue('VITE_OPENAI_API_KEY') ||
-           process.env.VITE_OPENAI_API_KEY ||
-           process.env.OPENAI_API_KEY ||
+           import.meta.env.VITE_OPENAI_API_KEY ||
            (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.VITE_OPENAI_API_KEY) ||
            (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__?.OPENAI_API_KEY) ||
            undefined;

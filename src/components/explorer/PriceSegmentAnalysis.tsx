@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { ProcessedProduct, PriceSegment, getPriceSegments, SummaryData, formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import ASINImage from '../ASINImage';
 
 interface PriceSegmentAnalysisProps {
   data: ProcessedProduct[];
@@ -38,9 +39,9 @@ export const PriceSegmentAnalysis: React.FC<PriceSegmentAnalysisProps> = ({
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Price Segment Analysis</h2>
       </header>
       
-      <div className="p-4">
+      <div className="p-5 space-y-6">
         {/* Price Increment Slider */}
-        <div className="mb-6">
+        <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Price Segment Increment: ${priceIncrement}
           </label>
@@ -180,14 +181,11 @@ export const PriceSegmentAnalysis: React.FC<PriceSegmentAnalysisProps> = ({
                                   </td>
                                   <td className="px-3 py-2">
                                     <div className="flex items-center">
-                                      <img
-                                        src={item.imageUrl || 'https://via.placeholder.com/40'}
+                                      <ASINImage
+                                        src={item.imageUrl}
+                                        asin={item.asin}
                                         alt={item.title}
                                         className="w-10 h-10 rounded object-cover mr-2"
-                                        onError={(e) => {
-                                          const target = e.target as HTMLImageElement;
-                                          target.src = 'https://via.placeholder.com/40';
-                                        }}
                                       />
                                       <div className="max-w-xs">
                                         <a

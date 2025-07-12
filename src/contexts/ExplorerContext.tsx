@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 // Types
 interface ExplorerSettings {
-  apiProvider: 'junglescout' | 'rainforest';
+  apiProvider: 'junglescout' | 'dataforseo';
   featureBatchSize: number;
   maxTokens: number;
   cacheEnabled: boolean;

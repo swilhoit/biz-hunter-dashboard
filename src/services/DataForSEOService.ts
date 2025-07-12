@@ -288,15 +288,15 @@ class DataForSEOService {
 
   constructor() {
     this.config = {
-      apiKey: process.env.DATAFORSEO_API_KEY || '',
+      apiKey: import.meta.env.VITE_DATAFORSEO_API_KEY || '',
       baseUrl: 'https://api.dataforseo.com',
-      username: process.env.DATAFORSEO_USERNAME || '',
-      password: process.env.DATAFORSEO_PASSWORD || ''
+      username: import.meta.env.VITE_DATAFORSEO_USERNAME || '',
+      password: import.meta.env.VITE_DATAFORSEO_PASSWORD || ''
     };
   }
 
-  private async makeRequest(endpoint: string, data: any): Promise<any> {
-    const credentials = Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64');
+  async makeRequest(endpoint: string, data: any): Promise<any> {
+    const credentials = btoa(`${this.config.username}:${this.config.password}`);
     
     const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
       method: 'POST',
@@ -691,6 +691,76 @@ class DataForSEOService {
       .select('*');
 
     return data;
+  }
+
+  // Fetch single product by ASIN for image retrieval
+  async fetchProductByASIN(asin: string): Promise<{ image_url?: string } | null> {
+    try {
+      const request = {
+        keyword: asin,
+        location_code: 2840, // US
+        language_code: 'en_US',
+        priority: 'standard'
+      };
+
+      const response: ProductSearchResponse = await this.makeRequest('/v3/merchant/amazon/products/task_post', request);
+
+      if (response.status_code !== 20000) {
+        throw new Error(`DataForSEO API error: ${response.status_message}`);
+      }
+
+      const task = response.tasks[0];
+      if (!task.result || task.result.length === 0) {
+        return null;
+      }
+
+      const items = task.result[0].items;
+      
+      // Find the matching ASIN in the results
+      const matchingItem = items.find(item => item.asin === asin);
+      
+      if (matchingItem && matchingItem.image_url) {
+        return { image_url: matchingItem.image_url };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error fetching product by ASIN:', error);
+      return null;
+    }
+  }
+
+  // Fetch bulk product data for multiple ASINs
+  async fetchBulkProductData(asins: string[]): Promise<any[]> {
+    try {
+      const results: any[] = [];
+      
+      // Search for each ASIN
+      for (const asin of asins) {
+        const request = {
+          keyword: asin,
+          location_code: 2840, // US
+          language_code: 'en_US',
+          priority: 'standard'
+        };
+
+        const response: ProductSearchResponse = await this.makeRequest('/v3/merchant/amazon/products/task_post', request);
+
+        if (response.status_code === 20000 && response.tasks[0].result) {
+          const items = response.tasks[0].result[0].items;
+          const matchingItem = items.find(item => item.asin === asin);
+          
+          if (matchingItem) {
+            results.push(matchingItem);
+          }
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching bulk product data:', error);
+      return [];
+    }
   }
 }
 

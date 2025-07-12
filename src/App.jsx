@@ -137,6 +137,7 @@ function App() {
         <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
         <Route path="/brand/:id" element={<ProtectedRoute><BrandDetails /></ProtectedRoute>} />
         <Route path="/explorer" element={<ProtectedRoute><Explorer /></ProtectedRoute>} />
+        <Route path="/asin/:asinId" element={<ProtectedRoute><ASINDetail /></ProtectedRoute>} />
         <Route path="/share-of-voice" element={<ProtectedRoute><ShareOfVoiceAnalysis /></ProtectedRoute>} />
 
         <Route path="/dashboard/fintech" element={<ProtectedRoute><Fintech /></ProtectedRoute>} />

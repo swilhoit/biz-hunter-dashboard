@@ -1,6 +1,8 @@
 import React from 'react';
-import { Download, Package, Trash2, ExternalLink } from 'lucide-react';
+import { Download, Package, Trash2, ExternalLink, Filter, Database, Upload } from 'lucide-react';
 import { formatNumberWithCommas } from '../../utils/explorer/dataProcessing';
+import ASINImage from '../ASINImage';
+import { Link } from 'react-router-dom';
 
 interface ProductSearchTableProps {
   products: any[];
@@ -9,6 +11,8 @@ interface ProductSearchTableProps {
   onDeleteProduct: (asin: string) => void;
   onExport: () => void;
   isLoading: boolean;
+  onShowFilters?: () => void;
+  onShowImportExport?: () => void;
 }
 
 export function ProductSearchTable({
@@ -17,7 +21,9 @@ export function ProductSearchTable({
   onProductSelect,
   onDeleteProduct,
   onExport,
-  isLoading
+  isLoading,
+  onShowFilters,
+  onShowImportExport
 }: ProductSearchTableProps) {
   if (isLoading) {
     return (
@@ -54,13 +60,33 @@ export function ProductSearchTable({
               ({products.length} products)
             </span>
           </h2>
-          <button 
-            onClick={onExport}
-            className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </button>
+          <div className="flex items-center gap-2">
+            {onShowFilters && (
+              <button 
+                onClick={onShowFilters}
+                className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filters
+              </button>
+            )}
+            {onShowImportExport && (
+              <button 
+                onClick={onShowImportExport}
+                className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Import/Export
+              </button>
+            )}
+            <button 
+              onClick={onExport}
+              className="btn bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/60 hover:border-gray-300 dark:hover:border-gray-600 text-gray-800 dark:text-gray-300"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+          </div>
         </div>
       </header>
       
@@ -136,13 +162,11 @@ export function ProductSearchTable({
                 <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="relative inline-flex mr-3">
-                      <img 
-                        src={product.imageUrl || 'https://via.placeholder.com/50'} 
+                      <ASINImage 
+                        src={product.imageUrl} 
+                        asin={product.asin}
                         alt={product.title}
                         className="w-12 h-12 rounded-lg object-cover"
-                        onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/50';
-                        }}
                       />
                     </div>
                     <div className="flex-1">
@@ -152,7 +176,13 @@ export function ProductSearchTable({
                         </div>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                        ASIN: {product.asin}
+                        ASIN: 
+                        <Link 
+                          to={`/asin/${product.asin}`}
+                          className="text-violet-500 hover:text-violet-600 underline"
+                        >
+                          {product.asin}
+                        </Link>
                         <a 
                           href={product.amazonUrl} 
                           target="_blank" 

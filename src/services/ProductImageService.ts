@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import axios from 'axios';
+import DataForSEOService from './DataForSEOService';
 
 interface ImageFetchResult {
   success: boolean;
@@ -32,49 +32,26 @@ export class ProductImageService {
         return { success: true, imageUrl: existingASIN.main_image_url };
       }
 
-      // Try to fetch image using Rainforest API if available
-      const rainforestApiKey = import.meta.env.VITE_RAINFOREST_API_KEY;
-      if (rainforestApiKey) {
-        try {
-          const response = await axios.get('https://api.rainforestapi.com/request', {
-            params: {
-              api_key: rainforestApiKey,
-              type: 'product',
-              amazon_domain: 'amazon.com',
-              asin: asin
-            }
-          });
+      // Try to fetch image using DataForSEO API
+      try {
+        const dataForSEOService = new DataForSEOService();
+        const response = await dataForSEOService.fetchProductByASIN(asin);
+        
+        if (response && response.image_url) {
+          // Update the database with the new image URL
+          await supabase
+            .from('asins')
+            .update({ main_image_url: response.image_url })
+            .eq('id', existingASIN.id);
 
-          if (response.data && response.data.product) {
-            const imageUrl = response.data.product.main_image?.link || 
-                           response.data.product.images?.[0]?.link ||
-                           response.data.product.image;
-
-            if (imageUrl) {
-              // Update the database with the new image URL
-              await supabase
-                .from('asins')
-                .update({ main_image_url: imageUrl })
-                .eq('id', existingASIN.id);
-
-              return { success: true, imageUrl };
-            }
-          }
-        } catch (error) {
-          console.error('Rainforest API error:', error);
+          return { success: true, imageUrl: response.image_url };
         }
+      } catch (error) {
+        console.error('DataForSEO API error:', error);
       }
 
-      // If all else fails, generate a widget URL
-      const widgetUrl = `https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=${asin}&Format=_SL500_&ID=AsinImage&MarketPlace=US&ServiceVersion=20070822`;
-      
-      // Update the database with the widget URL
-      await supabase
-        .from('asins')
-        .update({ main_image_url: widgetUrl })
-        .eq('id', existingASIN.id);
-
-      return { success: true, imageUrl: widgetUrl };
+      // If API fails, return no image
+      return { success: false, error: 'No image found for this ASIN' };
 
     } catch (error) {
       console.error('Error fetching product image:', error);
