@@ -590,15 +590,23 @@ export class BrandKeywordService {
               console.log(`[BrandKeywords] Sample ready task structure:`, JSON.stringify(readyData.tasks[0], null, 2));
             }
             
-            // Filter ready tasks by our tag pattern
+            // Filter ready tasks by our tag pattern and ensure they're actually complete
             const tagFilter = `parallel-${brandName}-`;
             const relevantReadyTasks = readyData.tasks.filter((task: any) => {
               // According to DataForSEO docs, tag is at the root level of task object
               const taskTag = task.tag;
-              if (taskTag) {
-                console.log(`[BrandKeywords] Task ${task.id} has tag: "${taskTag}", checking against filter: "${tagFilter}"`);
+              const isOurTask = taskTag && typeof taskTag === 'string' && taskTag.startsWith(tagFilter);
+              
+              if (isOurTask && task.status_code !== 20000) {
+                console.log(`[BrandKeywords] Task ${task.id} matches tag but status is ${task.status_code} (not ready)`);
+                return false;
               }
-              return taskTag && typeof taskTag === 'string' && taskTag.startsWith(tagFilter);
+              
+              if (taskTag) {
+                console.log(`[BrandKeywords] Task ${task.id} has tag: "${taskTag}", status: ${task.status_code}`);
+              }
+              
+              return isOurTask && task.status_code === 20000;
             });
             
             console.log(`[BrandKeywords] Total ready tasks:`, readyTaskIds.length, 'Relevant tasks:', relevantReadyTasks.length);
@@ -631,7 +639,7 @@ export class BrandKeywordService {
               console.log(`[BrandKeywords] No matching ready tasks found. ${remaining} tasks still pending.`);
               
               // Only try direct fetch if there are unmatched ready tasks (likely tag mismatch)
-              if (readyTaskIds.length > relevantTaskIds.length && elapsedMs > 30000) {
+              if (readyTaskIds.length > relevantTaskIds.length && elapsedMs > 60000) {
                 console.log(`[BrandKeywords] Found ${readyTaskIds.length - relevantTaskIds.length} unmatched ready tasks after ${Math.round(elapsedMs/1000)}s`);
                 console.log(`[BrandKeywords] Attempting direct fetch for some unprocessed tasks...`);
                 
@@ -639,7 +647,7 @@ export class BrandKeywordService {
                 const unprocessedTasks = allTasks.filter(task => 
                   !completedTasks.has(task.taskId) && 
                   !processingPromises.has(task.taskId)
-                ).slice(0, 2); // Try 2 at a time to avoid overwhelming
+                ).slice(0, 1); // Try 1 at a time to avoid overwhelming
                 
                 if (unprocessedTasks.length > 0) {
                   console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
@@ -715,7 +723,7 @@ export class BrandKeywordService {
       
       // Add initial wait period for tasks to process
       const elapsedTime = Date.now() - startTime;
-      const minWaitBeforeProcessing = 5000; // Wait at least 5 seconds before trying to process
+      const minWaitBeforeProcessing = 15000; // Wait at least 15 seconds before trying to process
       
       if (elapsedTime < minWaitBeforeProcessing && completedTasks.size === 0) {
         console.log(`[BrandKeywords] Waiting for initial task processing... (${Math.round((minWaitBeforeProcessing - elapsedTime) / 1000)}s remaining)`);
