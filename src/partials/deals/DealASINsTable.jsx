@@ -39,6 +39,8 @@ function DealASINsTable({ dealId }) {
         setLoading(true);
         setError(null);
         const dealASINs = await ASINService.fetchDealASINs(dealId);
+        console.log('Loaded ASINs:', dealASINs);
+        console.log('First ASIN image_url:', dealASINs[0]?.image_url);
         setAsins(dealASINs);
       } catch (err) {
         console.error('Error loading ASINs:', err);
@@ -648,7 +650,7 @@ function DealASINsTable({ dealId }) {
                       <div className="relative inline-flex mr-3 flex-shrink-0">
                         <ASINImage
                           className="w-16 h-16 rounded-lg object-cover"
-                          src={asin.image_url}
+                          src={asin.image_url || null}
                           asin={asin.asin}
                           alt={asin.product_name}
                           fallbackText={asin.asin.substring(0, 6)}

@@ -39,14 +39,8 @@ const ASINImage: React.FC<ASINImageProps> = ({
       }
     }
     
-    // Then, if we have an ASIN, try Amazon image URLs
-    if (asin) {
-      sources.push(...getAmazonImageUrls(asin));
-    }
-    
-    // Finally, add a placeholder
-    const placeholderText = fallbackText || asin?.substring(0, 6) || alt.substring(0, 10) || 'Product';
-    sources.push(getPlaceholderImageUrl(placeholderText));
+    // Only use actual image URLs from the database
+    // Don't add fallback URLs that cause errors
     
     setImageSources(sources);
     setCurrentImageIndex(0);
@@ -55,11 +49,10 @@ const ASINImage: React.FC<ASINImageProps> = ({
   }, [src, asin, alt, fallbackText]);
 
   const handleError = () => {
-    console.log(`Failed to load image at index ${currentImageIndex}: ${imageSources[currentImageIndex]}`);
-    
     // Try the next image source
     if (currentImageIndex < imageSources.length - 1) {
       setCurrentImageIndex(currentImageIndex + 1);
+      setIsLoading(true); // Reset loading state for new image
     } else {
       // All sources failed, show the fallback UI
       setImageError(true);
@@ -89,30 +82,31 @@ const ASINImage: React.FC<ASINImageProps> = ({
   if (!imageSources.length || imageSources.length === 0) {
     return (
       <div 
-        className={`${className} bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white font-medium text-xs`}
+        className={`${className} bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white font-medium text-xs rounded-lg`}
       >
         {displayText}
       </div>
     );
   }
 
+  const currentSrc = imageSources[currentImageIndex];
+  
   return (
-    <>
+    <div className={`relative ${className}`}>
       {isLoading && (
-        <div className={`${className} bg-gray-200 dark:bg-gray-700 animate-pulse`} />
+        <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />
       )}
       <img
         key={currentImageIndex}
-        src={imageSources[currentImageIndex]}
+        src={currentSrc}
         alt={alt}
-        className={`${className} ${isLoading ? 'hidden' : ''}`}
+        className={`${className} ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-200`}
         onError={handleError}
         onLoad={handleLoad}
         loading={loading}
-        crossOrigin="anonymous"
-        referrerPolicy="no-referrer"
+        style={{ display: 'block' }}
       />
-    </>
+    </div>
   );
 };
 

@@ -93,6 +93,8 @@ export class ASINService {
   static async fetchDealASINs(dealId: string): Promise<ASINData[]> {
     try {
       // Use the foreign key relationship to get deal ASINs with ASIN details
+      console.log('Fetching deal ASINs for dealId:', dealId);
+      
       const { data, error } = await supabase
         .from('deal_asins')
         .select(`
@@ -120,6 +122,8 @@ export class ASINService {
           )
         `)
         .eq('deal_id', dealId);
+        
+      console.log('Raw query result:', { data, error });
 
       if (error) {
         console.error('Error fetching deal ASINs:', error);
@@ -129,10 +133,23 @@ export class ASINService {
       if (!data || data.length === 0) {
         return [];
       }
+      
+      // Debug: Log first ASIN with full details
+      if (data[0]) {
+        console.log('First ASIN full data:', {
+          deal_asin: data[0],
+          asin_detail: data[0].asins,
+          main_image_url: data[0].asins?.main_image_url
+        });
+      }
 
       // Transform the data to match the expected interface
       return data.map(item => {
         const asinDetail = item.asins;
+        
+        if (!asinDetail) {
+          console.error('No asinDetail found for item:', item);
+        }
         
         return {
           id: asinDetail?.id || item.id, // Use asins table ID for keyword queries
@@ -158,8 +175,14 @@ export class ASINService {
           fba: true, // Default for now
           listing_quality: this.calculateListingQuality(asinDetail?.review_rating, asinDetail?.review_count),
           competition_level: this.calculateCompetitionLevel(asinDetail?.current_bsr),
-          image_url: asinDetail?.main_image_url
+          image_url: asinDetail?.main_image_url || null
         };
+        
+        // Debug logging for image URL issue
+        if (asinDetail?.asin) {
+          console.log(`ASIN ${asinDetail.asin} image_url:`, asinDetail?.main_image_url);
+          console.log('Full asinDetail:', asinDetail);
+        }
       });
     } catch (error) {
       console.error('Error in fetchDealASINs:', error);

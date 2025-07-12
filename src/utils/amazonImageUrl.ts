@@ -16,16 +16,10 @@ export function getAmazonImageUrl(asin: string, size: 'small' | 'medium' | 'larg
 }
 
 export function getAmazonImageUrls(asin: string): string[] {
-  // Return multiple possible image URLs to try, in order of reliability
-  return [
-    // Amazon widget service (most reliable)
-    getAmazonImageUrl(asin, 'large'),
-    getAmazonImageUrl(asin, 'medium'),
-    // Direct image URLs (less reliable, need specific image IDs)
-    `https://m.media-amazon.com/images/I/${asin}_AC_SX679_.jpg`,
-    `https://m.media-amazon.com/images/I/${asin}_AC_SL1500_.jpg`,
-    `https://images-na.ssl-images-amazon.com/images/I/${asin}._AC_SL1500_.jpg`,
-  ];
+  // Return empty array since the widget URLs are causing DNS errors
+  // and the direct ASIN URLs don't work without the proper image ID
+  // Images should come from JungleScout/DataForSEO instead
+  return [];
 }
 
 /**
@@ -55,8 +49,7 @@ export function transformAmazonImageSize(url: string, size: 'small' | 'medium' |
  * Get a placeholder image URL for when Amazon images aren't available
  */
 export function getPlaceholderImageUrl(text: string, width: number = 400, height: number = 400): string {
-  // Use a gradient background with the ASIN text
-  const bgColor = '7c3aed'; // Violet color to match the app theme
-  const textColor = 'ffffff';
-  return `https://via.placeholder.com/${width}x${height}/${bgColor}/${textColor}?text=${encodeURIComponent(text)}`;
+  // Return empty string to use CSS-based placeholder instead
+  // via.placeholder.com is causing certificate errors
+  return '';
 }
