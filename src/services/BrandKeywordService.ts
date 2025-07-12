@@ -346,11 +346,28 @@ export class BrandKeywordService {
         check_date: new Date().toISOString()
       };
 
-      await supabase
+      // First try to update existing record for today
+      const today = new Date().toISOString().split('T')[0];
+      const { data: existing } = await supabase
         .from('brand_ranking_summary')
-        .upsert(summary, { 
-          onConflict: 'brand_name,check_date::date' 
-        });
+        .select('id')
+        .eq('brand_name', brandName)
+        .gte('check_date', `${today}T00:00:00.000Z`)
+        .lt('check_date', `${today}T23:59:59.999Z`)
+        .single();
+
+      if (existing) {
+        // Update existing record
+        await supabase
+          .from('brand_ranking_summary')
+          .update(summary)
+          .eq('id', existing.id);
+      } else {
+        // Insert new record
+        await supabase
+          .from('brand_ranking_summary')
+          .insert(summary);
+      }
 
       console.log(`[BrandKeywords] Updated ranking summary for ${brandName}`);
     } catch (error) {

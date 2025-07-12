@@ -62,8 +62,7 @@ CREATE TABLE IF NOT EXISTS brand_ranking_summary (
     estimated_traffic INTEGER DEFAULT 0,
     check_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(brand_name, check_date::date)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for performance
@@ -75,6 +74,7 @@ CREATE INDEX idx_keyword_rankings_date ON keyword_rankings(check_date);
 CREATE INDEX idx_keyword_serp_features_brand_keyword ON keyword_serp_features(brand_keyword_id);
 CREATE INDEX idx_brand_ranking_summary_brand ON brand_ranking_summary(brand_name);
 CREATE INDEX idx_brand_ranking_summary_date ON brand_ranking_summary(check_date);
+CREATE UNIQUE INDEX idx_brand_ranking_summary_unique ON brand_ranking_summary(brand_name, DATE(check_date));
 
 -- Add RLS policies
 ALTER TABLE brand_keywords ENABLE ROW LEVEL SECURITY;
