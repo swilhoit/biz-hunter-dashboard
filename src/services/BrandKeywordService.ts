@@ -585,11 +585,21 @@ export class BrandKeywordService {
           if (readyData.status_code === 20000 && readyData.tasks) {
             const readyTaskIds = readyData.tasks.map((task: any) => task.id);
             
+            // Debug: Log the structure of ready tasks to understand tag placement
+            if (readyData.tasks.length > 0) {
+              console.log(`[BrandKeywords] Sample ready task structure:`, JSON.stringify(readyData.tasks[0], null, 2));
+            }
+            
             // Filter ready tasks by our tag pattern
             const tagFilter = `parallel-${brandName}-`;
-            const relevantReadyTasks = readyData.tasks.filter((task: any) => 
-              task.data?.tag && task.data.tag.startsWith(tagFilter)
-            );
+            const relevantReadyTasks = readyData.tasks.filter((task: any) => {
+              // Check multiple possible tag locations based on DataForSEO response structure
+              const taskTag = task.data?.tag || task.tag || task.postData?.tag;
+              if (taskTag) {
+                console.log(`[BrandKeywords] Task ${task.id} has tag:`, taskTag);
+              }
+              return taskTag && taskTag.startsWith(tagFilter);
+            });
             
             console.log(`[BrandKeywords] Total ready tasks:`, readyTaskIds.length, 'Relevant tasks:', relevantReadyTasks.length);
             
@@ -614,10 +624,27 @@ export class BrandKeywordService {
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
             
-            // Don't try direct fetch - only process tasks that appear in ready list
+            // If no matching ready tasks found, try direct fetch after some time
             if (newlyReady.length === 0 && completedTasks.size < allTasks.length) {
               const remaining = allTasks.length - completedTasks.size;
+              const elapsedMs = Date.now() - startTime;
               console.log(`[BrandKeywords] No ready tasks found. ${remaining} tasks still pending.`);
+              
+              // After 10 seconds, start trying direct fetch as tasks might be ready but not showing in ready list
+              if (elapsedMs > 10000) {
+                console.log(`[BrandKeywords] Attempting direct fetch after ${Math.round(elapsedMs/1000)}s...`);
+                
+                // Try to fetch some unprocessed tasks directly
+                const unprocessedTasks = allTasks.filter(task => 
+                  !completedTasks.has(task.taskId) && 
+                  !processingPromises.has(task.taskId)
+                ).slice(0, 3); // Try 3 at a time
+                
+                if (unprocessedTasks.length > 0) {
+                  console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
+                  newlyReady.push(...unprocessedTasks);
+                }
+              }
             }
             
             // Process tasks in batches to limit concurrent connections
