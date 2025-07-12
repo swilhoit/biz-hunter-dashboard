@@ -570,18 +570,13 @@ export class BrandKeywordService {
         onProgress?.('Polling', 45 + Math.round((completedTasks.size / allTasks.length) * 45), 100, 
           `⏱️ Checking task status... (${completedTasks.size}/${allTasks.length} complete, ${elapsedSeconds}s elapsed)`);
         
-        // Use POST with tag filter to get only our tasks
-        const tagFilter = `parallel-${brandName}-`;
+        // Use GET to check ready tasks
         const readyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/tasks_ready', {
-          method: 'POST',
+          method: 'GET',
           headers: {
             'Authorization': `Basic ${credentials}`,
             'Content-Type': 'application/json'
-          },
-          body: JSON.stringify([{
-            tag: tagFilter,
-            limit: 1000
-          }])
+          }
         });
         
         if (readyResponse.ok) {
@@ -590,19 +585,29 @@ export class BrandKeywordService {
           if (readyData.status_code === 20000 && readyData.tasks) {
             const readyTaskIds = readyData.tasks.map((task: any) => task.id);
             
+            // Filter ready tasks by our tag pattern
+            const tagFilter = `parallel-${brandName}-`;
+            const relevantReadyTasks = readyData.tasks.filter((task: any) => 
+              task.data?.tag && task.data.tag.startsWith(tagFilter)
+            );
+            
+            console.log(`[BrandKeywords] Total ready tasks:`, readyTaskIds.length, 'Relevant tasks:', relevantReadyTasks.length);
+            
+            const relevantTaskIds = relevantReadyTasks.map((task: any) => task.id);
+            
             // Process newly completed tasks in parallel
-            console.log(`[BrandKeywords] Ready task IDs:`, readyTaskIds.slice(0, 5), '...');
+            console.log(`[BrandKeywords] Ready task IDs:`, relevantTaskIds.slice(0, 5), '...');
             console.log(`[BrandKeywords] Our task IDs:`, allTasks.slice(0, 5).map(t => t.taskId), '...');
             
             // Debug: Check if any task IDs match
-            const matchingIds = allTasks.filter(task => readyTaskIds.includes(task.taskId));
+            const matchingIds = allTasks.filter(task => relevantTaskIds.includes(task.taskId));
             console.log(`[BrandKeywords] Matching task IDs found:`, matchingIds.length);
-            if (matchingIds.length === 0 && readyTaskIds.length > 0) {
-              console.warn(`[BrandKeywords] No matching task IDs! Example ready ID: "${readyTaskIds[0]}", Example our ID: "${allTasks[0]?.taskId}"`);
+            if (matchingIds.length === 0 && relevantTaskIds.length > 0) {
+              console.warn(`[BrandKeywords] No matching task IDs! Example ready ID: "${relevantTaskIds[0]}", Example our ID: "${allTasks[0]?.taskId}"`);
             }
             
             const newlyReady = allTasks.filter(task => 
-              readyTaskIds.includes(task.taskId) && 
+              relevantTaskIds.includes(task.taskId) && 
               !completedTasks.has(task.taskId) &&
               !processingPromises.has(task.taskId)
             );
