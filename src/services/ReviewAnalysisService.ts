@@ -31,6 +31,40 @@ interface ReviewAnalysis {
 
 export class ReviewAnalysisService {
   /**
+   * Get overall product rating from Amazon API (faster alternative)
+   */
+  private static async getProductRating(asin: string, credentials: string): Promise<{ rating: number; reviewCount: number } | null> {
+    try {
+      // Use the lighter products endpoint to get overall rating quickly
+      const response = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/task_post', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([{
+          keyword: asin,
+          location_code: 2840,
+          language_code: "en",
+          priority: 1
+        }])
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status_code === 20000 && data.tasks?.[0]?.id) {
+          // This would require polling, but for now we'll get it from reviews
+          return null;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting product rating:', error);
+      return null;
+    }
+  }
+
+  /**
    * Fetch reviews for an ASIN from DataForSEO
    */
   static async fetchReviewsFromDataForSEO(asin: string): Promise<ReviewData[]> {
@@ -48,17 +82,22 @@ export class ReviewAnalysisService {
       // DataForSEO Merchant Amazon Reviews endpoint - using task_post pattern
       const endpoint = 'https://api.dataforseo.com/v3/merchant/amazon/reviews/task_post';
       
+      // Focus only on critical reviews (1-2 stars) for pain point analysis
       const payload = [{
         language_code: "en",
-        location_code: 2840, // United States
+        location_code: 2840,
         asin: asin,
-        priority: 1, // Priority queue for faster processing (~1 min vs ~45 min)
-        depth: 50, // Number of reviews to fetch (max 1000)
-        tag: `review-analysis-${asin}`
+        priority: 1,
+        depth: 30, // Focus on getting enough critical reviews
+        sort_by: "lowest_rating", // Get the worst reviews first for pain points
+        tag: `pain-point-analysis-${asin}`
       }];
 
       console.log('[DataForSEO] Fetching reviews for ASIN:', asin);
 
+      // Single focused request for critical reviews
+      console.log('[DataForSEO] Fetching critical reviews for pain point analysis');
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -75,51 +114,26 @@ export class ReviewAnalysisService {
       }
 
       const data = await response.json();
-      console.log('[DataForSEO] Response:', data);
       
-      // Check if this is a task_post response (task ID returned)
-      if (data.status_code === 20000 && data.tasks?.[0]?.id) {
-        const taskId = data.tasks[0].id;
-        console.log('[DataForSEO] Task created with ID:', taskId);
-        console.log('[DataForSEO] Waiting for task completion...');
+      if (data.status_code !== 20000 || !data.tasks?.[0]?.id) {
+        console.error('[DataForSEO] Failed to create task');
+        return [];
+      }
+      
+      const taskId = data.tasks[0].id;
+      console.log('[DataForSEO] Task created:', taskId);
+      
+      // Poll for task completion
+      console.log('[DataForSEO] Waiting for critical review analysis...');
+      
+      let taskReady = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (!taskReady && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 8000));
         
-        // Poll for task completion using tasks_ready endpoint
-        let taskReady = false;
-        let attempts = 0;
-        const maxAttempts = 12; // 2 minutes max wait time
-        
-        while (!taskReady && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds between checks
-          
-          const tasksReadyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/reviews/tasks_ready', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Basic ${credentials}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (tasksReadyResponse.ok) {
-            const readyData = await tasksReadyResponse.json();
-            if (readyData.status_code === 20000 && readyData.tasks) {
-              // Check if our task ID is in the ready list
-              taskReady = readyData.tasks.some((task: any) => task.id === taskId);
-              console.log(`[DataForSEO] Task ready check ${attempts + 1}/${maxAttempts}: ${taskReady ? 'Ready' : 'Not ready'}`);
-            }
-          }
-          
-          attempts++;
-        }
-        
-        if (!taskReady) {
-          console.error('[DataForSEO] Task did not complete within timeout period');
-          return [];
-        }
-        
-        // Get task results
-        const getEndpoint = `https://api.dataforseo.com/v3/merchant/amazon/reviews/task_get/advanced/${taskId}`;
-        
-        const getResponse = await fetch(getEndpoint, {
+        const tasksReadyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/reviews/tasks_ready', {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${credentials}`,
@@ -127,33 +141,73 @@ export class ReviewAnalysisService {
           }
         });
         
-        if (!getResponse.ok) {
-          console.error('[DataForSEO] Task GET error:', getResponse.status, await getResponse.text());
-          return [];
+        if (tasksReadyResponse.ok) {
+          const readyData = await tasksReadyResponse.json();
+          if (readyData.status_code === 20000 && readyData.tasks) {
+            taskReady = readyData.tasks.some((task: any) => task.id === taskId);
+            console.log(`[DataForSEO] Attempt ${attempts + 1}: ${taskReady ? 'Ready' : 'Processing...'}`);
+          }
         }
         
-        const getResult = await getResponse.json();
+        attempts++;
+      }
+      
+      if (!taskReady) {
+        console.error('[DataForSEO] Task timeout');
+        return [];
+      }
         
-        if (getResult.status_code === 20000 && getResult.tasks?.[0]?.result?.[0]?.reviews) {
-          const reviews = getResult.tasks[0].result[0].reviews;
-          console.log('[DataForSEO] Found', reviews.length, 'reviews');
-          
-          // Map DataForSEO review format to our format based on official documentation
-          return reviews.map((review: any, index: number) => ({
-            id: `${asin}-review-${index}`,
-            title: review.title || '',
-            body: review.text || '',
-            rating: review.rating || 0,
-            verified_purchase: review.verified_purchase || false,
-            helpful_votes: 0, // Not provided in standard response
-            date: review.publication_date || new Date().toISOString(),
-            author: review.author_name || 'Anonymous',
-            variant: undefined
-          }));
-        } else {
-          console.error('[DataForSEO] Task failed or no reviews found:', getResult);
-          return [];
+      // Get results
+      const getResponse = await fetch(`https://api.dataforseo.com/v3/merchant/amazon/reviews/task_get/advanced/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/json'
         }
+      });
+      
+      if (!getResponse.ok) {
+        console.error('[DataForSEO] Failed to get results');
+        return [];
+      }
+      
+      const result = await getResponse.json();
+      
+      if (result.status_code === 20000 && result.tasks?.[0]?.result?.[0]?.reviews) {
+        const reviews = result.tasks[0].result[0].reviews;
+        console.log(`[DataForSEO] Found ${reviews.length} reviews`);
+        
+        // Filter for critical reviews (1-2 stars) and prioritize for pain points
+        const criticalReviews = reviews
+          .filter((review: any) => review.rating <= 2) // Only 1-2 star reviews
+          .filter((review: any) => review.text && review.text.length > 20) // Must have substantial text
+          .sort((a: any, b: any) => {
+            // Prioritize verified purchases
+            if (a.verified_purchase && !b.verified_purchase) return -1;
+            if (!a.verified_purchase && b.verified_purchase) return 1;
+            // Then by lowest rating
+            return a.rating - b.rating;
+          })
+          .slice(0, 25); // Limit to 25 most critical reviews for focused analysis
+        
+        console.log(`[DataForSEO] Filtered to ${criticalReviews.length} critical reviews (1-2 stars)`);
+        
+        // Map to our format
+        return criticalReviews.map((review: any, index: number) => ({
+          id: `${asin}-critical-${index}`,
+          title: review.title || '',
+          body: review.text || '',
+          rating: review.rating || 0,
+          verified_purchase: review.verified_purchase || false,
+          helpful_votes: 0,
+          date: review.publication_date || new Date().toISOString(),
+          author: review.author_name || 'Anonymous',
+          variant: undefined
+        }));
+      }
+      
+      console.log('[DataForSEO] No critical reviews found');
+      return [];
       }
       
       // Check if this is a live response with immediate results (fallback)
@@ -184,7 +238,7 @@ export class ReviewAnalysisService {
   }
 
   /**
-   * Analyze reviews using AI to extract pain points and insights
+   * Analyze critical reviews for pain points (optimized for speed)
    */
   static async analyzeReviewsWithAI(reviews: ReviewData[]): Promise<ReviewAnalysis | null> {
     try {
@@ -198,43 +252,48 @@ export class ReviewAnalysisService {
         return null;
       }
 
-      // Prepare review text for analysis
-      const reviewTexts = reviews.slice(0, 50).map(r => 
-        `Rating: ${r.rating}/5\nTitle: ${r.title}\nReview: ${r.body}\n---`
+      // Focus only on the most critical reviews for pain point extraction
+      const criticalReviews = reviews.filter(r => r.rating <= 2).slice(0, 15);
+      
+      if (criticalReviews.length === 0) {
+        console.log('[AI Analysis] No critical reviews found');
+        return {
+          painPoints: [],
+          commonIssues: [],
+          positiveAspects: [],
+          recommendations: [],
+          sentiment: { positive: 0, negative: 100, neutral: 0 },
+          keyThemes: []
+        };
+      }
+      
+      console.log(`[AI Analysis] Analyzing ${criticalReviews.length} critical reviews for pain points`);
+      
+      const reviewTexts = criticalReviews.map(r => 
+        `${r.rating}★: ${r.title}\n${r.body}\n---`
       ).join('\n');
 
-      const prompt = `Analyze these Amazon product reviews and provide a comprehensive analysis in JSON format.
+      // Focused prompt for pain point extraction only
+      const prompt = `Extract pain points from these critical Amazon reviews (1-2 stars only). Return ONLY JSON:
 
-Reviews:
+Critical Reviews:
 ${reviewTexts}
 
-Please analyze and return ONLY a JSON object with the following structure (no markdown, no additional text):
 {
-  "painPoints": ["array of specific customer pain points mentioned in reviews"],
-  "commonIssues": ["array of recurring problems or complaints"],
-  "positiveAspects": ["array of features/aspects customers love"],
-  "recommendations": ["array of actionable improvements based on feedback"],
-  "sentiment": {
-    "positive": <percentage as number>,
-    "negative": <percentage as number>,
-    "neutral": <percentage as number>
-  },
-  "keyThemes": [
-    {
-      "theme": "theme name",
-      "frequency": <number of times mentioned>,
-      "sentiment": "positive|negative|neutral"
-    }
-  ]
+  "painPoints": ["specific customer pain points and frustrations"],
+  "commonIssues": ["recurring problems mentioned multiple times"],
+  "recommendations": ["actionable fixes for the main issues"],
+  "keyThemes": [{"theme": "problem category", "frequency": count, "sentiment": "negative"}]
 }
 
-Focus on:
-1. Specific pain points that could be addressed
-2. Recurring quality or functionality issues
-3. What customers love about the product
-4. Actionable recommendations for improvement
-5. Overall sentiment distribution
-6. Key themes across all reviews`;
+Focus ONLY on:
+- Specific problems customers experienced
+- Quality issues and defects
+- Functionality failures
+- Design flaws
+- Recurring complaints
+
+Be concise and specific.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -247,15 +306,15 @@ Focus on:
           messages: [
             {
               role: 'system',
-              content: 'You are an expert product analyst specializing in Amazon review analysis. Always respond with valid JSON only.'
+              content: 'You are a product analyst focused on identifying customer pain points. Return only valid JSON with specific, actionable insights from negative reviews.'
             },
             {
               role: 'user',
               content: prompt
             }
           ],
-          temperature: 0.3,
-          max_tokens: 2000
+          temperature: 0.1, // Lower for more consistent pain point extraction
+          max_tokens: 1000 // Reduced for faster response
         })
       });
 
@@ -266,12 +325,27 @@ Focus on:
       const data = await response.json();
       const analysisText = data.choices[0].message.content;
       
-      // Parse the JSON response
+      // Parse and complete the analysis structure
       try {
         const analysis = JSON.parse(analysisText);
-        return analysis as ReviewAnalysis;
+        
+        // Complete the analysis with calculated sentiment based on critical reviews
+        const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+        
+        return {
+          painPoints: analysis.painPoints || [],
+          commonIssues: analysis.commonIssues || [],
+          positiveAspects: [], // No positive aspects from critical reviews
+          recommendations: analysis.recommendations || [],
+          sentiment: {
+            positive: Math.max(0, Math.round((avgRating - 1) * 25)), // Rough estimate
+            negative: Math.min(100, Math.round((3 - avgRating) * 50)),
+            neutral: Math.round(100 - Math.max(0, Math.round((avgRating - 1) * 25)) - Math.min(100, Math.round((3 - avgRating) * 50)))
+          },
+          keyThemes: analysis.keyThemes || []
+        } as ReviewAnalysis;
       } catch (parseError) {
-        console.error('Failed to parse AI response as JSON:', analysisText);
+        console.error('Failed to parse AI response:', analysisText);
         return null;
       }
     } catch (error) {

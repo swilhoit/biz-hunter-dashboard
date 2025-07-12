@@ -121,7 +121,7 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
             ) : (
               <>
                 <RefreshCw className="w-4 h-4 mr-2" />
-                {analysis ? 'Refresh Analysis' : 'Analyze Reviews'}
+                {analysis ? 'Refresh Analysis' : 'Analyze Pain Points'}
               </>
             )}
           </button>
@@ -226,31 +226,33 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
               )}
             </div>
 
-            {/* Positive Aspects */}
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => toggleSection('positive')}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <ThumbsUp className="w-5 h-5 text-green-500" />
-                  <span className="font-medium text-gray-800 dark:text-gray-100">
-                    Positive Aspects ({analysis.positiveAspects.length})
-                  </span>
-                </div>
-                {expandedSections.positive ? <ChevronUp /> : <ChevronDown />}
-              </button>
-              {expandedSections.positive && (
-                <div className="p-4 space-y-2">
-                  {analysis.positiveAspects.map((aspect: string, index: number) => (
-                    <div key={index} className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">•</span>
-                      <span className="text-gray-700 dark:text-gray-300">{aspect}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Positive Aspects - Hidden for pain point focused analysis */}
+            {analysis.positiveAspects.length > 0 && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => toggleSection('positive')}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <ThumbsUp className="w-5 h-5 text-green-500" />
+                    <span className="font-medium text-gray-800 dark:text-gray-100">
+                      Positive Aspects ({analysis.positiveAspects.length})
+                    </span>
+                  </div>
+                  {expandedSections.positive ? <ChevronUp /> : <ChevronDown />}
+                </button>
+                {expandedSections.positive && (
+                  <div className="p-4 space-y-2">
+                    {analysis.positiveAspects.map((aspect: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <span className="text-green-500 mt-1">•</span>
+                        <span className="text-gray-700 dark:text-gray-300">{aspect}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Recommendations */}
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -379,10 +381,10 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
           <div className="text-center py-8">
             <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 dark:text-gray-400 mb-2">
-              No review analysis available yet
+              No pain point analysis available yet
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
-              Click "Analyze Reviews" to generate AI-powered insights from customer feedback
+              Click "Analyze Pain Points" to identify customer issues from critical reviews (1-2 stars)
             </p>
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-sm text-blue-700 dark:text-blue-300">
