@@ -12,6 +12,7 @@ import { getAmazonImageUrl } from '../utils/amazonImageUrl';
 import KeywordRecommendationService from '../services/KeywordRecommendationService';
 import { testJungleScoutAPI } from '../utils/explorer/junglescout';
 import { ASINReviewAnalysis } from '../components/ASINReviewAnalysis';
+import { BrandKeywordTracker } from '../components/BrandKeywordTracker';
 
 // Chart components
 import LineChart01 from '../charts/LineChart01';
@@ -730,6 +731,14 @@ function ASINDetail() {
                 }>
                   Reviews
                 </Tab>
+                <Tab className={({ selected }) =>
+                  `btn ${selected 
+                    ? 'bg-violet-500 hover:bg-violet-600 text-white' 
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-300'
+                  } m-1`
+                }>
+                  Brand Tracking
+                </Tab>
               </Tab.List>
 
               <Tab.Panels>
@@ -1328,6 +1337,12 @@ function ASINDetail() {
                   <ASINReviewAnalysis 
                     asin={asinData.asin} 
                     asinId={asinData.id}
+                  />
+                </Tab.Panel>
+                {/* Brand Tracking Tab */}
+                <Tab.Panel>
+                  <BrandKeywordTracker 
+                    brandName={dealData?.deals?.business_name || 'Unknown Brand'}
                   />
                 </Tab.Panel>
               </Tab.Panels>
