@@ -898,8 +898,9 @@ export class BrandKeywordService {
 
         console.log(`[BrandKeywords] Found ${organicResults.length} organic results for keyword: ${keyword.keyword}`);
 
-        // Prepare batch data for rankings
+        // Prepare batch data for rankings and features
         const rankingsBatch: Partial<KeywordRanking>[] = [];
+        const featuresBatch: Partial<SerpFeature>[] = [];
         const brandMatches: string[] = [];
         
         for (const amazonResult of organicResults) {
@@ -947,7 +948,6 @@ export class BrandKeywordService {
 
         // Prepare batch data for SERP features (sponsored products, etc)
         const serpFeatures = items.filter((item: any) => item.type !== 'amazon_product');
-        const featuresBatch: Partial<SerpFeature>[] = [];
 
         for (const feature of serpFeatures) {
           const serpFeature: Partial<SerpFeature> = {
