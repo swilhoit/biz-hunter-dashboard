@@ -554,8 +554,8 @@ export class BrandKeywordService {
     let failedTasks = 0;
     let processedKeywords: string[] = [];
     
-    const maxWaitTime = 180000; // 3 minutes max (longer for more tasks)
-    const pollInterval = 2000; // Check every 2 seconds for faster response
+    const maxWaitTime = 120000; // 2 minutes max
+    const pollInterval = 1000; // Check every 1 second for faster response
     const startTime = Date.now();
     
     let completedTasks = new Set<string>();
@@ -570,12 +570,18 @@ export class BrandKeywordService {
         onProgress?.('Polling', 45 + Math.round((completedTasks.size / allTasks.length) * 45), 100, 
           `⏱️ Checking task status... (${completedTasks.size}/${allTasks.length} complete, ${elapsedSeconds}s elapsed)`);
         
+        // Use POST with tag filter to get only our tasks
+        const tagFilter = `parallel-${brandName}-`;
         const readyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/tasks_ready', {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Authorization': `Basic ${credentials}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify([{
+            tag: tagFilter,
+            limit: 1000
+          }])
         });
         
         if (readyResponse.ok) {
@@ -602,6 +608,22 @@ export class BrandKeywordService {
             );
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
+            
+            // If no tasks are ready but we haven't processed all tasks, try fetching them directly
+            if (newlyReady.length === 0 && completedTasks.size < allTasks.length) {
+              console.log(`[BrandKeywords] No ready tasks found, trying direct fetch for unprocessed tasks...`);
+              
+              // Try to process some unprocessed tasks directly
+              const unprocessedTasks = allTasks.filter(task => 
+                !completedTasks.has(task.taskId) && 
+                !processingPromises.has(task.taskId)
+              ).slice(0, 5); // Try 5 at a time
+              
+              if (unprocessedTasks.length > 0) {
+                console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
+                newlyReady.push(...unprocessedTasks);
+              }
+            }
             
             // Process tasks in batches to limit concurrent connections
             const tasksToProcess = newlyReady.slice(0, maxConcurrentProcessing - processingPromises.size);
@@ -810,14 +832,33 @@ export class BrandKeywordService {
       
       // Debug logging to understand response structure
       console.log(`[BrandKeywords] Task ${taskId} response status:`, result.status_code);
-      console.log(`[BrandKeywords] Task ${taskId} has tasks:`, !!result.tasks);
-      if (result.tasks?.[0]) {
-        console.log(`[BrandKeywords] Task ${taskId} first task status:`, result.tasks[0].status_code);
-        console.log(`[BrandKeywords] Task ${taskId} has result:`, !!result.tasks[0].result);
+      
+      if (result.status_code !== 20000) {
+        console.error(`[BrandKeywords] Task ${taskId} failed with status:`, result.status_code, result.status_message);
+        return;
+      }
+      
+      if (!result.tasks || result.tasks.length === 0) {
+        console.error(`[BrandKeywords] Task ${taskId} has no tasks in response`);
+        return;
+      }
+      
+      const task = result.tasks[0];
+      console.log(`[BrandKeywords] Task ${taskId} status:`, task.status_code, task.status_message);
+      
+      // Check if task is still processing
+      if (task.status_code === 20100) {
+        console.log(`[BrandKeywords] Task ${taskId} is still in progress`);
+        throw new Error('Task still in progress'); // This will be caught and retried
+      }
+      
+      if (task.status_code !== 20000) {
+        console.error(`[BrandKeywords] Task ${taskId} failed:`, task.status_code, task.status_message);
+        return;
       }
 
-      if (result.status_code === 20000 && result.tasks?.[0]?.result?.[0]?.items) {
-        const items = result.tasks[0].result[0].items;
+      if (task.result?.[0]?.items) {
+        const items = task.result[0].items;
         
         // Process Amazon search results (merchant API returns all as Amazon products)
         const organicResults = items.filter((item: any) => 
