@@ -63,7 +63,11 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
       setAnalysis(newAnalysis);
       
       if (!newAnalysis) {
-        setError('No reviews found or analysis failed');
+        if (fetchedReviews.length === 0) {
+          setError('DataForSEO Reviews API is currently unavailable. Please try again later.');
+        } else {
+          setError('Reviews fetched but AI analysis failed. Please try again.');
+        }
       }
     } catch (err) {
       setError('Failed to analyze reviews');
@@ -377,9 +381,15 @@ export function ASINReviewAnalysis({ asin, asinId }: ReviewAnalysisProps) {
             <p className="text-gray-600 dark:text-gray-400 mb-2">
               No review analysis available yet
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
               Click "Analyze Reviews" to generate AI-powered insights from customer feedback
             </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                🚀 This feature uses DataForSEO's Amazon Reviews API with priority processing (~1 minute) 
+                combined with OpenAI GPT-4o-mini for AI-powered insights.
+              </p>
+            </div>
           </div>
         )}
       </div>

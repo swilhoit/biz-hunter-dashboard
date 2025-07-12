@@ -253,20 +253,22 @@ function ExplorerContent() {
             {/* Search Bar */}
             <div className="col-span-full bg-white dark:bg-gray-800 shadow-sm rounded-xl mb-6">
               <div className="p-6">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Enter keywords to search Amazon products (comma-separated)..."
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className="form-input w-full pl-10 pr-32"
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Enter keywords to search Amazon products (comma-separated)..."
+                      value={keywords}
+                      onChange={(e) => setKeywords(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      className="form-input w-full pl-10 pr-4"
+                    />
+                  </div>
                   <button
                     onClick={handleSearch}
                     disabled={isLoading}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 btn bg-violet-500 hover:bg-violet-600 text-white text-sm"
+                    className="btn bg-violet-500 hover:bg-violet-600 text-white whitespace-nowrap"
                   >
                     {isLoading ? 'Searching...' : 'Search'}
                   </button>

@@ -44,82 +44,138 @@ export class ReviewAnalysisService {
       }
 
       const credentials = btoa(`${username}:${password}`);
+      
+      // DataForSEO Merchant Amazon Reviews endpoint - using task_post pattern
       const endpoint = 'https://api.dataforseo.com/v3/merchant/amazon/reviews/task_post';
       
-      // Create task to fetch reviews
-      const taskPayload = [{
+      const payload = [{
+        language_code: "en",
+        location_code: 2840, // United States
         asin: asin,
-        location_code: 2840, // USA
-        language_code: 'en',
-        depth: 100, // Number of reviews to fetch
-        sort_by: 'helpful' // Sort by most helpful reviews
+        priority: 1, // Priority queue for faster processing (~1 min vs ~45 min)
+        depth: 50, // Number of reviews to fetch (max 1000)
+        tag: `review-analysis-${asin}`
       }];
 
-      console.log('[DataForSEO] Creating reviews task for ASIN:', asin);
+      console.log('[DataForSEO] Fetching reviews for ASIN:', asin);
 
-      const taskResponse = await fetch(endpoint, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(taskPayload)
+        body: JSON.stringify(payload)
       });
 
-      if (!taskResponse.ok) {
-        const errorText = await taskResponse.text();
-        console.error('[DataForSEO] Task creation error:', taskResponse.status, errorText);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DataForSEO] API error:', response.status, errorText);
         return [];
       }
 
-      const taskData = await taskResponse.json();
+      const data = await response.json();
+      console.log('[DataForSEO] Response:', data);
       
-      if (taskData.status_code !== 20000 || !taskData.tasks?.[0]?.id) {
-        console.error('[DataForSEO] Failed to create review task');
-        return [];
-      }
-
-      const taskId = taskData.tasks[0].id;
-      
-      // Wait for task completion (polling)
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-      
-      // Get task results
-      const resultEndpoint = `https://api.dataforseo.com/v3/merchant/amazon/reviews/task_get/${taskId}`;
-      
-      const resultResponse = await fetch(resultEndpoint, {
-        headers: {
-          'Authorization': `Basic ${credentials}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!resultResponse.ok) {
-        console.error('[DataForSEO] Failed to get review results');
-        return [];
-      }
-
-      const resultData = await resultResponse.json();
-      
-      if (resultData.status_code === 20000 && resultData.tasks?.[0]?.result?.[0]?.items) {
-        const items = resultData.tasks[0].result[0].items;
-        console.log('[DataForSEO] Found', items.length, 'reviews');
+      // Check if this is a task_post response (task ID returned)
+      if (data.status_code === 20000 && data.tasks?.[0]?.id) {
+        const taskId = data.tasks[0].id;
+        console.log('[DataForSEO] Task created with ID:', taskId);
+        console.log('[DataForSEO] Waiting for task completion...');
         
-        // Map DataForSEO review format to our format
-        return items.map((item: any, index: number) => ({
+        // Poll for task completion using tasks_ready endpoint
+        let taskReady = false;
+        let attempts = 0;
+        const maxAttempts = 12; // 2 minutes max wait time
+        
+        while (!taskReady && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds between checks
+          
+          const tasksReadyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/reviews/tasks_ready', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${credentials}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (tasksReadyResponse.ok) {
+            const readyData = await tasksReadyResponse.json();
+            if (readyData.status_code === 20000 && readyData.tasks) {
+              // Check if our task ID is in the ready list
+              taskReady = readyData.tasks.some((task: any) => task.id === taskId);
+              console.log(`[DataForSEO] Task ready check ${attempts + 1}/${maxAttempts}: ${taskReady ? 'Ready' : 'Not ready'}`);
+            }
+          }
+          
+          attempts++;
+        }
+        
+        if (!taskReady) {
+          console.error('[DataForSEO] Task did not complete within timeout period');
+          return [];
+        }
+        
+        // Get task results
+        const getEndpoint = `https://api.dataforseo.com/v3/merchant/amazon/reviews/task_get/advanced/${taskId}`;
+        
+        const getResponse = await fetch(getEndpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!getResponse.ok) {
+          console.error('[DataForSEO] Task GET error:', getResponse.status, await getResponse.text());
+          return [];
+        }
+        
+        const getResult = await getResponse.json();
+        
+        if (getResult.status_code === 20000 && getResult.tasks?.[0]?.result?.[0]?.reviews) {
+          const reviews = getResult.tasks[0].result[0].reviews;
+          console.log('[DataForSEO] Found', reviews.length, 'reviews');
+          
+          // Map DataForSEO review format to our format based on official documentation
+          return reviews.map((review: any, index: number) => ({
+            id: `${asin}-review-${index}`,
+            title: review.title || '',
+            body: review.text || '',
+            rating: review.rating || 0,
+            verified_purchase: review.verified_purchase || false,
+            helpful_votes: 0, // Not provided in standard response
+            date: review.publication_date || new Date().toISOString(),
+            author: review.author_name || 'Anonymous',
+            variant: undefined
+          }));
+        } else {
+          console.error('[DataForSEO] Task failed or no reviews found:', getResult);
+          return [];
+        }
+      }
+      
+      // Check if this is a live response with immediate results (fallback)
+      else if (data.status_code === 20000 && data.tasks?.[0]?.result?.[0]?.reviews) {
+        const reviews = data.tasks[0].result[0].reviews;
+        console.log('[DataForSEO] Found', reviews.length, 'reviews');
+        
+        // Map DataForSEO review format to our format based on official documentation
+        return reviews.map((review: any, index: number) => ({
           id: `${asin}-review-${index}`,
-          title: item.title || '',
-          body: item.content || '',
-          rating: item.rating?.value || 0,
-          verified_purchase: item.verified || false,
-          helpful_votes: item.helpful_votes || 0,
-          date: item.publication_date || new Date().toISOString(),
-          author: item.author || 'Anonymous',
-          variant: item.variant
+          title: review.title || '',
+          body: review.text || '',
+          rating: review.rating || 0,
+          verified_purchase: review.verified_purchase || false,
+          helpful_votes: 0, // Not provided in standard response
+          date: review.publication_date || new Date().toISOString(),
+          author: review.author_name || 'Anonymous',
+          variant: undefined
         }));
       }
       
-      console.log('[DataForSEO] No reviews found');
+      console.log('[DataForSEO] No reviews found or API error');
       return [];
     } catch (error) {
       console.error('Error fetching reviews from DataForSEO:', error);
