@@ -153,17 +153,21 @@ Return as JSON with this structure:
   }>): Promise<Map<string, CategoryAnalysisResult>> {
     const results = new Map<string, CategoryAnalysisResult>();
     
+    console.log(`Starting batch analysis of ${listings.length} listings...`);
+    
     // Process in batches of 5 to avoid rate limits
     const batchSize = 5;
     for (let i = 0; i < listings.length; i += batchSize) {
       const batch = listings.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(listings.length/batchSize)}...`);
       
       const batchPromises = batch.map(async (listing) => {
         try {
           const result = await this.analyzeListingCategory(listing);
+          console.log(`✓ Analyzed "${listing.name}": ${result.category} (${result.confidence}% confidence)`);
           results.set(listing.id, result);
         } catch (error) {
-          console.error(`Error analyzing listing ${listing.id}:`, error);
+          console.error(`✗ Error analyzing listing ${listing.id} "${listing.name}":`, error);
           results.set(listing.id, {
             category: 'Unknown',
             confidence: 0,
@@ -177,10 +181,12 @@ Return as JSON with this structure:
       
       // Add a small delay between batches to avoid rate limits
       if (i + batchSize < listings.length) {
+        console.log('Waiting 1 second before next batch...');
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
+    console.log(`Batch analysis complete. Analyzed ${results.size} listings.`);
     return results;
   }
 
@@ -262,6 +268,8 @@ Return as JSON with this structure:
       const updates: Array<{ id: string; category: string }> = [];
       const results: Array<{ id: string; name: string; category: string; confidence: number }> = [];
       
+      console.log(`\nFiltering results by confidence threshold (${confidenceThreshold}%)...`);
+      
       analysisResults.forEach((result, id) => {
         const listing = listings.find(l => l.id === id);
         if (listing) {
@@ -274,9 +282,14 @@ Return as JSON with this structure:
           
           if (result.confidence >= confidenceThreshold && result.category !== 'Unknown') {
             updates.push({ id, category: result.category });
+            console.log(`✓ Will update "${listing.name}" to "${result.category}" (${result.confidence}% confidence)`);
+          } else {
+            console.log(`✗ Skipping "${listing.name}": ${result.category} (${result.confidence}% confidence) - ${result.confidence < confidenceThreshold ? 'below threshold' : 'unknown category'}`);
           }
         }
       });
+      
+      console.log(`\nPrepared ${updates.length} updates out of ${listings.length} analyzed listings.`);
       
       // Update database
       const updateResult = await this.updateListingCategories(updates, table);
