@@ -588,6 +588,13 @@ export class BrandKeywordService {
             console.log(`[BrandKeywords] Ready task IDs:`, readyTaskIds.slice(0, 5), '...');
             console.log(`[BrandKeywords] Our task IDs:`, allTasks.slice(0, 5).map(t => t.taskId), '...');
             
+            // Debug: Check if any task IDs match
+            const matchingIds = allTasks.filter(task => readyTaskIds.includes(task.taskId));
+            console.log(`[BrandKeywords] Matching task IDs found:`, matchingIds.length);
+            if (matchingIds.length === 0 && readyTaskIds.length > 0) {
+              console.warn(`[BrandKeywords] No matching task IDs! Example ready ID: "${readyTaskIds[0]}", Example our ID: "${allTasks[0]?.taskId}"`);
+            }
+            
             const newlyReady = allTasks.filter(task => 
               readyTaskIds.includes(task.taskId) && 
               !completedTasks.has(task.taskId) &&
@@ -800,6 +807,14 @@ export class BrandKeywordService {
       }
 
       const result = await response.json();
+      
+      // Debug logging to understand response structure
+      console.log(`[BrandKeywords] Task ${taskId} response status:`, result.status_code);
+      console.log(`[BrandKeywords] Task ${taskId} has tasks:`, !!result.tasks);
+      if (result.tasks?.[0]) {
+        console.log(`[BrandKeywords] Task ${taskId} first task status:`, result.tasks[0].status_code);
+        console.log(`[BrandKeywords] Task ${taskId} has result:`, !!result.tasks[0].result);
+      }
 
       if (result.status_code === 20000 && result.tasks?.[0]?.result?.[0]?.items) {
         const items = result.tasks[0].result[0].items;
