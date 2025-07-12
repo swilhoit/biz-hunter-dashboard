@@ -554,8 +554,8 @@ export class BrandKeywordService {
     let failedTasks = 0;
     let processedKeywords: string[] = [];
     
-    const maxWaitTime = 120000; // 2 minutes max
-    const pollInterval = 1000; // Check every 1 second for faster response
+    const maxWaitTime = 180000; // 3 minutes max
+    const pollInterval = 2000; // Check every 2 seconds (more reasonable for API)
     const startTime = Date.now();
     
     let completedTasks = new Set<string>();
@@ -624,21 +624,22 @@ export class BrandKeywordService {
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
             
-            // If no matching ready tasks found, try direct fetch after some time
+            // Only attempt direct fetch if we have confirmed ready tasks but they're not matching
             if (newlyReady.length === 0 && completedTasks.size < allTasks.length) {
               const remaining = allTasks.length - completedTasks.size;
               const elapsedMs = Date.now() - startTime;
-              console.log(`[BrandKeywords] No ready tasks found. ${remaining} tasks still pending.`);
+              console.log(`[BrandKeywords] No matching ready tasks found. ${remaining} tasks still pending.`);
               
-              // After 10 seconds, start trying direct fetch as tasks might be ready but not showing in ready list
-              if (elapsedMs > 10000) {
-                console.log(`[BrandKeywords] Attempting direct fetch after ${Math.round(elapsedMs/1000)}s...`);
+              // Only try direct fetch if there are unmatched ready tasks (likely tag mismatch)
+              if (readyTaskIds.length > relevantTaskIds.length && elapsedMs > 30000) {
+                console.log(`[BrandKeywords] Found ${readyTaskIds.length - relevantTaskIds.length} unmatched ready tasks after ${Math.round(elapsedMs/1000)}s`);
+                console.log(`[BrandKeywords] Attempting direct fetch for some unprocessed tasks...`);
                 
                 // Try to fetch some unprocessed tasks directly
                 const unprocessedTasks = allTasks.filter(task => 
                   !completedTasks.has(task.taskId) && 
                   !processingPromises.has(task.taskId)
-                ).slice(0, 3); // Try 3 at a time
+                ).slice(0, 2); // Try 2 at a time to avoid overwhelming
                 
                 if (unprocessedTasks.length > 0) {
                   console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
@@ -710,6 +711,14 @@ export class BrandKeywordService {
         }
       } catch (error) {
         console.warn('[BrandKeywords] Error in parallel polling:', error);
+      }
+      
+      // Add initial wait period for tasks to process
+      const elapsedTime = Date.now() - startTime;
+      const minWaitBeforeProcessing = 5000; // Wait at least 5 seconds before trying to process
+      
+      if (elapsedTime < minWaitBeforeProcessing && completedTasks.size === 0) {
+        console.log(`[BrandKeywords] Waiting for initial task processing... (${Math.round((minWaitBeforeProcessing - elapsedTime) / 1000)}s remaining)`);
       }
       
       // If we're processing tasks, poll more aggressively
