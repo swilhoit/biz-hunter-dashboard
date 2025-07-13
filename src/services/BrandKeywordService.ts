@@ -202,6 +202,115 @@ export class BrandKeywordService {
   }
 
   /**
+   * Pre-populate ASINs for a brand to improve keyword tracking performance
+   */
+  static async prePopulateBrandASINs(brandName: string): Promise<number> {
+    try {
+      console.log(`[BrandKeywords] Pre-populating ASINs for brand: ${brandName}`);
+      
+      // Search for the brand's products to populate ASIN database
+      const searchKeywords = [
+        brandName,
+        `${brandName} products`,
+        `${brandName} official`
+      ];
+      
+      let totalASINsAdded = 0;
+      const dataForSEOConfig = {
+        username: import.meta.env.VITE_DATAFORSEO_USERNAME || '',
+        password: import.meta.env.VITE_DATAFORSEO_PASSWORD || ''
+      };
+      const credentials = btoa(`${dataForSEOConfig.username}:${dataForSEOConfig.password}`);
+      
+      for (const searchTerm of searchKeywords) {
+        try {
+          const response = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/task_post', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${credentials}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify([{
+              keyword: searchTerm,
+              location_code: 2840,
+              language_code: 'en_US',
+              depth: 100
+            }])
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.tasks?.[0]?.id) {
+              // Wait for task to complete
+              await new Promise(resolve => setTimeout(resolve, 10000));
+              
+              // Fetch results
+              const resultResponse = await fetch(
+                `https://api.dataforseo.com/v3/merchant/amazon/products/task_get/advanced/${data.tasks[0].id}`,
+                {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+              
+              if (resultResponse.ok) {
+                const result = await resultResponse.json();
+                const items = result.tasks?.[0]?.result?.[0]?.items || [];
+                
+                // Store ASINs that likely belong to the brand
+                const asinsToStore = [];
+                for (const item of items) {
+                  if (item.asin && item.title && item.type === 'amazon_serp') {
+                    // Simple brand check in title
+                    if (item.title.toLowerCase().includes(brandName.toLowerCase())) {
+                      asinsToStore.push({
+                        asin: item.asin,
+                        title: item.title,
+                        brand: brandName,
+                        current_price: item.price?.current || 0,
+                        review_rating: item.rating?.value || 0,
+                        review_count: item.rating?.votes_count || 0,
+                        category: item.main_category || '',
+                        subcategory: item.sub_category || '',
+                        last_updated: new Date().toISOString()
+                      });
+                    }
+                  }
+                }
+                
+                if (asinsToStore.length > 0) {
+                  const { error } = await supabase
+                    .from('asins')
+                    .upsert(asinsToStore, {
+                      onConflict: 'asin',
+                      ignoreDuplicates: false
+                    });
+                    
+                  if (!error) {
+                    totalASINsAdded += asinsToStore.length;
+                    console.log(`[BrandKeywords] Added ${asinsToStore.length} ASINs for search term: ${searchTerm}`);
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`[BrandKeywords] Error pre-populating ASINs for ${searchTerm}:`, error);
+        }
+      }
+      
+      console.log(`[BrandKeywords] Pre-populated ${totalASINsAdded} total ASINs for brand: ${brandName}`);
+      return totalASINsAdded;
+    } catch (error) {
+      console.error('[BrandKeywords] Error in prePopulateBrandASINs:', error);
+      return 0;
+    }
+  }
+  
+  /**
    * Get all active keywords for a brand
    */
   static async getBrandKeywords(brandName: string): Promise<BrandKeyword[]> {
@@ -289,8 +398,8 @@ export class BrandKeywordService {
       
       // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks)
       const maxBatchSize = 100;
-      // Increase parallel batch submissions for better throughput
-      const maxParallelBatches = 10; // Submit up to 10 batches simultaneously (1000 keywords)
+      // Maximize parallel batch submissions for speed
+      const maxParallelBatches = 20; // Submit up to 20 batches simultaneously (2000 keywords)
       
       onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
       onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
@@ -328,10 +437,8 @@ export class BrandKeywordService {
         const groupResults = await Promise.allSettled(groupPromises);
         allTaskPromises.push(...groupPromises);
         
-        // Minimal delay between groups to respect rate limits
-        if (i + maxParallelBatches < batches.length) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms
-        }
+        // No delay between groups - rely on DataForSEO's rate limiting
+        // This maximizes submission speed
       }
 
       // Wait for all task submissions to complete
@@ -446,72 +553,98 @@ export class BrandKeywordService {
   /**
    * Detect if a search result belongs to the tracked brand
    */
-  private static detectBrandMatch(brandName: string, title: string, url?: string): {
+  private static detectBrandMatch(brandName: string, title: string, url?: string, additionalData?: any): {
     isBrandResult: boolean;
     matchScore: number;
     matchReason: string;
   } {
-    const brandLower = brandName.toLowerCase();
+    const brandLower = brandName.toLowerCase().trim();
     const titleLower = title.toLowerCase();
     const urlLower = url?.toLowerCase() || '';
     
     let score = 0;
     const reasons: string[] = [];
     
-    // Direct brand name match in title (highest confidence)
-    if (titleLower.includes(brandLower)) {
+    // Exact brand name match at start of title (highest confidence)
+    if (titleLower.startsWith(brandLower + ' ') || titleLower.startsWith(brandLower + ':') || titleLower.startsWith(brandLower + ',')) {
+      score = 1.0; // Maximum confidence
+      reasons.push('exact_brand_start');
+      return {
+        isBrandResult: true,
+        matchScore: score,
+        matchReason: reasons.join(', ')
+      };
+    }
+    
+    // Check if title starts with brand (accounting for variations)
+    const brandVariations = [
+      brandLower,
+      brandLower.replace(/[\s-_]/g, ''), // Remove spaces/hyphens
+      brandLower.replace(/\s+/g, '-'), // Space to hyphen
+      brandLower.replace(/\s+/g, '_'), // Space to underscore
+    ];
+    
+    for (const variant of brandVariations) {
+      if (titleLower.startsWith(variant + ' ') || titleLower.startsWith(variant + ':') || titleLower.startsWith(variant + ',')) {
+        score = 0.95;
+        reasons.push('brand_variant_start');
+        return {
+          isBrandResult: true,
+          matchScore: score,
+          matchReason: reasons.join(', ')
+        };
+      }
+    }
+    
+    // Direct brand name match anywhere in title (high confidence)
+    const brandRegex = new RegExp(`\\b${brandLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (brandRegex.test(title)) {
       score += 0.8;
       reasons.push('brand_name_in_title');
     }
     
-    // Brand name as first word in title (very high confidence)
-    if (titleLower.startsWith(brandLower + ' ') || titleLower.startsWith(brandLower + '-')) {
+    // Check "by [Brand]" pattern (very high confidence)
+    const byBrandPattern = new RegExp(`\\bby\\s+${brandLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (byBrandPattern.test(title)) {
       score += 0.9;
-      reasons.push('brand_name_starts_title');
+      reasons.push('by_brand_pattern');
     }
     
-    // Brand name in URL (medium confidence)
-    if (urlLower.includes(brandLower)) {
-      score += 0.3;
-      reasons.push('brand_name_in_url');
+    // Brand name in URL (low confidence - many URLs contain multiple brand names)
+    if (urlLower.includes(brandLower.replace(/\s+/g, '-')) || urlLower.includes(brandLower.replace(/\s+/g, ''))) {
+      score += 0.2;
+      reasons.push('brand_in_url');
     }
     
-    // Brand variations (handle common cases)
-    const brandWords = brandLower.split(' ');
+    // Handle multi-word brands - all words must be present in correct order
+    const brandWords = brandLower.split(/\s+/);
     if (brandWords.length > 1) {
-      const allWordsInTitle = brandWords.every(word => titleLower.includes(word));
-      if (allWordsInTitle) {
-        score += 0.6;
-        reasons.push('brand_words_in_title');
+      // Check if words appear in order (not necessarily consecutive)
+      let lastIndex = -1;
+      let allWordsInOrder = true;
+      for (const word of brandWords) {
+        const index = titleLower.indexOf(word, lastIndex + 1);
+        if (index === -1) {
+          allWordsInOrder = false;
+          break;
+        }
+        lastIndex = index;
       }
-    }
-    
-    // Handle common brand patterns (e.g., "by [Brand]", "[Brand] Official")
-    const brandPatterns = [
-      `by ${brandLower}`,
-      `${brandLower} official`,
-      `${brandLower} store`,
-      `${brandLower}®`,
-      `${brandLower}™`
-    ];
-    
-    for (const pattern of brandPatterns) {
-      if (titleLower.includes(pattern)) {
-        score += 0.7;
-        reasons.push('brand_pattern_match');
-        break;
+      if (allWordsInOrder) {
+        score += 0.5;
+        reasons.push('brand_words_in_order');
       }
     }
     
     // Cap score at 1.0
     score = Math.min(score, 1.0);
     
-    // Consider it a brand result if score is above threshold
-    const isBrandResult = score >= 0.5;
+    // Higher threshold for brand matching to reduce false positives
+    const isBrandResult = score >= 0.7; // Increased from 0.5
     
     return {
       isBrandResult,
-      matchScore: Math.round(score * 100) / 100, // Round to 2 decimal places
+      matchScore: Math.round(score * 100) / 100,
       matchReason: reasons.join(', ') || 'no_match'
     };
   }
@@ -555,12 +688,12 @@ export class BrandKeywordService {
     let processedKeywords: string[] = [];
     
     const maxWaitTime = 180000; // 3 minutes max
-    const pollInterval = 2000; // Check every 2 seconds (more reasonable for API)
+    const pollInterval = 500; // Check every 500ms for even faster response
     const startTime = Date.now();
     
     let completedTasks = new Set<string>();
     const processingPromises = new Map<string, Promise<void>>();
-    const maxConcurrentProcessing = 20; // Process up to 20 results simultaneously
+    const maxConcurrentProcessing = 100; // Process up to 100 results simultaneously for maximum speed
     
     while (completedTasks.size < allTasks.length && (Date.now() - startTime) < maxWaitTime) {
       try {
@@ -793,14 +926,14 @@ export class BrandKeywordService {
       clearTimeout(this.batchInsertTimeout);
     }
     
-    // If we have enough data, insert immediately
-    if (this.pendingRankings.length >= 500 || this.pendingSerpFeatures.length >= 200) {
+    // Execute batch insert more frequently for real-time updates
+    if (this.pendingRankings.length >= 100 || this.pendingSerpFeatures.length >= 50) { // Reduced thresholds
       await this.executeBatchInsert();
     } else {
       // Otherwise, wait a bit to collect more data
       this.batchInsertTimeout = setTimeout(() => {
         this.executeBatchInsert();
-      }, 1000);
+      }, 250); // Reduced from 1000ms to 250ms for faster updates
     }
   }
 
@@ -819,17 +952,23 @@ export class BrandKeywordService {
           const rankingsToInsert = [...this.pendingRankings];
           this.pendingRankings = [];
           
-          // Split into smaller batches if needed (Supabase has limits)
+          // Process multiple chunks in parallel for faster DB operations
           const chunkSize = 500;
+          const insertPromises = [];
           for (let i = 0; i < rankingsToInsert.length; i += chunkSize) {
             const chunk = rankingsToInsert.slice(i, i + chunkSize);
-            const { error } = await supabase.from('keyword_rankings').insert(chunk);
-            if (error) {
-              console.error(`[BrandKeywords] Error batch inserting rankings:`, error);
-            } else {
-              console.log(`[BrandKeywords] Batch inserted ${chunk.length} rankings`);
-            }
+            insertPromises.push(
+              supabase.from('keyword_rankings').insert(chunk)
+                .then(({ error }) => {
+                  if (error) {
+                    console.error(`[BrandKeywords] Error batch inserting rankings:`, error);
+                  } else {
+                    console.log(`[BrandKeywords] Batch inserted ${chunk.length} rankings`);
+                  }
+                })
+            );
           }
+          await Promise.all(insertPromises);
         }
         
         // Insert SERP features in batches
@@ -938,42 +1077,155 @@ export class BrandKeywordService {
         }
 
         console.log(`[BrandKeywords] Found ${organicResults.length} organic results for keyword: ${keyword.keyword}`);
+        
+        // Debug: Log sample results to understand the data
+        if (organicResults.length > 0) {
+          console.log(`[BrandKeywords] Sample result for brand matching:`, {
+            keyword: keyword.keyword,
+            brandName: brandName,
+            firstResult: {
+              title: organicResults[0].title,
+              asin: organicResults[0].asin,
+              url: organicResults[0].url
+            }
+          });
+        }
 
+        // First, get all ASINs from results to check their brands
+        const asinList = organicResults.map(r => r.asin).filter(Boolean);
+        
+        // Fetch brand info for all ASINs in one query
+        const asinBrandMap = new Map<string, string>();
+        if (asinList.length > 0) {
+          // Query in chunks to avoid potential query size limits
+          const chunkSize = 100;
+          for (let i = 0; i < asinList.length; i += chunkSize) {
+            const chunk = asinList.slice(i, i + chunkSize);
+            const { data: asinData, error } = await supabase
+              .from('asins')
+              .select('asin, brand')
+              .in('asin', chunk);
+              
+            if (!error && asinData) {
+              asinData.forEach(item => {
+                if (item.brand) {
+                  asinBrandMap.set(item.asin, item.brand);
+                }
+              });
+            }
+          }
+          
+          console.log(`[BrandKeywords] Found brand data for ${asinBrandMap.size}/${asinList.length} ASINs`);
+        }
+        
         // Prepare batch data for rankings and features
         const rankingsBatch: Partial<KeywordRanking>[] = [];
         const featuresBatch: Partial<SerpFeature>[] = [];
         const brandMatches: string[] = [];
+        let nonBrandCount = 0;
+        let unknownBrandCount = 0;
         
         for (const amazonResult of organicResults) {
-          // Detect if this result belongs to the tracked brand
-          const brandMatch = this.detectBrandMatch(
-            brandName, 
-            amazonResult.title || '', 
-            amazonResult.url
-          );
-
-          const ranking: Partial<KeywordRanking> = {
-            brand_keyword_id: keyword.id!,
-            asin: amazonResult.asin, // DataForSEO docs show field is "asin"
-            position: amazonResult.rank_absolute || amazonResult.position,
-            page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute) / 16), // Amazon shows 16 results per page
-            url: amazonResult.url,
-            title: amazonResult.title,
-            domain: 'amazon.com',
-            location_code: 2840,
-            language_code: 'en_US',
-            check_date: new Date().toISOString(),
-            is_brand_result: brandMatch.isBrandResult,
-            brand_match_score: brandMatch.matchScore,
-            brand_match_reason: brandMatch.matchReason
-          };
-
-          rankingsBatch.push(ranking);
-          
-          // Track brand matches for logging
-          if (brandMatch.isBrandResult) {
-            brandMatches.push(`"${keyword.keyword}": ${amazonResult.title} (score: ${brandMatch.matchScore})`);
+          if (!amazonResult.asin) {
+            continue; // Skip results without ASIN
           }
+          
+          // Check if this ASIN belongs to the tracked brand
+          const asinBrand = asinBrandMap.get(amazonResult.asin);
+          
+          if (!asinBrand) {
+            // ASIN not in our database yet - try to extract brand from title
+            unknownBrandCount++;
+            
+            // Extract potential brand from title (usually first words before certain patterns)
+            let extractedBrand = '';
+            const titleLower = amazonResult.title?.toLowerCase() || '';
+            const title = amazonResult.title || '';
+            
+            // Common patterns where brand name appears before
+            const patterns = [
+              /^([^,:\-\(\[]+?)\s*[,:\-\(\[]/,  // Brand before comma, colon, dash, or parenthesis
+              /^(\S+(?:\s+\S+){0,2})\s+/,  // First 1-3 words
+            ];
+            
+            for (const pattern of patterns) {
+              const match = title.match(pattern);
+              if (match && match[1]) {
+                extractedBrand = match[1].trim();
+                break;
+              }
+            }
+            
+            // Store new ASIN for future reference
+            if (extractedBrand && amazonResult.asin) {
+              const { error } = await supabase
+                .from('asins')
+                .upsert({
+                  asin: amazonResult.asin,
+                  title: amazonResult.title,
+                  brand: extractedBrand,
+                  current_price: amazonResult.price?.current || 0,
+                  review_rating: amazonResult.rating?.value || 0,
+                  review_count: amazonResult.rating?.votes_count || 0,
+                  category: amazonResult.main_category || '',
+                  subcategory: amazonResult.sub_category || '',
+                  last_updated: new Date().toISOString()
+                }, {
+                  onConflict: 'asin',
+                  ignoreDuplicates: false
+                });
+                
+              if (!error) {
+                console.log(`[BrandKeywords] Added new ASIN ${amazonResult.asin} with brand: ${extractedBrand}`);
+                
+                // Check if it matches our target brand
+                if (extractedBrand.toLowerCase() === brandName.toLowerCase()) {
+                  // Add to our map for immediate use
+                  asinBrandMap.set(amazonResult.asin, extractedBrand);
+                  // Don't continue - let it be processed below
+                } else {
+                  continue;
+                }
+              } else {
+                console.error(`[BrandKeywords] Error adding ASIN ${amazonResult.asin}:`, error);
+                continue;
+              }
+            } else {
+              console.log(`[BrandKeywords] Unknown ASIN ${amazonResult.asin}: ${amazonResult.title} (no brand extracted)`);
+              continue;
+            }
+          }
+          
+          // Compare brands (case-insensitive)
+          const isBrandMatch = asinBrand.toLowerCase() === brandName.toLowerCase();
+          
+          if (isBrandMatch) {
+            const ranking: Partial<KeywordRanking> = {
+              brand_keyword_id: keyword.id!,
+              asin: amazonResult.asin,
+              position: amazonResult.rank_absolute || amazonResult.position,
+              page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute) / 16),
+              url: amazonResult.url,
+              title: amazonResult.title,
+              domain: 'amazon.com',
+              location_code: 2840,
+              language_code: 'en_US',
+              check_date: new Date().toISOString(),
+              is_brand_result: true,
+              brand_match_score: 1.0, // 100% confidence from database
+              brand_match_reason: 'database_brand_match'
+            };
+
+            rankingsBatch.push(ranking);
+            brandMatches.push(`"${keyword.keyword}": Position ${ranking.position} - ${amazonResult.title}`);
+          } else {
+            nonBrandCount++;
+          }
+        }
+        
+        // Log filtering results
+        if (nonBrandCount > 0 || unknownBrandCount > 0) {
+          console.log(`[BrandKeywords] Keyword "${keyword.keyword}": ${brandMatches.length} ${brandName} products, ${nonBrandCount} other brands, ${unknownBrandCount} unknown ASINs`);
         }
 
         // Add to batch instead of immediate insert
@@ -1224,8 +1476,8 @@ export class BrandKeywordService {
           }
         }
         
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Minimal delay between batches
+        await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 2000ms
       }
 
       return volumeData;
