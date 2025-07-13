@@ -1343,8 +1343,17 @@ export class BrandKeywordService {
         console.warn(`[BrandKeywords] No valid SERP data for keyword: ${keyword.keyword}`);
         console.log(`[BrandKeywords] API Response:`, result);
       }
-    } catch (error) {
-      console.error(`[BrandKeywords] Error processing SERP results for ${keyword.keyword}:`, error);
+    } catch (error: any) {
+      // Check if it's a temporary "in queue" error
+      if (error.isTemporary || error.message?.includes('in queue') || error.message?.includes('in progress')) {
+        // This is expected - don't log as error
+        console.log(`[BrandKeywords] Task for "${keyword.keyword}" not ready yet - will retry automatically`);
+      } else {
+        // This is a real error
+        console.error(`[BrandKeywords] Error processing SERP results for ${keyword.keyword}:`, error);
+      }
+      // Re-throw to let the caller handle it
+      throw error;
     }
   }
 
