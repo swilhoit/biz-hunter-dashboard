@@ -1259,8 +1259,11 @@ export class BrandKeywordService {
             }
           }
           
+          // Get the brand from our map (which includes newly added ASINs)
+          const currentBrand = asinBrandMap.get(amazonResult.asin);
+          
           // Compare brands (case-insensitive)
-          const isBrandMatch = asinBrand.toLowerCase() === brandName.toLowerCase();
+          const isBrandMatch = currentBrand && currentBrand.toLowerCase() === brandName.toLowerCase();
           
           if (isBrandMatch) {
             const ranking: Partial<KeywordRanking> = {
@@ -1286,10 +1289,11 @@ export class BrandKeywordService {
           }
         }
         
-        // Log filtering results
-        if (nonBrandCount > 0 || unknownBrandCount > 0) {
-          console.log(`[BrandKeywords] Keyword "${keyword.keyword}": ${brandMatches.length} ${brandName} products, ${nonBrandCount} other brands, ${unknownBrandCount} unknown ASINs`);
-        }
+        // Always log filtering results to confirm it's working
+        console.log(`[BrandKeywords] Keyword "${keyword.keyword}" filtering complete:`);
+        console.log(`  - ${brandMatches.length} ${brandName} products found and stored`);
+        console.log(`  - ${nonBrandCount} products from other brands filtered out`);
+        console.log(`  - ${unknownBrandCount} unknown ASINs (${unknownBrandCount > 0 ? 'added to database' : 'none'})`);
 
         // Add to batch instead of immediate insert
         if (rankingsBatch.length > 0 || featuresBatch.length > 0) {
