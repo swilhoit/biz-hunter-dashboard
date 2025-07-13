@@ -271,6 +271,68 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
     }
   };
 
+  const prePopulateASINs = async () => {
+    setPrePopulating(true);
+    setShowProgressModal(true);
+    setLogs([]);
+    setProgress({ stage: 'Discovering', current: 0, total: 100, message: 'Starting product discovery...', timestamp: new Date().toLocaleTimeString() });
+    
+    try {
+      addLog('info', `Searching for ${brandName} products on Amazon...`);
+      
+      const progressCallback = (message: string) => {
+        addLog('info', message);
+        setProgress(prev => ({
+          stage: 'Discovering',
+          current: Math.min((prev?.current || 0) + 10, 90),
+          total: 100,
+          message,
+          timestamp: new Date().toLocaleTimeString()
+        }));
+      };
+      
+      const count = await BrandKeywordService.prePopulateBrandASINs(brandName, progressCallback);
+      
+      if (count > 0) {
+        addLog('success', `Successfully added ${count} new ${brandName} products!`);
+        setProgress({ stage: 'Complete', current: 100, total: 100, message: `Added ${count} products to database`, timestamp: new Date().toLocaleTimeString() });
+        
+        // Automatically suggest keywords
+        addLog('info', 'Finding keywords where your products rank...');
+        const suggestedKeywords = await BrandKeywordService.findRankingKeywords(brandName);
+        
+        if (suggestedKeywords.length > 0) {
+          addLog('success', `Found ${suggestedKeywords.length} keywords to track:`);
+          suggestedKeywords.forEach(kw => addLog('info', `  • ${kw}`));
+          
+          // Auto-add suggested keywords
+          const keywordsToAdd = suggestedKeywords.map(kw => ({
+            keyword: kw,
+            search_volume: 1000, // Default, will be updated
+            cpc: 1.0,
+            competition: 0.5,
+            difficulty: 50,
+            relevance_score: 0.9,
+            keyword_type: 'product' as const,
+            source: 'ai_recommendation' as const
+          }));
+          
+          await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
+          await loadBrandPerformance();
+          addLog('success', 'Keywords added to tracking list!');
+        }
+      } else {
+        addLog('warning', 'No new products found. Try running this after adding products to your catalog.');
+        setProgress({ stage: 'Complete', current: 100, total: 100, message: 'No new products found', timestamp: new Date().toLocaleTimeString() });
+      }
+    } catch (error) {
+      console.error('Error pre-populating ASINs:', error);
+      addLog('error', 'Error during product discovery');
+    } finally {
+      setPrePopulating(false);
+    }
+  };
+
   const getRankingIcon = (tier: string) => {
     switch (tier) {
       case 'Top 3':
