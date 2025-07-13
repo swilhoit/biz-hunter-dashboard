@@ -70,6 +70,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [cleaningKeywords, setCleaningKeywords] = useState(false);
   const [cleaningNonBrand, setCleaningNonBrand] = useState(false);
+  const [prePopulating, setPrePopulating] = useState(false);
   
   // Progress tracking state
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
