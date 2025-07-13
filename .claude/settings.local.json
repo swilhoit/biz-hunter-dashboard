@@ -45,7 +45,6 @@
       "Bash(npm run:*)",
       "Bash(npx tsx:*)",
       "Bash(npm run scraping-api:dev:*)",
-      "Bash(npm run:*)",
       "mcp__supabase__get_advisors",
       "Bash(jq:*)",
       "WebFetch(domain:quietlight.com)",
@@ -85,7 +84,6 @@
       "mcp__ide__executeCode",
       "Bash(supabase:*)",
       "Bash(env)",
-      "Bash(supabase:*)",
       "Bash(brew upgrade:*)",
       "Bash(npm uninstall:*)",
       "Bash(kill:*)",
@@ -111,7 +109,6 @@
       "Bash(ps:*)",
       "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\nsupabase\n  .from(''deal_documents'')\n  .select(''*'')\n  .order(''uploaded_at'', { ascending: false })\n  .limit(5)\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''Error:'', error);\n    } else {\n      console.log(''Recent uploads:'', JSON.stringify(data, null, 2));\n    }\n  });\n\")",
       "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\nsupabase\n  .rpc(''insert_deal_document'', {\n    p_deal_id: ''66505930-39ed-4caf-ae0b-4a3ea1cc2b49'',\n    p_file_name: ''test.txt'',\n    p_file_path: ''test/test.txt'',\n    p_file_size: 100,\n    p_mime_type: ''text/plain'',\n    p_document_type: ''test'',\n    p_description: ''test file''\n  })\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''RPC Error:'', error);\n    } else {\n      console.log(''RPC Success:'', data);\n    }\n  });\n\")",
-      "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\nsupabase\n  .rpc(''insert_deal_document'', {\n    p_deal_id: ''66505930-39ed-4caf-ae0b-4a3ea1cc2b49'',\n    p_file_name: ''test.txt'',\n    p_file_path: ''test/test.txt'',\n    p_file_size: 100,\n    p_mime_type: ''text/plain'',\n    p_document_type: ''test'',\n    p_description: ''test file''\n  })\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''RPC Error:'', error);\n    } else {\n      console.log(''RPC Success:'', data);\n    }\n  });\n\")",
       "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\nsupabase\n  .rpc(''insert_deal_document'', {\n    p_deal_id: ''66505930-39ed-4caf-ae0b-4a3ea1cc2b49'',\n    p_file_name: ''test.txt'',\n    p_file_path: ''test/test.txt'',\n    p_file_size: 100,\n    p_mime_type: ''text/plain'',\n    p_document_type: ''test'',\n    p_description: ''test file'',\n    p_uploaded_by: ''00000000-0000-0000-0000-000000000001''\n  })\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''RPC Error:'', error);\n    } else {\n      console.log(''RPC Success:'', data);\n    }\n  });\n\")",
       "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\n// Try to insert directly to test RLS\nsupabase\n  .from(''deal_documents'')\n  .insert({\n    deal_id: ''66505930-39ed-4caf-ae0b-4a3ea1cc2b49'',\n    file_name: ''test.txt'',\n    file_path: ''test/test.txt'',\n    file_size: 100,\n    mime_type: ''text/plain'',\n    document_type: ''test'',\n    description: ''test file''\n  })\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''Direct Insert Error:'', error);\n    } else {\n      console.log(''Direct Insert Success:'', data);\n    }\n  });\n\")",
       "Bash(VITE_SUPABASE_URL=\"https://ueemtnohgkovwzodzxdr.supabase.co\" VITE_SUPABASE_ANON_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZW10bm9oZ2tvdnd6b2R6eGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjcyOTUsImV4cCI6MjA2NjQ0MzI5NX0.6_bLS2rSI-XsSwwVB5naQS7OYtyemtXvjn2y5MUM9xk\" node -e \"\nconst { createClient } = require(''@supabase/supabase-js'');\nconst supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);\n\n// List all functions to see if insert_deal_document exists\nsupabase\n  .from(''pg_proc'')\n  .select(''proname'')\n  .ilike(''proname'', ''%insert_deal_document%'')\n  .then(({ data, error }) => {\n    if (error) {\n      console.error(''Function check error:'', error);\n    } else {\n      console.log(''Functions found:'', data);\n    }\n  });\n\")",
@@ -135,7 +132,8 @@
       "WebFetch(domain:support.junglescout.com)",
       "WebFetch(domain:docs.dataforseo.com)",
       "mcp__supabase__generate_typescript_types",
-      "WebFetch(domain:localhost)"
+      "WebFetch(domain:localhost)",
+      "WebFetch(domain:sandbox.dataforseo.com)"
     ],
     "deny": []
   }

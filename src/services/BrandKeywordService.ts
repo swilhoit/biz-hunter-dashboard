@@ -924,16 +924,16 @@ export class BrandKeywordService {
         }
         
         // Process Amazon search results
-        // First try strict filter, then fallback to looser filter
+        // According to DataForSEO docs, Amazon products have type "amazon_serp"
         let organicResults = items.filter((item: any) => 
-          item.type === 'amazon_product' && item.data_asin
+          item.type === 'amazon_serp' && item.asin
         );
         
-        // If no results with strict filter, try just checking for ASIN
+        // If no results with amazon_serp, try other product types
         if (organicResults.length === 0 && items.length > 0) {
-          console.log(`[BrandKeywords] No results with type 'amazon_product', trying alternative filter...`);
+          console.log(`[BrandKeywords] No results with type 'amazon_serp', trying alternative filter...`);
           organicResults = items.filter((item: any) => 
-            (item.asin || item.data_asin) && item.title
+            item.asin && item.title && !item.type?.includes('paid')
           );
         }
 
@@ -954,8 +954,8 @@ export class BrandKeywordService {
 
           const ranking: Partial<KeywordRanking> = {
             brand_keyword_id: keyword.id!,
-            asin: amazonResult.data_asin || amazonResult.asin, // Handle both field names
-            position: amazonResult.rank_absolute || amazonResult.position_absolute || amazonResult.position,
+            asin: amazonResult.asin, // DataForSEO docs show field is "asin"
+            position: amazonResult.rank_absolute || amazonResult.position,
             page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute) / 16), // Amazon shows 16 results per page
             url: amazonResult.url,
             title: amazonResult.title,
@@ -988,7 +988,9 @@ export class BrandKeywordService {
         }
 
         // Prepare batch data for SERP features (sponsored products, etc)
-        const serpFeatures = items.filter((item: any) => item.type !== 'amazon_product');
+        const serpFeatures = items.filter((item: any) => 
+          item.type === 'amazon_paid' || item.type === 'editorial_recommendations' || item.type === 'amazon_featured_snippet'
+        );
 
         for (const feature of serpFeatures) {
           const serpFeature: Partial<SerpFeature> = {
@@ -999,11 +1001,11 @@ export class BrandKeywordService {
             url: feature.url,
             description: feature.description,
             additional_data: {
-              asin: feature.data_asin,
-              price: feature.price?.value,
+              asin: feature.asin,
+              price: feature.price?.current,
               currency: feature.price?.currency,
               rating: feature.rating?.value,
-              reviews_count: feature.rating?.count,
+              reviews_count: feature.rating?.votes_count,
               is_prime: feature.is_prime,
               delivery_info: feature.delivery_info,
               bestseller_badge: feature.bestseller_label,
