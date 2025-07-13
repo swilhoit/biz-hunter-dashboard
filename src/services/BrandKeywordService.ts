@@ -1574,7 +1574,19 @@ export class BrandKeywordService {
         return [];
       }
 
-      return data || [];
+      // Filter to show:
+      // 1. Keywords where the brand IS ranking (position is not null and is_brand_result is true)
+      // 2. Keywords where the brand is NOT ranking (position is null)
+      const filteredData = (data || []).filter(item => {
+        // If there's a ranking position, only show if it's our brand
+        if (item.position !== null) {
+          return item.is_brand_result === true;
+        }
+        // If no ranking (position is null), show it so user knows which keywords they're not ranking for
+        return true;
+      });
+
+      return filteredData;
     } catch (error) {
       console.error('Error in getBrandPerformance:', error);
       return [];
