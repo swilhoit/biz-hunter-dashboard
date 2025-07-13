@@ -905,13 +905,37 @@ export class BrandKeywordService {
         return;
       }
 
+      console.log(`[BrandKeywords] Task result structure:`, {
+        hasResult: !!task.result,
+        resultLength: task.result?.length,
+        hasFirstResult: !!task.result?.[0],
+        hasItems: !!task.result?.[0]?.items,
+        itemsLength: task.result?.[0]?.items?.length || 0
+      });
+      
       if (task.result?.[0]?.items) {
         const items = task.result[0].items;
         
-        // Process Amazon search results (merchant API returns all as Amazon products)
-        const organicResults = items.filter((item: any) => 
+        // Debug: Log the structure of the first few items
+        if (items.length > 0) {
+          console.log(`[BrandKeywords] Sample item structure for keyword "${keyword.keyword}":`, JSON.stringify(items[0], null, 2));
+          console.log(`[BrandKeywords] Total items returned: ${items.length}`);
+          console.log(`[BrandKeywords] Item types found:`, [...new Set(items.map((item: any) => item.type))]);
+        }
+        
+        // Process Amazon search results
+        // First try strict filter, then fallback to looser filter
+        let organicResults = items.filter((item: any) => 
           item.type === 'amazon_product' && item.data_asin
         );
+        
+        // If no results with strict filter, try just checking for ASIN
+        if (organicResults.length === 0 && items.length > 0) {
+          console.log(`[BrandKeywords] No results with type 'amazon_product', trying alternative filter...`);
+          organicResults = items.filter((item: any) => 
+            (item.asin || item.data_asin) && item.title
+          );
+        }
 
         console.log(`[BrandKeywords] Found ${organicResults.length} organic results for keyword: ${keyword.keyword}`);
 
@@ -930,8 +954,8 @@ export class BrandKeywordService {
 
           const ranking: Partial<KeywordRanking> = {
             brand_keyword_id: keyword.id!,
-            asin: amazonResult.data_asin, // ASIN from merchant API
-            position: amazonResult.rank_absolute || amazonResult.position_absolute,
+            asin: amazonResult.data_asin || amazonResult.asin, // Handle both field names
+            position: amazonResult.rank_absolute || amazonResult.position_absolute || amazonResult.position,
             page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute) / 16), // Amazon shows 16 results per page
             url: amazonResult.url,
             title: amazonResult.title,
