@@ -64,13 +64,10 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const [keywords, setKeywords] = useState<KeywordPerformance[]>([]);
   const [summary, setSummary] = useState<BrandSummary | null>(null);
   const [loading, setLoading] = useState(false);
-  const [trackingRankings, setTrackingRankings] = useState(false);
   const [showAddKeywords, setShowAddKeywords] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
-  const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
-  const [cleaningKeywords, setCleaningKeywords] = useState(false);
-  const [cleaningNonBrand, setCleaningNonBrand] = useState(false);
-  const [prePopulating, setPrePopulating] = useState(false);
+  const [setupInProgress, setSetupInProgress] = useState(false);
+  const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(true);
   
   // Progress tracking state
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
@@ -80,8 +77,15 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   useEffect(() => {
     if (brandName) {
       loadBrandPerformance();
+      checkFirstTimeSetup();
     }
   }, [brandName]);
+
+  const checkFirstTimeSetup = async () => {
+    // Check if we have any keywords for this brand
+    const hasKeywords = keywords.length > 0;
+    setIsFirstTimeSetup(!hasKeywords);
+  };
 
   // Progress tracking functions
   const addLog = (level: LogEntry['level'], message: string) => {
@@ -133,16 +137,79 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
     }
   };
 
-  const trackKeywordRankings = async () => {
-    setTrackingRankings(true);
+  const smartSetupAndTrack = async () => {
+    setSetupInProgress(true);
     setShowProgressModal(true);
-    setLogs([]); // Clear previous logs
+    setLogs([]);
     
     try {
-      addLog('info', `Starting keyword ranking tracking for ${brandName}`);
-      updateProgress('Initializing', 0, 100, 'Preparing keyword tracking...');
+      // Step 1: Find brand products if none exist
+      if (isFirstTimeSetup || keywords.length === 0) {
+        addLog('info', `First time setup: Discovering ${brandName} products...`);
+        updateProgress('Setup', 10, 100, 'Discovering your products on Amazon...');
+        
+        const progressCallback = (message: string) => {
+          addLog('info', message);
+        };
+        
+        const count = await BrandKeywordService.prePopulateBrandASINs(brandName, progressCallback);
+        
+        if (count > 0) {
+          addLog('success', `Found ${count} ${brandName} products!`);
+          updateProgress('Setup', 30, 100, `Added ${count} products to database`);
+          
+          // Step 2: Find keywords where products rank
+          addLog('info', 'Finding keywords where your products already rank...');
+          updateProgress('Setup', 40, 100, 'Analyzing keyword rankings...');
+          
+          const suggestedKeywords = await BrandKeywordService.findRankingKeywords(brandName);
+          
+          if (suggestedKeywords.length > 0) {
+            addLog('success', `Found ${suggestedKeywords.length} keywords where your products rank`);
+            
+            const keywordsToAdd = suggestedKeywords.map(kw => ({
+              keyword: kw,
+              search_volume: 1000,
+              cpc: 1.0,
+              competition: 0.5,
+              difficulty: 50,
+              relevance_score: 0.9,
+              keyword_type: 'product' as const,
+              source: 'auto_discovery' as const
+            }));
+            
+            await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
+            updateProgress('Setup', 60, 100, 'Keywords added to tracking list');
+          }
+        }
+        
+        // Also get AI recommendations for generic keywords
+        addLog('info', 'Getting AI recommendations for additional keywords...');
+        updateProgress('Setup', 70, 100, 'Generating keyword recommendations...');
+        
+        const recommendations = await BrandKeywordService.generateKeywordRecommendations(
+          brandName,
+          keywords.map(k => k.keyword).slice(0, 5)
+        );
+        
+        if (recommendations.length > 0) {
+          await BrandKeywordService.addBrandKeywords(brandName, recommendations);
+          addLog('success', `Added ${recommendations.length} recommended keywords`);
+        }
+      }
       
-      // Create a progress callback
+      // Step 3: Clean non-brand rankings automatically
+      addLog('info', 'Cleaning up competitor product rankings...');
+      updateProgress('Tracking', 80, 100, 'Removing non-brand results...');
+      const cleanedCount = await BrandKeywordService.cleanupNonBrandRankings(brandName);
+      if (cleanedCount > 0) {
+        addLog('info', `Removed ${cleanedCount} competitor rankings`);
+      }
+      
+      // Step 4: Track rankings
+      addLog('info', 'Starting keyword ranking update...');
+      updateProgress('Tracking', 90, 100, 'Tracking keyword rankings...');
+      
       const progressCallback = (stage: string, current: number, total: number, message: string) => {
         updateProgress(stage, current, total, message);
       };
@@ -154,23 +221,21 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
       );
       
       if (result) {
-        addLog('success', 'Keyword ranking tracking completed successfully!');
-        updateProgress('Complete', 100, 100, 'All rankings updated');
+        addLog('success', 'All tracking completed successfully!');
+        updateProgress('Complete', 100, 100, 'Setup and tracking complete');
         await loadBrandPerformance();
-      } else {
-        addLog('error', 'Keyword ranking tracking failed');
+        setIsFirstTimeSetup(false);
       }
     } catch (error) {
-      console.error('Error tracking rankings:', error);
+      console.error('Error in smart setup:', error);
       addLog('error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setTrackingRankings(false);
-      // Keep modal open for 2 seconds to show completion
+      setSetupInProgress(false);
       setTimeout(() => {
         if (progress?.current === progress?.total) {
           clearProgress();
         }
-      }, 2000);
+      }, 3000);
     }
   };
 
@@ -194,143 +259,45 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
     }
   };
 
-  const generateRecommendations = async () => {
-    setGeneratingRecommendations(true);
-    try {
-      // First, clean up any existing branded keywords
-      addLog('info', 'Cleaning up existing branded keywords...');
-      const cleanedCount = await BrandKeywordService.cleanupBrandedKeywords(brandName);
-      if (cleanedCount > 0) {
-        addLog('warning', `Removed ${cleanedCount} branded keywords from database`);
-      }
-      
-      // Get some product names from existing keywords for context
-      const productContext = keywords
-        .filter(k => k.keyword_type === 'product')
-        .map(k => k.keyword)
-        .slice(0, 5);
-      
-      addLog('info', 'Fetching actual product data for AI recommendations...');
-      const recommendations = await BrandKeywordService.generateKeywordRecommendations(
-        brandName,
-        productContext.length > 0 ? productContext : [] // Will fetch actual ASINs from database
-      );
-      
-      if (recommendations.length > 0) {
-        addLog('success', `Generated ${recommendations.length} non-branded keyword recommendations`);
-        await BrandKeywordService.addBrandKeywords(brandName, recommendations);
-        await loadBrandPerformance();
-        addLog('success', 'Successfully added non-branded keywords to tracking list');
-      } else {
-        addLog('warning', 'No valid non-branded keywords were generated');
-      }
-    } catch (error) {
-      console.error('Error generating recommendations:', error);
-      addLog('error', `Error generating recommendations: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setGeneratingRecommendations(false);
-    }
-  };
-
-  const cleanupBrandedKeywords = async () => {
-    setCleaningKeywords(true);
-    try {
-      const cleanedCount = await BrandKeywordService.cleanupBrandedKeywords(brandName);
-      if (cleanedCount > 0) {
-        await loadBrandPerformance();
-        alert(`Successfully removed ${cleanedCount} branded keywords from the tracking list.`);
-      } else {
-        alert('No branded keywords found to remove.');
-      }
-    } catch (error) {
-      console.error('Error cleaning branded keywords:', error);
-      alert('Error cleaning up branded keywords.');
-    } finally {
-      setCleaningKeywords(false);
-    }
-  };
-
-  const cleanupNonBrandRankings = async () => {
-    if (!confirm(`This will remove all keyword rankings for products that are not from ${brandName}. Continue?`)) {
-      return;
-    }
-    
-    setCleaningNonBrand(true);
-    try {
-      const cleanedCount = await BrandKeywordService.cleanupNonBrandRankings(brandName);
-      if (cleanedCount > 0) {
-        await loadBrandPerformance();
-        alert(`Successfully removed ${cleanedCount} non-${brandName} product rankings. Future tracking will only show ${brandName} products.`);
-      } else {
-        alert(`No non-${brandName} rankings found to remove.`);
-      }
-    } catch (error) {
-      console.error('Error cleaning non-brand rankings:', error);
-      alert('Error cleaning up non-brand rankings.');
-    } finally {
-      setCleaningNonBrand(false);
-    }
-  };
-
-  const prePopulateASINs = async () => {
-    setPrePopulating(true);
+  const refreshRankings = async () => {
     setShowProgressModal(true);
     setLogs([]);
-    setProgress({ stage: 'Discovering', current: 0, total: 100, message: 'Starting product discovery...', timestamp: new Date().toLocaleTimeString() });
     
     try {
-      addLog('info', `Searching for ${brandName} products on Amazon...`);
+      addLog('info', `Refreshing rankings for ${brandName}...`);
+      updateProgress('Refreshing', 0, 100, 'Starting ranking update...');
       
-      const progressCallback = (message: string) => {
-        addLog('info', message);
-        setProgress(prev => ({
-          stage: 'Discovering',
-          current: Math.min((prev?.current || 0) + 10, 90),
-          total: 100,
-          message,
-          timestamp: new Date().toLocaleTimeString()
-        }));
+      // Clean non-brand rankings first
+      const cleanedCount = await BrandKeywordService.cleanupNonBrandRankings(brandName);
+      if (cleanedCount > 0) {
+        addLog('info', `Cleaned ${cleanedCount} competitor rankings`);
+      }
+      
+      // Track rankings
+      const progressCallback = (stage: string, current: number, total: number, message: string) => {
+        updateProgress(stage, current, total, message);
       };
       
-      const count = await BrandKeywordService.prePopulateBrandASINs(brandName, progressCallback);
+      const result = await BrandKeywordService.trackKeywordRankingsWithProgress(
+        brandName, 
+        undefined, 
+        progressCallback
+      );
       
-      if (count > 0) {
-        addLog('success', `Successfully added ${count} new ${brandName} products!`);
-        setProgress({ stage: 'Complete', current: 100, total: 100, message: `Added ${count} products to database`, timestamp: new Date().toLocaleTimeString() });
-        
-        // Automatically suggest keywords
-        addLog('info', 'Finding keywords where your products rank...');
-        const suggestedKeywords = await BrandKeywordService.findRankingKeywords(brandName);
-        
-        if (suggestedKeywords.length > 0) {
-          addLog('success', `Found ${suggestedKeywords.length} keywords to track:`);
-          suggestedKeywords.forEach(kw => addLog('info', `  • ${kw}`));
-          
-          // Auto-add suggested keywords
-          const keywordsToAdd = suggestedKeywords.map(kw => ({
-            keyword: kw,
-            search_volume: 1000, // Default, will be updated
-            cpc: 1.0,
-            competition: 0.5,
-            difficulty: 50,
-            relevance_score: 0.9,
-            keyword_type: 'product' as const,
-            source: 'ai_recommendation' as const
-          }));
-          
-          await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
-          await loadBrandPerformance();
-          addLog('success', 'Keywords added to tracking list!');
-        }
-      } else {
-        addLog('warning', 'No new products found. Try running this after adding products to your catalog.');
-        setProgress({ stage: 'Complete', current: 100, total: 100, message: 'No new products found', timestamp: new Date().toLocaleTimeString() });
+      if (result) {
+        addLog('success', 'Rankings refreshed successfully!');
+        updateProgress('Complete', 100, 100, 'All rankings updated');
+        await loadBrandPerformance();
       }
     } catch (error) {
-      console.error('Error pre-populating ASINs:', error);
-      addLog('error', 'Error during product discovery');
+      console.error('Error refreshing rankings:', error);
+      addLog('error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setPrePopulating(false);
+      setTimeout(() => {
+        if (progress?.current === progress?.total) {
+          clearProgress();
+        }
+      }, 2000);
     }
   };
 
@@ -385,70 +352,38 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
           <div className="flex gap-2">
             <button
               onClick={() => setShowAddKeywords(!showAddKeywords)}
-              className="btn bg-blue-500 hover:bg-blue-600 text-white"
+              className="btn bg-gray-500 hover:bg-gray-600 text-white"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Keywords
             </button>
-            <button
-              onClick={generateRecommendations}
-              disabled={generatingRecommendations}
-              className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50"
-            >
-              {generatingRecommendations ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Zap className="w-4 h-4 mr-2" />
-              )}
-              AI Recommendations
-            </button>
-            <button
-              onClick={cleanupBrandedKeywords}
-              disabled={cleaningKeywords}
-              className="btn bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
-              title="Remove any branded keywords from tracking list"
-            >
-              {cleaningKeywords ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Trash2 className="w-4 h-4 mr-2" />
-              )}
-              Clean Branded
-            </button>
-            <button
-              onClick={cleanupNonBrandRankings}
-              disabled={cleaningNonBrand}
-              className="btn bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
-              title="Remove rankings for products not from your brand"
-            >
-              {cleaningNonBrand ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Trash2 className="w-4 h-4 mr-2" />
-              )}
-              Clean Non-Brand
-            </button>
-            <button
-              onClick={prePopulateASINs}
-              disabled={prePopulating}
-              className="btn bg-purple-500 hover:bg-purple-600 text-white disabled:opacity-50"
-              title="Discover your brand products and suggest keywords"
-            >
-              <Search className="w-4 h-4 mr-2" />
-              {prePopulating ? 'Discovering...' : 'Find My Products'}
-            </button>
-            <button
-              onClick={trackKeywordRankings}
-              disabled={trackingRankings}
-              className="btn bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
-            >
-              {trackingRankings ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
-              )}
-              Track Rankings
-            </button>
+            {isFirstTimeSetup ? (
+              <button
+                onClick={smartSetupAndTrack}
+                disabled={setupInProgress}
+                className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50"
+              >
+                {setupInProgress ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <Zap className="w-4 h-4 mr-2" />
+                )}
+                Setup & Track
+              </button>
+            ) : (
+              <button
+                onClick={refreshRankings}
+                disabled={setupInProgress}
+                className="btn bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
+              >
+                {setupInProgress ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Refresh Rankings
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -618,11 +553,24 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
           <div className="text-center py-8">
             <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 dark:text-gray-400 mb-2">
-              No keywords tracked yet
+              {isFirstTimeSetup ? 'Ready to start tracking!' : 'No keywords tracked yet'}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              Add keywords manually or use AI recommendations to get started
+            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+              {isFirstTimeSetup 
+                ? 'Click "Setup & Track" to automatically discover your products and keywords'
+                : 'Add keywords manually or refresh to update rankings'
+              }
             </p>
+            {isFirstTimeSetup && (
+              <button
+                onClick={smartSetupAndTrack}
+                disabled={setupInProgress}
+                className="btn bg-violet-500 hover:bg-violet-600 text-white"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                Setup & Track
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -636,7 +584,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <Activity className="w-6 h-6 text-violet-500" />
-                    {trackingRankings && (
+                    {setupInProgress && (
                       <div className="absolute -bottom-1 -right-1">
                         <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
                       </div>
@@ -644,7 +592,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      Tracking Keyword Rankings
+                      {isFirstTimeSetup ? 'Setting Up Keyword Tracking' : 'Refreshing Rankings'}
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {brandName} • {keywords.length} keywords
@@ -654,7 +602,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                 <button
                   onClick={clearProgress}
                   className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  disabled={trackingRankings}
+                  disabled={setupInProgress}
                 >
                   ✕
                 </button>
@@ -760,7 +708,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-2 mt-6">
-                {progress?.current === progress?.total && !trackingRankings ? (
+                {progress?.current === progress?.total && !setupInProgress ? (
                   <button
                     onClick={clearProgress}
                     className="btn bg-green-500 hover:bg-green-600 text-white"
@@ -771,7 +719,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                 ) : (
                   <button
                     onClick={clearProgress}
-                    disabled={trackingRankings}
+                    disabled={setupInProgress}
                     className="btn bg-gray-500 hover:bg-gray-600 text-white disabled:opacity-50"
                   >
                     Close
