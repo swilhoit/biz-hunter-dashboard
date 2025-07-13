@@ -811,26 +811,32 @@ export class BrandKeywordService {
             
             console.log(`[BrandKeywords] Found ${newlyReady.length} newly ready tasks to process`);
             
-            // Only attempt direct fetch if we have confirmed ready tasks but they're not matching
+            // Only attempt direct fetch if enough time has passed
             if (newlyReady.length === 0 && completedTasks.size < allTasks.length) {
               const remaining = allTasks.length - completedTasks.size;
               const elapsedMs = Date.now() - startTime;
-              console.log(`[BrandKeywords] No matching ready tasks found. ${remaining} tasks still pending.`);
               
-              // Only try direct fetch if there are unmatched ready tasks (likely tag mismatch)
-              if (readyTaskIds.length > relevantTaskIds.length && elapsedMs > 60000) {
-                console.log(`[BrandKeywords] Found ${readyTaskIds.length - relevantTaskIds.length} unmatched ready tasks after ${Math.round(elapsedMs/1000)}s`);
-                console.log(`[BrandKeywords] Attempting direct fetch for some unprocessed tasks...`);
+              // Don't attempt any fetches in the first 10 seconds
+              if (elapsedMs < 10000) {
+                console.log(`[BrandKeywords] ${remaining} tasks pending. Waiting for initial processing...`);
+              } else {
+                console.log(`[BrandKeywords] No matching ready tasks found. ${remaining} tasks still pending.`);
                 
-                // Try to fetch some unprocessed tasks directly
-                const unprocessedTasks = allTasks.filter(task => 
-                  !completedTasks.has(task.taskId) && 
-                  !processingPromises.has(task.taskId)
-                ).slice(0, 1); // Try 1 at a time to avoid overwhelming
-                
-                if (unprocessedTasks.length > 0) {
-                  console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
-                  newlyReady.push(...unprocessedTasks);
+                // Only try direct fetch if there are unmatched ready tasks (likely tag mismatch)
+                if (readyTaskIds.length > relevantTaskIds.length && elapsedMs > 30000) {
+                  console.log(`[BrandKeywords] Found ${readyTaskIds.length - relevantTaskIds.length} unmatched ready tasks after ${Math.round(elapsedMs/1000)}s`);
+                  console.log(`[BrandKeywords] Attempting direct fetch for some unprocessed tasks...`);
+                  
+                  // Try to fetch some unprocessed tasks directly
+                  const unprocessedTasks = allTasks.filter(task => 
+                    !completedTasks.has(task.taskId) && 
+                    !processingPromises.has(task.taskId)
+                  ).slice(0, 1); // Try 1 at a time to avoid overwhelming
+                  
+                  if (unprocessedTasks.length > 0) {
+                    console.log(`[BrandKeywords] Attempting direct fetch for ${unprocessedTasks.length} tasks`);
+                    newlyReady.push(...unprocessedTasks);
+                  }
                 }
               }
             }
@@ -859,14 +865,16 @@ export class BrandKeywordService {
                 onProgress?.('Processing', progressPercent, 100, 
                   `📊 Processed "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length} complete, ~${remainingTime}s remaining)`);
               }).catch((error) => {
-                console.error(`[BrandKeywords] Error processing task ${task.taskId}:`, error);
                 processingPromises.delete(task.taskId);
                 
-                // Only mark as completed if it's not a temporary error
-                const isTemporaryError = error.message?.includes('in queue') || error.message?.includes('in progress');
+                // Check if it's a temporary error (task not ready yet)
+                const isTemporaryError = (error as any).isTemporary || 
+                  error.message?.includes('in queue') || 
+                  error.message?.includes('in progress');
                 
                 if (!isTemporaryError) {
-                  // Permanent failure - mark as completed to avoid infinite loop
+                  // Permanent failure - log error and mark as completed
+                  console.error(`[BrandKeywords] Error processing task ${task.taskId}:`, error);
                   completedTasks.add(task.taskId);
                   failedTasks++;
                   
@@ -875,8 +883,9 @@ export class BrandKeywordService {
                   onProgress?.('Warning', progressPercent, 100, 
                     `⚠️ Failed to process "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length}, ${failedTasks} failed)`);
                 } else {
-                  // Temporary error - task will be retried later
-                  console.log(`[BrandKeywords] Task ${task.taskId} will be retried later (${error.message})`);
+                  // Temporary error - this is normal, task will be retried
+                  // Don't log as error to avoid confusion
+                  console.log(`[BrandKeywords] Task for "${task.keyword.keyword}" not ready yet - will check again`);
                 }
               });
               
@@ -900,12 +909,15 @@ export class BrandKeywordService {
         console.warn('[BrandKeywords] Error in parallel polling:', error);
       }
       
-      // Add initial wait period for tasks to process
+      // Add longer initial wait for first attempt to reduce "in queue" errors
       const elapsedTime = Date.now() - startTime;
-      const minWaitBeforeProcessing = 15000; // Wait at least 15 seconds before trying to process
+      const minWaitBeforeFirstAttempt = 10000; // Wait 10 seconds before first attempt
       
-      if (elapsedTime < minWaitBeforeProcessing && completedTasks.size === 0) {
-        console.log(`[BrandKeywords] Waiting for initial task processing... (${Math.round((minWaitBeforeProcessing - elapsedTime) / 1000)}s remaining)`);
+      if (elapsedTime < minWaitBeforeFirstAttempt && processingPromises.size === 0 && completedTasks.size === 0) {
+        const waitRemaining = Math.round((minWaitBeforeFirstAttempt - elapsedTime) / 1000);
+        console.log(`[BrandKeywords] Waiting ${waitRemaining}s before first processing attempt...`);
+        onProgress?.('Waiting', 45 + Math.round((elapsedTime / minWaitBeforeFirstAttempt) * 10), 100, 
+          `⏳ Tasks submitted, waiting ${waitRemaining}s for processing to begin...`);
       }
       
       // If we're processing tasks, poll more aggressively
@@ -1081,8 +1093,13 @@ export class BrandKeywordService {
       
       // Check if task is still processing or in queue
       if (task.status_code === 20100 || task.status_code === 40602) {
-        console.log(`[BrandKeywords] Task ${taskId} is still ${task.status_code === 40602 ? 'in queue' : 'in progress'}`);
-        throw new Error(`Task still ${task.status_code === 40602 ? 'in queue' : 'in progress'}`); // This will be caught and retried
+        // This is expected behavior - tasks take time to process
+        const status = task.status_code === 40602 ? 'in queue' : 'in progress';
+        console.log(`[BrandKeywords] Task ${taskId} is still ${status} - will retry later`);
+        // Throw a specific error that will be caught and handled gracefully
+        const error = new Error(`Task still ${status}`);
+        (error as any).isTemporary = true;
+        throw error;
       }
       
       if (task.status_code !== 20000) {
