@@ -65,6 +65,12 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
       const sortedData = formattedData.sort((a, b) => b.searchVolume - a.searchVolume);
       
       setKeywordData(sortedData);
+      
+      // Save to localStorage for brand keyword tracker
+      localStorage.setItem('keywordResearchData', JSON.stringify({
+        keywords: sortedData,
+        timestamp: new Date().toISOString()
+      }));
     } catch (err) {
       setError('Failed to fetch keyword data');
       console.error(err);
@@ -195,6 +201,13 @@ export function KeywordResearch({ initialKeywords, onKeywordSelect, products }: 
       {/* Results */}
       <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl">
         <header className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/60">
+          {keywordData.length > 0 && (
+            <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+              <p className="text-sm text-green-800 dark:text-green-300">
+                ✓ Keywords saved! You can import these into Brand Keyword Tracking using the bulk import feature.
+              </p>
+            </div>
+          )}
           <div className="flex border-b border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setActiveTab('search')}

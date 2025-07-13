@@ -10,7 +10,7 @@ interface BrandKeyword {
   difficulty: number;
   relevance_score: number;
   keyword_type: 'brand' | 'product' | 'category' | 'competitor' | 'general';
-  source: 'manual' | 'ai_recommendation' | 'competitor_analysis';
+  source: 'manual' | 'ai_recommendation' | 'competitor_analysis' | 'bulk_import' | 'keyword_research' | 'auto_discovery';
   is_active: boolean;
 }
 

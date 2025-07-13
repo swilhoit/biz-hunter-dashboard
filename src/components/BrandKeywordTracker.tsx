@@ -68,6 +68,8 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const [newKeyword, setNewKeyword] = useState('');
   const [setupInProgress, setSetupInProgress] = useState(false);
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(true);
+  const [bulkImportMode, setBulkImportMode] = useState(false);
+  const [bulkKeywords, setBulkKeywords] = useState('');
   
   // Progress tracking state
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
@@ -183,9 +185,40 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
           }
         }
         
+        // Import keywords from existing research (if available)
+        addLog('info', 'Checking for existing keyword research...');
+        updateProgress('Setup', 65, 100, 'Looking for keyword data...');
+        
+        // Get keywords from localStorage (if saved from keyword research tab)
+        const savedKeywordResearch = localStorage.getItem('keywordResearchData');
+        if (savedKeywordResearch) {
+          try {
+            const researchData = JSON.parse(savedKeywordResearch);
+            if (researchData.keywords && Array.isArray(researchData.keywords)) {
+              const importKeywords = researchData.keywords.map((kw: any) => ({
+                keyword: kw.keyword || kw,
+                search_volume: kw.searchVolume || kw.search_volume || 1000,
+                cpc: kw.cpc || 1.0,
+                competition: kw.competition || 0.5,
+                difficulty: kw.keywordDifficulty || kw.difficulty || 50,
+                relevance_score: 0.8,
+                keyword_type: 'research' as const,
+                source: 'keyword_research' as const
+              }));
+              
+              if (importKeywords.length > 0) {
+                await BrandKeywordService.addBrandKeywords(brandName, importKeywords);
+                addLog('success', `Imported ${importKeywords.length} keywords from research`);
+              }
+            }
+          } catch (error) {
+            console.error('Error importing keyword research:', error);
+          }
+        }
+        
         // Also get AI recommendations for generic keywords
         addLog('info', 'Getting AI recommendations for additional keywords...');
-        updateProgress('Setup', 70, 100, 'Generating keyword recommendations...');
+        updateProgress('Setup', 75, 100, 'Generating keyword recommendations...');
         
         const recommendations = await BrandKeywordService.generateKeywordRecommendations(
           brandName,
@@ -256,6 +289,48 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
       }
     } catch (error) {
       console.error('Error adding keyword:', error);
+    }
+  };
+
+  const addBulkKeywords = async () => {
+    if (!bulkKeywords.trim()) return;
+    
+    try {
+      // Parse keywords - support comma, newline, or space separated
+      const keywordList = bulkKeywords
+        .split(/[,\n]/)
+        .map(k => k.trim())
+        .filter(k => k.length > 0)
+        .filter((k, i, arr) => arr.indexOf(k) === i); // Remove duplicates
+      
+      if (keywordList.length === 0) {
+        alert('No valid keywords found');
+        return;
+      }
+      
+      // Convert to keyword objects
+      const keywordsToAdd = keywordList.map(keyword => ({
+        keyword,
+        search_volume: 1000, // Default, will be updated by tracking
+        cpc: 1.0,
+        competition: 0.5,
+        difficulty: 50,
+        relevance_score: 0.7,
+        keyword_type: 'general' as const,
+        source: 'bulk_import' as const
+      }));
+      
+      const success = await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
+      
+      if (success) {
+        setBulkKeywords('');
+        setBulkImportMode(false);
+        await loadBrandPerformance();
+        alert(`Successfully added ${keywordList.length} keywords`);
+      }
+    } catch (error) {
+      console.error('Error adding bulk keywords:', error);
+      alert('Error adding keywords');
     }
   };
 
@@ -445,23 +520,65 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
         {/* Add Keywords Form */}
         {showAddKeywords && (
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 mb-6">
-            <h3 className="font-medium mb-3">Add New Keyword</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                placeholder="Enter keyword to track..."
-                className="form-input flex-1"
-                onKeyPress={(e) => e.key === 'Enter' && addKeyword()}
-              />
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-medium">Add Keywords</h3>
               <button
-                onClick={addKeyword}
-                className="btn bg-violet-500 hover:bg-violet-600 text-white"
+                onClick={() => setBulkImportMode(!bulkImportMode)}
+                className="text-sm text-violet-600 hover:text-violet-700"
               >
-                Add
+                {bulkImportMode ? 'Single Mode' : 'Bulk Import'}
               </button>
             </div>
+            
+            {bulkImportMode ? (
+              <div>
+                <textarea
+                  value={bulkKeywords}
+                  onChange={(e) => setBulkKeywords(e.target.value)}
+                  placeholder="Paste keywords here (one per line or comma-separated)...\n\nExample:\ncandles\npillar candles\nscented candles\nunscented candles\nsoy candles"
+                  className="form-input w-full h-32 mb-2"
+                />
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-gray-500">
+                    {bulkKeywords.split(/[,\n]/).filter(k => k.trim()).length} keywords detected
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setBulkKeywords('')}
+                      className="btn bg-gray-500 hover:bg-gray-600 text-white"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={addBulkKeywords}
+                      className="btn bg-violet-500 hover:bg-violet-600 text-white"
+                    >
+                      Import All
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Tip: Copy keywords from the Keyword Research tab and paste them here
+                </p>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newKeyword}
+                  onChange={(e) => setNewKeyword(e.target.value)}
+                  placeholder="Enter keyword to track..."
+                  className="form-input flex-1"
+                  onKeyPress={(e) => e.key === 'Enter' && addKeyword()}
+                />
+                <button
+                  onClick={addKeyword}
+                  className="btn bg-violet-500 hover:bg-violet-600 text-white"
+                >
+                  Add
+                </button>
+              </div>
+            )}
           </div>
         )}
 
