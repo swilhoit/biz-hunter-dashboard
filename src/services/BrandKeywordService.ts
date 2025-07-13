@@ -255,47 +255,11 @@ export class BrandKeywordService {
       console.log(`[BrandKeywords] Pre-populating ASINs for brand: ${brandName}`);
       onProgress?.(`Starting ASIN discovery for ${brandName}...`);
       
-      // Get existing product titles to create better search terms
-      const { data: existingProducts } = await supabase
-        .from('asins')
-        .select('title')
-        .eq('brand', brandName)
-        .limit(10);
-        
-      // Extract product types from existing titles
-      const productTypes = new Set<string>();
-      if (existingProducts) {
-        existingProducts.forEach(p => {
-          // Extract key product descriptors
-          const words = p.title.toLowerCase().split(' ');
-          const descriptors = ['candle', 'candles', 'pillar', 'votive', 'jar', 'scented', 'unscented', 'citronella'];
-          words.forEach(word => {
-            if (descriptors.includes(word)) {
-              productTypes.add(word);
-            }
-          });
-        });
-      }
-      
-      // Build comprehensive search keywords
+      // Use only essential search terms to speed up the process
       const searchKeywords = [
         brandName,
         `"${brandName}"`, // Exact match
-        `${brandName} candle`,
-        `${brandName} candles`,
-        `by ${brandName}`,
-        `${brandName} -knock -inspired`, // Exclude knock-offs
-      ];
-      
-      // Add product-specific searches
-      productTypes.forEach(type => {
-        searchKeywords.push(`${brandName} ${type}`);
-      });
-      
-      // Also search for specific known ASINs
-      const knownASINs = [
-        'B07CTBNRP3', 'B07D1ZHF44', 'B079HFZ2Z1', 'B01N9O2C9I',
-        'B01N7OWYT1', 'B08SLNZ7KW', 'B07GP6JY8Q', 'B0C1D699N6'
+        `${brandName} candle`
       ];
       
       let totalASINsAdded = 0;
@@ -304,8 +268,10 @@ export class BrandKeywordService {
         password: import.meta.env.VITE_DATAFORSEO_PASSWORD || ''
       };
       const credentials = btoa(`${dataForSEOConfig.username}:${dataForSEOConfig.password}`);
+      const allASINs = new Map<string, any>(); // Use Map to deduplicate by ASIN
       
-      for (const searchTerm of searchKeywords) {
+      // Submit all search tasks in parallel
+      const taskPromises = searchKeywords.map(async (searchTerm) => {
         try {
           const response = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/task_post', {
             method: 'POST',
@@ -317,75 +283,71 @@ export class BrandKeywordService {
               keyword: searchTerm,
               location_code: 2840,
               language_code: 'en_US',
-              depth: 100
+              depth: 50, // Reduced from 100 to speed up
+              tag: `asin-discovery-${brandName}-${searchTerm}`
             }])
           });
           
           if (response.ok) {
             const data = await response.json();
             if (data.tasks?.[0]?.id) {
-              // Wait for task to complete
-              await new Promise(resolve => setTimeout(resolve, 10000));
-              
-              // Fetch results with retry for queue status
-              let attempts = 0;
-              let resultResponse;
-              let resultData;
-              
-              while (attempts < 10) {
-                resultResponse = await fetch(
-                  `https://api.dataforseo.com/v3/merchant/amazon/products/task_get/advanced/${data.tasks[0].id}`,
-                  {
-                    method: 'GET',
-                    headers: {
-                      'Authorization': `Basic ${credentials}`,
-                      'Content-Type': 'application/json'
-                    }
-                  }
-                );
-                
-                if (resultResponse.ok) {
-                  resultData = await resultResponse.json();
-                  const taskStatus = resultData.tasks?.[0]?.status_code;
-                  
-                  if (taskStatus === 20000) {
-                    // Success
-                    break;
-                  } else if (taskStatus === 40602 || taskStatus === 20100) {
-                    // Still processing
-                    console.log(`[BrandKeywords] Task still processing, waiting...`);
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    attempts++;
-                  } else {
-                    // Error
-                    console.error(`[BrandKeywords] Task failed with status: ${taskStatus}`);
-                    break;
-                  }
-                } else {
-                  break;
+              return { taskId: data.tasks[0].id, searchTerm };
+            }
+          }
+        } catch (error) {
+          console.error(`[BrandKeywords] Error submitting search for ${searchTerm}:`, error);
+        }
+        return null;
+      });
+      
+      // Submit all tasks
+      const tasks = (await Promise.all(taskPromises)).filter(t => t !== null);
+      onProgress?.(`Submitted ${tasks.length} search tasks...`);
+      
+      // Wait a bit for processing to start
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Process results in parallel with proper polling
+      const resultPromises = tasks.map(async ({ taskId, searchTerm }) => {
+        let attempts = 0;
+        const maxAttempts = 20; // 1 minute max wait
+        
+        while (attempts < maxAttempts) {
+          try {
+            const resultResponse = await fetch(
+              `https://api.dataforseo.com/v3/merchant/amazon/products/task_get/advanced/${taskId}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Basic ${credentials}`,
+                  'Content-Type': 'application/json'
                 }
               }
+            );
+            
+            if (resultResponse.ok) {
+              const resultData = await resultResponse.json();
+              const taskStatus = resultData.tasks?.[0]?.status_code;
               
-              if (resultData?.tasks?.[0]?.status_code === 20000) {
+              if (taskStatus === 20000) {
+                // Success - process results
                 const items = resultData.tasks[0].result?.[0]?.items || [];
                 onProgress?.(`Found ${items.length} results for: ${searchTerm}`);
                 
-                // Store ASINs with better brand detection
-                const asinsToStore = [];
+                // Collect matching ASINs
                 for (const item of items) {
-                  if (item.asin && item.title && item.type === 'amazon_serp') {
+                  if (item.asin && item.title && item.type === 'amazon_product') {
                     const titleLower = item.title.toLowerCase();
                     const brandLower = brandName.toLowerCase();
                     
-                    // Multiple checks for brand matching
+                    // Check for brand match
                     const isBrandMatch = 
-                      titleLower.includes(brandLower) || // Brand in title
-                      titleLower.startsWith(brandLower) || // Title starts with brand
-                      (item.manufacturer && item.manufacturer.toLowerCase() === brandLower) || // Manufacturer match
-                      (item.brand && item.brand.toLowerCase() === brandLower); // Brand field match
+                      titleLower.includes(brandLower) || 
+                      (item.manufacturer && item.manufacturer.toLowerCase().includes(brandLower)) ||
+                      (item.brand && item.brand.toLowerCase().includes(brandLower));
                     
-                    if (isBrandMatch) {
-                      asinsToStore.push({
+                    if (isBrandMatch && !allASINs.has(item.asin)) {
+                      allASINs.set(item.asin, {
                         asin: item.asin,
                         title: item.title,
                         brand: brandName,
@@ -394,31 +356,49 @@ export class BrandKeywordService {
                         review_count: item.rating?.votes_count || 0,
                         category: item.main_category || '',
                         subcategory: item.sub_category || '',
-                        current_bsr: item.rank || null,
+                        current_bsr: item.bsr || null,
+                        image_url: item.image_url || '',
                         last_updated: new Date().toISOString()
                       });
                     }
                   }
                 }
-                
-                if (asinsToStore.length > 0) {
-                  const { error } = await supabase
-                    .from('asins')
-                    .upsert(asinsToStore, {
-                      onConflict: 'asin',
-                      ignoreDuplicates: false
-                    });
-                    
-                  if (!error) {
-                    totalASINsAdded += asinsToStore.length;
-                    console.log(`[BrandKeywords] Added ${asinsToStore.length} ASINs for search term: ${searchTerm}`);
-                  }
-                }
+                return;
+              } else if (taskStatus === 40602 || taskStatus === 20100) {
+                // Still processing - wait and retry
+                attempts++;
+                await new Promise(resolve => setTimeout(resolve, 3000));
+              } else {
+                // Error - stop trying
+                console.error(`[BrandKeywords] Task failed with status: ${taskStatus}`);
+                return;
               }
             }
+          } catch (error) {
+            console.error(`[BrandKeywords] Error fetching results for ${searchTerm}:`, error);
+            return;
           }
-        } catch (error) {
-          console.error(`[BrandKeywords] Error pre-populating ASINs for ${searchTerm}:`, error);
+        }
+      });
+      
+      // Wait for all results
+      await Promise.all(resultPromises);
+      
+      // Store all discovered ASINs at once
+      if (allASINs.size > 0) {
+        const asinsToStore = Array.from(allASINs.values());
+        const { error } = await supabase
+          .from('asins')
+          .upsert(asinsToStore, {
+            onConflict: 'asin',
+            ignoreDuplicates: false
+          });
+          
+        if (!error) {
+          totalASINsAdded = asinsToStore.length;
+          console.log(`[BrandKeywords] Added ${totalASINsAdded} unique ASINs for brand: ${brandName}`);
+        } else {
+          console.error('[BrandKeywords] Error storing ASINs:', error);
         }
       }
       
