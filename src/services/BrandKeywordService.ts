@@ -202,6 +202,52 @@ export class BrandKeywordService {
   }
 
   /**
+   * Clean up old non-brand keyword rankings
+   */
+  static async cleanupNonBrandRankings(brandName: string): Promise<number> {
+    try {
+      console.log(`[BrandKeywords] Cleaning up non-brand rankings for: ${brandName}`);
+      
+      // First get all keyword IDs for this brand
+      const { data: keywords, error: keywordError } = await supabase
+        .from('brand_keywords')
+        .select('id')
+        .eq('brand_name', brandName);
+        
+      if (keywordError || !keywords) {
+        throw new Error('Failed to fetch brand keywords');
+      }
+      
+      const keywordIds = keywords.map(k => k.id);
+      if (keywordIds.length === 0) {
+        return 0;
+      }
+      
+      // Delete non-brand rankings in batches
+      let totalDeleted = 0;
+      for (const keywordId of keywordIds) {
+        const { error: deleteError, count } = await supabase
+          .from('keyword_rankings')
+          .delete()
+          .eq('brand_keyword_id', keywordId)
+          .eq('is_brand_result', false);
+          
+        if (deleteError) {
+          console.error('[BrandKeywords] Error deleting rankings for keyword:', keywordId, deleteError);
+        } else {
+          totalDeleted += (count || 0);
+        }
+      }
+      
+      console.log(`[BrandKeywords] Deleted ${totalDeleted} non-brand rankings`);
+      return totalDeleted;
+    } catch (error) {
+      console.error('[BrandKeywords] Error in cleanupNonBrandRankings:', error);
+      throw error;
+    }
+  }
+  
+  /**
    * Pre-populate ASINs for a brand to improve keyword tracking performance
    */
   static async prePopulateBrandASINs(brandName: string): Promise<number> {

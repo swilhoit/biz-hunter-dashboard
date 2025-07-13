@@ -69,6 +69,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
   const [newKeyword, setNewKeyword] = useState('');
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [cleaningKeywords, setCleaningKeywords] = useState(false);
+  const [cleaningNonBrand, setCleaningNonBrand] = useState(false);
   
   // Progress tracking state
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
@@ -248,6 +249,28 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
     }
   };
 
+  const cleanupNonBrandRankings = async () => {
+    if (!confirm(`This will remove all keyword rankings for products that are not from ${brandName}. Continue?`)) {
+      return;
+    }
+    
+    setCleaningNonBrand(true);
+    try {
+      const cleanedCount = await BrandKeywordService.cleanupNonBrandRankings(brandName);
+      if (cleanedCount > 0) {
+        await loadBrandPerformance();
+        alert(`Successfully removed ${cleanedCount} non-${brandName} product rankings. Future tracking will only show ${brandName} products.`);
+      } else {
+        alert(`No non-${brandName} rankings found to remove.`);
+      }
+    } catch (error) {
+      console.error('Error cleaning non-brand rankings:', error);
+      alert('Error cleaning up non-brand rankings.');
+    } finally {
+      setCleaningNonBrand(false);
+    }
+  };
+
   const getRankingIcon = (tier: string) => {
     switch (tier) {
       case 'Top 3':
@@ -316,6 +339,19 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                 <Trash2 className="w-4 h-4 mr-2" />
               )}
               Clean Branded
+            </button>
+            <button
+              onClick={cleanupNonBrandRankings}
+              disabled={cleaningNonBrand}
+              className="btn bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
+              title="Remove rankings for products not from your brand"
+            >
+              {cleaningNonBrand ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Clean Non-Brand
             </button>
             <button
               onClick={trackKeywordRankings}
