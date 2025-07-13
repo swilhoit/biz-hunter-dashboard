@@ -306,6 +306,18 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
             <h2 className="font-semibold text-gray-800 dark:text-gray-100">
               Brand Keyword Tracking: {brandName}
             </h2>
+            {summary && (
+              <div className="flex items-center gap-4 ml-4 text-sm text-gray-600 dark:text-gray-400">
+                <span className="flex items-center gap-1">
+                  <Award className="w-4 h-4 text-yellow-500" />
+                  {summary.ranking_keywords}/{summary.total_keywords} ranking
+                </span>
+                <span className="flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4 text-green-500" />
+                  {summary.top_10_keywords} in top 10
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -352,6 +364,15 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
                 <Trash2 className="w-4 h-4 mr-2" />
               )}
               Clean Non-Brand
+            </button>
+            <button
+              onClick={prePopulateASINs}
+              disabled={prePopulating}
+              className="btn bg-purple-500 hover:bg-purple-600 text-white disabled:opacity-50"
+              title="Discover your brand products and suggest keywords"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              {prePopulating ? 'Discovering...' : 'Find My Products'}
             </button>
             <button
               onClick={trackKeywordRankings}
