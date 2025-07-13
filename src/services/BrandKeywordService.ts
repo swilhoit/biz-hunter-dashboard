@@ -10,7 +10,7 @@ interface BrandKeyword {
   difficulty: number;
   relevance_score: number;
   keyword_type: 'brand' | 'product' | 'category' | 'competitor' | 'general';
-  source: 'manual' | 'ai_recommendation' | 'competitor_analysis' | 'bulk_import' | 'keyword_research' | 'auto_discovery';
+  source: 'manual' | 'ai_recommendation' | 'competitor_analysis' | 'bulk_import' | 'keyword_research' | 'auto_discovery' | 'asin_analysis';
   is_active: boolean;
 }
 
@@ -247,6 +247,72 @@ export class BrandKeywordService {
     }
   }
   
+  /**
+   * Get recommended keywords from ASINs for a brand
+   */
+  static async getASINRecommendedKeywords(brandName: string): Promise<Partial<BrandKeyword>[]> {
+    try {
+      console.log(`[BrandKeywords] Fetching ASIN recommended keywords for brand: ${brandName}`);
+      
+      // First get ASINs for this brand
+      const { data: brandASINs, error: asinError } = await supabase
+        .from('asins')
+        .select('id')
+        .eq('brand', brandName);
+        
+      if (asinError || !brandASINs || brandASINs.length === 0) {
+        console.log('[BrandKeywords] No ASINs found for brand');
+        return [];
+      }
+      
+      const asinIds = brandASINs.map(a => a.id);
+      console.log(`[BrandKeywords] Found ${asinIds.length} ASINs for brand`);
+      
+      // Get recommended keywords for these ASINs
+      const { data: recommendedKeywords, error: keywordError } = await supabase
+        .from('asin_recommended_keywords')
+        .select('*')
+        .in('asin_id', asinIds)
+        .order('relevance_score', { ascending: false });
+        
+      if (keywordError || !recommendedKeywords) {
+        console.error('[BrandKeywords] Error fetching recommended keywords:', keywordError);
+        return [];
+      }
+      
+      console.log(`[BrandKeywords] Found ${recommendedKeywords.length} recommended keywords`);
+      
+      // Convert to BrandKeyword format
+      const keywords = recommendedKeywords.map(kw => ({
+        keyword: kw.keyword,
+        search_volume: kw.amazon_search_volume || kw.google_search_volume || 1000,
+        cpc: kw.google_cpc || 1.0,
+        competition: kw.google_competition || 0.5,
+        difficulty: Math.round((kw.google_competition || 0.5) * 100),
+        relevance_score: kw.relevance_score || 0.8,
+        keyword_type: (kw.search_intent === 'product' || kw.keyword.includes(brandName.toLowerCase())) ? 'product' : 'general' as BrandKeyword['keyword_type'],
+        source: 'asin_analysis' as const
+      }));
+      
+      // Remove duplicates and filter out branded keywords
+      const uniqueKeywords = new Map<string, typeof keywords[0]>();
+      keywords.forEach(kw => {
+        const keywordLower = kw.keyword.toLowerCase();
+        const brandLower = brandName.toLowerCase();
+        
+        // Skip if it contains the brand name (we want generic keywords)
+        if (!this.containsBrandName(keywordLower, brandLower)) {
+          uniqueKeywords.set(keywordLower, kw);
+        }
+      });
+      
+      return Array.from(uniqueKeywords.values());
+    } catch (error) {
+      console.error('[BrandKeywords] Error in getASINRecommendedKeywords:', error);
+      return [];
+    }
+  }
+
   /**
    * Pre-populate ASINs for a brand to improve keyword tracking performance
    */

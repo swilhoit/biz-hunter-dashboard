@@ -185,11 +185,18 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
           }
         }
         
-        // Import keywords from existing research (if available)
-        addLog('info', 'Checking for existing keyword research...');
-        updateProgress('Setup', 65, 100, 'Looking for keyword data...');
+        // Import keywords from ASIN recommended keywords table
+        addLog('info', 'Importing keywords from product analysis...');
+        updateProgress('Setup', 65, 100, 'Loading product keywords...');
         
-        // Get keywords from localStorage (if saved from keyword research tab)
+        const asinKeywords = await BrandKeywordService.getASINRecommendedKeywords(brandName);
+        if (asinKeywords.length > 0) {
+          addLog('success', `Found ${asinKeywords.length} keywords from product analysis`);
+          await BrandKeywordService.addBrandKeywords(brandName, asinKeywords);
+          addLog('success', `Imported ${asinKeywords.length} keywords from your products`);
+        }
+        
+        // Also check localStorage for manual keyword research
         const savedKeywordResearch = localStorage.getItem('keywordResearchData');
         if (savedKeywordResearch) {
           try {
@@ -208,7 +215,7 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
               
               if (importKeywords.length > 0) {
                 await BrandKeywordService.addBrandKeywords(brandName, importKeywords);
-                addLog('success', `Imported ${importKeywords.length} keywords from research`);
+                addLog('success', `Imported ${importKeywords.length} keywords from manual research`);
               }
             }
           } catch (error) {
@@ -342,13 +349,24 @@ export function BrandKeywordTracker({ brandName, onKeywordsUpdate }: BrandKeywor
       addLog('info', `Refreshing rankings for ${brandName}...`);
       updateProgress('Refreshing', 0, 100, 'Starting ranking update...');
       
-      // Clean non-brand rankings first
+      // Check for new ASIN keywords
+      addLog('info', 'Checking for new product keywords...');
+      updateProgress('Refreshing', 10, 100, 'Looking for new keywords...');
+      const asinKeywords = await BrandKeywordService.getASINRecommendedKeywords(brandName);
+      if (asinKeywords.length > 0) {
+        await BrandKeywordService.addBrandKeywords(brandName, asinKeywords);
+        addLog('success', `Added ${asinKeywords.length} new keywords from products`);
+      }
+      
+      // Clean non-brand rankings
+      updateProgress('Refreshing', 20, 100, 'Cleaning competitor rankings...');
       const cleanedCount = await BrandKeywordService.cleanupNonBrandRankings(brandName);
       if (cleanedCount > 0) {
         addLog('info', `Cleaned ${cleanedCount} competitor rankings`);
       }
       
       // Track rankings
+      updateProgress('Refreshing', 30, 100, 'Updating keyword rankings...');
       const progressCallback = (stage: string, current: number, total: number, message: string) => {
         updateProgress(stage, current, total, message);
       };
