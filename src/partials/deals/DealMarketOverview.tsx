@@ -51,10 +51,16 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
     setShowShareOfVoice(true);
   };
 
-  const handleReportComplete = async (report: any) => {
+  const handleReportComplete = async (report: StoredShareOfVoiceReport | null) => {
     // Report has been generated, refresh the status
     await checkForExistingReport();
     setGeneratingReport(false);
+    setShowShareOfVoice(false); // Hide the modal after completion
+  };
+
+  const handleReportCancel = () => {
+    setGeneratingReport(false);
+    setShowShareOfVoice(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -195,6 +201,7 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
               brandName={deal.amazon_store_name || deal.business_name}
               category={deal.amazon_category || deal.sub_industry}
               onComplete={handleReportComplete}
+              onCancel={handleReportCancel}
             />
           </div>
         )}
