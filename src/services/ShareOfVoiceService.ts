@@ -270,7 +270,7 @@ export class ShareOfVoiceService {
 
   /**
    * Generate a comprehensive Share of Voice report and store it
-   * Integrates with brand keyword tracking and competitor analysis
+   * Optimized with parallel processing for maximum speed
    */
   static async generateAndStoreReport(
     dealId: string, 
@@ -279,25 +279,37 @@ export class ShareOfVoiceService {
     isStoreUrl: boolean = false
   ): Promise<StoredShareOfVoiceReport | null> {
     try {
-      console.log(`[ShareOfVoice] Generating comprehensive report for ${brandName}`);
+      console.log(`[ShareOfVoice] 🚀 Starting optimized report generation for ${brandName}`);
+      const startTime = Date.now();
       
-      // Step 1: Ensure brand keywords are tracked
-      const brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
+      // Step 1: Ensure brand keywords are tracked (parallel setup if needed)
+      console.log(`[ShareOfVoice] ⏱️ Step 1: Checking brand keywords...`);
+      let brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
+      
       if (!brandKeywords || brandKeywords.length === 0) {
-        console.log(`[ShareOfVoice] No brand keywords found. Setting up keywords for ${brandName}...`);
+        console.log(`[ShareOfVoice] Setting up keywords for ${brandName}...`);
         
-        // Try to get keywords from ASIN data if available
-        const { data: asinKeywords } = await supabase
-          .from('asin_keywords' as any)
-          .select('keyword, search_volume, ppc_bid_exact')
-          .eq('brand', brandName)
-          .not('keyword', 'is', null)
-          .gt('search_volume', 0)
-          .limit(100);
+        // Try to get keywords from ASIN data in parallel
+        const [asinKeywordsResult, asinDataResult] = await Promise.allSettled([
+          supabase
+            .from('asin_keywords' as any)
+            .select('keyword, search_volume, ppc_bid_exact')
+            .eq('brand', brandName)
+            .not('keyword', 'is', null)
+            .gt('search_volume', 0)
+            .limit(100),
+          supabase
+            .from('asins' as any)
+            .select('asin, title, brand')
+            .eq('brand', brandName)
+            .limit(50)
+        ]);
 
-        if (asinKeywords && asinKeywords.length > 0) {
-          // Import keywords from ASIN data
-          const keywordsToAdd = asinKeywords.map(kw => ({
+        let keywordsToAdd: any[] = [];
+
+        // Process ASIN keywords if available
+        if (asinKeywordsResult.status === 'fulfilled' && asinKeywordsResult.value.data?.length > 0) {
+          keywordsToAdd = asinKeywordsResult.value.data.map(kw => ({
             keyword: kw.keyword,
             search_volume: kw.search_volume || 1000,
             cpc: kw.ppc_bid_exact || 1.0,
@@ -307,41 +319,104 @@ export class ShareOfVoiceService {
             keyword_type: 'product' as const,
             source: 'asin_import' as const
           }));
+        }
+        // Fallback to extracting keywords from ASIN titles
+        else if (asinDataResult.status === 'fulfilled' && asinDataResult.value.data?.length > 0) {
+          const extractedKeywords = new Set<string>();
+          asinDataResult.value.data.forEach(asin => {
+            if (asin.title) {
+              // Extract potential keywords from product titles
+              const words = asin.title.toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .split(/\s+/)
+                .filter(word => word.length > 3 && !['with', 'from', 'this', 'that', 'pack'].includes(word));
+              
+              // Create 2-3 word combinations
+              for (let i = 0; i < words.length - 1; i++) {
+                const twoWord = `${words[i]} ${words[i + 1]}`;
+                const threeWord = i < words.length - 2 ? `${words[i]} ${words[i + 1]} ${words[i + 2]}` : null;
+                
+                extractedKeywords.add(twoWord);
+                if (threeWord && threeWord.length <= 30) {
+                  extractedKeywords.add(threeWord);
+                }
+              }
+            }
+          });
 
+          keywordsToAdd = Array.from(extractedKeywords).slice(0, 50).map(keyword => ({
+            keyword,
+            search_volume: 1000,
+            cpc: 1.0,
+            competition: 0.5,
+            difficulty: 50,
+            relevance_score: 0.6,
+            keyword_type: 'product' as const,
+            source: 'title_extraction' as const
+          }));
+        }
+
+        if (keywordsToAdd.length > 0) {
           await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
-          console.log(`[ShareOfVoice] Added ${keywordsToAdd.length} keywords for ${brandName}`);
+          console.log(`[ShareOfVoice] ✅ Added ${keywordsToAdd.length} keywords for ${brandName}`);
+          brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
         } else {
-          throw new Error(`No keywords available for brand: ${brandName}. Please run keyword analysis first.`);
+          throw new Error(`No keywords available for brand: ${brandName}. Please add some ASINs or keywords first.`);
         }
       }
 
-      // Step 2: Track keyword rankings with competitor detection
-      console.log(`[ShareOfVoice] Tracking keyword rankings for ${brandName}...`);
-      const trackingResult = await BrandKeywordService.trackKeywordRankingsWithProgress(
-        brandName,
-        undefined, // Track all keywords
-        (stage, current, total, message) => {
-          console.log(`[ShareOfVoice] ${stage}: ${message} (${current}/${total})`);
-        },
-        100 // Full depth tracking
-      );
+      const step1Time = Date.now() - startTime;
+      console.log(`[ShareOfVoice] ⏱️ Step 1 completed in ${step1Time}ms`);
 
-      if (!trackingResult) {
-        throw new Error(`Failed to track keyword rankings for ${brandName}`);
+      // Step 2: Start parallel processes for ranking tracking and existing data analysis
+      console.log(`[ShareOfVoice] ⏱️ Step 2: Starting parallel ranking analysis...`);
+      const step2Start = Date.now();
+
+      // Start ranking tracking and data fetching in parallel
+      const [trackingResult, existingAnalysisResults] = await Promise.allSettled([
+        // Tracking with optimized settings
+        BrandKeywordService.trackKeywordRankingsWithProgress(
+          brandName,
+          undefined, // Track all keywords
+          (stage, current, total, message) => {
+            console.log(`[ShareOfVoice] ${stage}: ${message} (${current}/${total})`);
+          },
+          100 // Full depth tracking
+        ),
+        // Parallel data fetching for existing analysis
+        Promise.allSettled([
+          this.getExistingShareOfVoiceData(brandName),
+          CompetitorAnalysisService.getMarketShareAnalysis(brandName),
+          CompetitorAnalysisService.getCompetitorBrands(brandName)
+        ])
+      ]);
+
+      if (trackingResult.status === 'rejected' || !trackingResult.value) {
+        throw new Error(`Failed to track keyword rankings: ${trackingResult.status === 'rejected' ? trackingResult.reason : 'Unknown error'}`);
       }
 
-      // Step 3: Generate Share of Voice metrics
-      console.log(`[ShareOfVoice] Calculating Share of Voice metrics...`);
-      const shareOfVoiceMetrics = await this.calculateShareOfVoice(brandName);
+      const step2Time = Date.now() - step2Start;
+      console.log(`[ShareOfVoice] ⏱️ Step 2 completed in ${step2Time}ms`);
 
-      // Step 4: Get competitor analysis data
-      console.log(`[ShareOfVoice] Analyzing competitive landscape...`);
-      const competitorInsights = await CompetitorAnalysisService.generateCompetitorInsights(brandName);
-      const marketConcentration = await CompetitorAnalysisService.calculateMarketConcentration(brandName);
+      // Step 3: Generate all analyses in parallel
+      console.log(`[ShareOfVoice] ⏱️ Step 3: Generating parallel analyses...`);
+      const step3Start = Date.now();
 
-      // Step 5: Compile comprehensive report data
+      const [sovMetrics, competitorInsights, marketConcentration] = await Promise.all([
+        this.calculateShareOfVoice(brandName),
+        CompetitorAnalysisService.generateCompetitorInsights(brandName),
+        CompetitorAnalysisService.calculateMarketConcentration(brandName)
+      ]);
+
+      const step3Time = Date.now() - step3Start;
+      console.log(`[ShareOfVoice] ⏱️ Step 3 completed in ${step3Time}ms`);
+
+      // Step 4: Compile and store report
+      console.log(`[ShareOfVoice] ⏱️ Step 4: Compiling and storing report...`);
+      const step4Start = Date.now();
+
       const reportData = {
-        shareOfVoice: shareOfVoiceMetrics,
+        shareOfVoice: sovMetrics,
         competitorAnalysis: {
           insights: competitorInsights,
           marketConcentration,
@@ -351,26 +426,54 @@ export class ShareOfVoiceService {
           brandName,
           category,
           isStoreUrl,
-          totalKeywordsTracked: shareOfVoiceMetrics.total_keywords_tracked,
-          keywordsWithRankings: shareOfVoiceMetrics.keywords_with_rankings,
+          totalKeywordsTracked: sovMetrics.total_keywords_tracked,
+          keywordsWithRankings: sovMetrics.keywords_with_rankings,
           competitorsDetected: competitorInsights.length,
-          generatedAt: new Date().toISOString()
+          generatedAt: new Date().toISOString(),
+          processingTime: {
+            step1_keywords: step1Time,
+            step2_tracking: step2Time,
+            step3_analysis: step3Time,
+            total: Date.now() - startTime
+          }
         }
       };
 
-      // Step 6: Store the report
-      console.log(`[ShareOfVoice] Storing comprehensive report...`);
       const storedReport = await this.saveReport(dealId, brandName, reportData);
+      const step4Time = Date.now() - step4Start;
+      const totalTime = Date.now() - startTime;
 
+      console.log(`[ShareOfVoice] ⏱️ Step 4 completed in ${step4Time}ms`);
+      console.log(`[ShareOfVoice] 🎉 TOTAL TIME: ${totalTime}ms (${(totalTime/1000).toFixed(1)}s)`);
+      
       if (storedReport) {
-        console.log(`[ShareOfVoice] ✅ Successfully generated and stored comprehensive report for ${brandName}`);
-        console.log(`[ShareOfVoice] Report includes: ${shareOfVoiceMetrics.total_keywords_tracked} keywords, ${competitorInsights.length} competitors`);
+        console.log(`[ShareOfVoice] ✅ Report generated: ${sovMetrics.total_keywords_tracked} keywords, ${competitorInsights.length} competitors`);
+        console.log(`[ShareOfVoice] 📊 Performance: Keywords(${step1Time}ms) + Tracking(${step2Time}ms) + Analysis(${step3Time}ms) + Storage(${step4Time}ms)`);
       }
 
       return storedReport;
     } catch (error) {
       console.error('[ShareOfVoice] Error generating and storing report:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Helper method to get existing share of voice data without recalculation
+   */
+  private static async getExistingShareOfVoiceData(brandName: string): Promise<any> {
+    try {
+      const { data: rankings } = await supabase
+        .from('keyword_rankings' as any)
+        .select('brand_keyword_id, position, asin')
+        .eq('is_brand_result', true)
+        .not('position', 'is', null)
+        .limit(1000);
+
+      return rankings || [];
+    } catch (error) {
+      console.error('Error fetching existing SOV data:', error);
+      return [];
     }
   }
 }
