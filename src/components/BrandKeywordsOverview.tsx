@@ -749,7 +749,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
             </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <select
               value={selectedBrand}
               onChange={(e) => setSelectedBrand(e.target.value)}
@@ -764,19 +764,17 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
             <button
               onClick={loadBrandKeywordData}
               disabled={!selectedBrand || loading}
-              className="btn bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             
-            {(() => {
-              console.log('[BrandKeywordsOverview] Button state:', { hasSetupKeywords, selectedBrand });
-              return !hasSetupKeywords && selectedBrand ? (
+            {!hasSetupKeywords && selectedBrand ? (
                 <button
                   onClick={setupKeywordsFromASINData}
                   disabled={fetchingRankings}
-                  className="btn bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className={`w-4 h-4 mr-2 ${fetchingRankings ? 'animate-pulse' : ''}`} />
                   {fetchingRankings ? 'Setting up...' : 'Setup Keywords'}
@@ -785,19 +783,18 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
                 <button
                   onClick={fetchRankingsForAllASINs}
                   disabled={!selectedBrand || fetchingRankings || !hasSetupKeywords}
-                  className="btn bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title={!hasSetupKeywords ? 'Please setup keywords first' : ''}
                 >
                   <Target className={`w-4 h-4 mr-2 ${fetchingRankings ? 'animate-pulse' : ''}`} />
                   {fetchingRankings ? 'Fetching Rankings...' : 'Fetch Rankings'}
                 </button>
-              );
-            })()}
+              )}
             
             <button
               onClick={exportToCSV}
               disabled={keywords.length === 0}
-              className="btn bg-gray-500 hover:bg-gray-600 text-white disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="w-4 h-4 mr-2" />
               Export
