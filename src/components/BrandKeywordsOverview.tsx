@@ -36,6 +36,7 @@ import { BrandKeywordService } from '../services/BrandKeywordService';
 
 interface BrandKeywordsOverviewProps {
   brandName?: string;
+  brandId?: string;
 }
 
 interface KeywordPerformance {
@@ -68,9 +69,10 @@ interface BrandKeywordStats {
   total_search_volume: number;
 }
 
-export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeywordsOverviewProps) {
+export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propBrandId }: BrandKeywordsOverviewProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>(propBrandName || '');
-  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [selectedBrandId, setSelectedBrandId] = useState<string>(propBrandId || '');
+  const [availableBrands, setAvailableBrands] = useState<Array<{id: string; name: string}>>([]);
   const [keywords, setKeywords] = useState<KeywordPerformance[]>([]);
   const [stats, setStats] = useState<BrandKeywordStats | null>(null);
   const [loading, setLoading] = useState(false);
