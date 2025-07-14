@@ -276,17 +276,21 @@ export class ShareOfVoiceService {
     dealId: string, 
     brandName: string, 
     category?: string, 
-    isStoreUrl: boolean = false
+    isStoreUrl: boolean = false,
+    onProgress?: (stage: string, current: number, total: number, message: string) => void
   ): Promise<StoredShareOfVoiceReport | null> {
     try {
       console.log(`[ShareOfVoice] 🚀 Starting optimized report generation for ${brandName}`);
       const startTime = Date.now();
       
       // Step 1: Ensure brand keywords are tracked (parallel setup if needed)
+      onProgress?.('Initializing', 5, 100, 'Starting Share of Voice report generation...');
       console.log(`[ShareOfVoice] ⏱️ Step 1: Checking brand keywords...`);
+      onProgress?.('Loading Keywords', 10, 100, 'Checking existing brand keywords...');
       let brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
       
       if (!brandKeywords || brandKeywords.length === 0) {
+        onProgress?.('Setting Up', 15, 100, `No existing keywords found. Setting up keywords for ${brandName}...`);
         console.log(`[ShareOfVoice] Setting up keywords for ${brandName}...`);
         
         // Try to get keywords from ASIN data in parallel
@@ -357,6 +361,7 @@ export class ShareOfVoiceService {
         }
 
         if (keywordsToAdd.length > 0) {
+          onProgress?.('Adding Keywords', 20, 100, `Adding ${keywordsToAdd.length} keywords to brand tracking...`);
           await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
           console.log(`[ShareOfVoice] ✅ Added ${keywordsToAdd.length} keywords for ${brandName}`);
           brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
@@ -369,19 +374,35 @@ export class ShareOfVoiceService {
       console.log(`[ShareOfVoice] ⏱️ Step 1 completed in ${step1Time}ms`);
 
       // Step 2: Start parallel processes for ranking tracking and existing data analysis
+      onProgress?.('Optimizing Strategy', 25, 100, 'Prioritizing high-value keywords for faster results...');
       console.log(`[ShareOfVoice] ⏱️ Step 2: Starting parallel ranking analysis...`);
       const step2Start = Date.now();
 
+      // Prioritize keywords by search volume for faster initial results
+      const priorityKeywords = brandKeywords
+        .sort((a, b) => (b.search_volume || 0) - (a.search_volume || 0))
+        .slice(0, Math.min(30, brandKeywords.length)); // Top 30 high-value keywords first
+      
+      const remainingKeywords = brandKeywords
+        .sort((a, b) => (b.search_volume || 0) - (a.search_volume || 0))
+        .slice(30);
+
+      onProgress?.('Submitting', 30, 100, `Prioritizing ${priorityKeywords.length} high-volume keywords for fast results`);
+      console.log(`[ShareOfVoice] Prioritizing ${priorityKeywords.length} high-volume keywords for fast results`);
+
       // Start ranking tracking and data fetching in parallel
       const [trackingResult, existingAnalysisResults] = await Promise.allSettled([
-        // Tracking with optimized settings
+        // Track priority keywords first with reduced depth for speed
         BrandKeywordService.trackKeywordRankingsWithProgress(
           brandName,
-          undefined, // Track all keywords
+          priorityKeywords.map(k => k.keyword), // Track priority keywords first
           (stage, current, total, message) => {
+            // Map internal progress to external progress (30-70%)
+            const progressPercent = Math.floor(30 + (current / total) * 40);
+            onProgress?.(stage, progressPercent, 100, message);
             console.log(`[ShareOfVoice] ${stage}: ${message} (${current}/${total})`);
           },
-          100 // Full depth tracking
+          20 // Reduced depth for speed - only top 20 results needed
         ),
         // Parallel data fetching for existing analysis
         Promise.allSettled([
@@ -398,7 +419,24 @@ export class ShareOfVoiceService {
       const step2Time = Date.now() - step2Start;
       console.log(`[ShareOfVoice] ⏱️ Step 2 completed in ${step2Time}ms`);
 
-      // Step 3: Generate all analyses in parallel
+      // Background processing for remaining keywords (don't wait for it)
+      if (remainingKeywords.length > 0) {
+        console.log(`[ShareOfVoice] 🔄 Starting background processing for ${remainingKeywords.length} additional keywords`);
+        // Process remaining keywords in background with higher depth
+        BrandKeywordService.trackKeywordRankingsWithProgress(
+          brandName,
+          remainingKeywords.map(k => k.keyword),
+          (stage, current, total, message) => {
+            console.log(`[ShareOfVoice] Background: ${message} (${current}/${total})`);
+          },
+          50 // Higher depth for comprehensive data
+        ).catch(error => {
+          console.warn(`[ShareOfVoice] Background processing failed (non-critical):`, error);
+        });
+      }
+
+      // Step 3: Generate all analyses in parallel (using priority keyword data)
+      onProgress?.('Analyzing', 70, 100, 'Generating Share of Voice and competitor analyses...');
       console.log(`[ShareOfVoice] ⏱️ Step 3: Generating parallel analyses...`);
       const step3Start = Date.now();
 
@@ -412,6 +450,7 @@ export class ShareOfVoiceService {
       console.log(`[ShareOfVoice] ⏱️ Step 3 completed in ${step3Time}ms`);
 
       // Step 4: Compile and store report
+      onProgress?.('Finalizing', 85, 100, 'Compiling and storing comprehensive report...');
       console.log(`[ShareOfVoice] ⏱️ Step 4: Compiling and storing report...`);
       const step4Start = Date.now();
 
@@ -443,6 +482,7 @@ export class ShareOfVoiceService {
       const step4Time = Date.now() - step4Start;
       const totalTime = Date.now() - startTime;
 
+      onProgress?.('Complete', 100, 100, 'Share of Voice report generated successfully!');
       console.log(`[ShareOfVoice] ⏱️ Step 4 completed in ${step4Time}ms`);
       console.log(`[ShareOfVoice] 🎉 TOTAL TIME: ${totalTime}ms (${(totalTime/1000).toFixed(1)}s)`);
       

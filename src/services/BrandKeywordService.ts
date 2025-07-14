@@ -66,7 +66,7 @@ export class BrandKeywordService {
   private static rateLimitTracker = {
     requestsInLastMinute: [] as number[],
     lastRateLimitError: 0,
-    dynamicBatchSize: 50 // Start with 50, adjust based on rate limit feedback
+    dynamicBatchSize: 80 // Start with 80 for faster processing, adjust based on rate limit feedback
   };
 
   /**
@@ -677,15 +677,36 @@ export class BrandKeywordService {
 
       console.log(`[BrandKeywords] Starting parallel ranking tracking for ${keywordsToTrack.length} keywords`);
       
+      // Cache optimization: Check for recent ranking data (less than 2 hours old)
+      onProgress?.('Checking Cache', 15, 100, 'Checking for recent ranking data...');
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: recentRankings } = await supabase
+        .from('keyword_rankings' as any)
+        .select('brand_keyword_id, created_at')
+        .in('brand_keyword_id', keywordsToTrack.map(k => k.id).filter(Boolean))
+        .gte('created_at', twoHoursAgo);
+      
+      // Filter out keywords that have recent data
+      const recentlyTrackedIds = new Set(recentRankings?.map(r => r.brand_keyword_id) || []);
+      const keywordsNeedingUpdate = keywordsToTrack.filter(k => k.id && !recentlyTrackedIds.has(k.id));
+      const cachedCount = keywordsToTrack.length - keywordsNeedingUpdate.length;
+      
+      if (cachedCount > 0) {
+        console.log(`[BrandKeywords] ⚡ Using cached data for ${cachedCount} keywords, tracking ${keywordsNeedingUpdate.length} fresh`);
+        onProgress?.('Cache Optimization', 20, 100, `Using cached data for ${cachedCount} keywords`);
+      }
+      
+      // Use filtered list for actual tracking
+      const finalKeywordsToTrack = keywordsNeedingUpdate.length > 0 ? keywordsNeedingUpdate : keywordsToTrack;
+      
       // Debug: Log first few keywords
-      if (keywordsToTrack.length > 0) {
-        console.log(`[BrandKeywords] Sample keywords to track:`, keywordsToTrack.slice(0, 3).map(k => ({
+      if (finalKeywordsToTrack.length > 0) {
+        console.log(`[BrandKeywords] Sample keywords to track:`, finalKeywordsToTrack.slice(0, 3).map(k => ({
           id: k.id,
           keyword: k.keyword,
           search_volume: k.search_volume
         })));
       }
-      console.log(`[BrandKeywords] DEBUG - Sample keyword with ID:`, keywordsToTrack[0]);
       
       // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks per request)
       const maxBatchSize = 100;
@@ -694,17 +715,22 @@ export class BrandKeywordService {
       // Use dynamic parallelization based on rate limit feedback
       const maxParallelBatches = this.getOptimalBatchSize(); // Dynamic batch size based on rate limits
       
-      onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
-      onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
+      // Skip API calls if no keywords need updating (all cached)
+      if (finalKeywordsToTrack.length === 0) {
+        console.log(`[BrandKeywords] ⚡ All keyword data is cached and recent - no API calls needed!`);
+        onProgress?.('Complete', 100, 100, 'All keyword data is up to date!');
+        return true;
+      }
+
+      onProgress?.('Submitting', 25, 100, `Found ${keywordsToTrack.length} total keywords (${cachedCount} cached, ${finalKeywordsToTrack.length} to track)`);
+      onProgress?.('Submitting', 30, 100, `Preparing to submit ${Math.ceil(finalKeywordsToTrack.length / maxBatchSize)} batch${Math.ceil(finalKeywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
 
       const credentials = btoa(`${username}:${password}`);
       
-      onProgress?.('Submitting Tasks', 25, 100, 'Creating task batches...');
-      
-      // Split keywords into batches
+      // Split keywords into batches (using filtered list)
       const batches: BrandKeyword[][] = [];
-      for (let i = 0; i < keywordsToTrack.length; i += maxBatchSize) {
-        batches.push(keywordsToTrack.slice(i, i + maxBatchSize));
+      for (let i = 0; i < finalKeywordsToTrack.length; i += maxBatchSize) {
+        batches.push(finalKeywordsToTrack.slice(i, i + maxBatchSize));
       }
       
       // Process batches in parallel groups
@@ -1364,6 +1390,14 @@ export class BrandKeywordService {
         console.log(`[BrandKeywords] Task ${taskId} is still ${status} - will retry later`);
         // Throw a specific error that will be caught and handled gracefully
         const error = new Error(`Task still ${status}`);
+        (error as any).isTemporary = true;
+        throw error;
+      }
+      
+      // Handle temporary errors that should be retried
+      if (task.status_code === 40601) {
+        console.log(`[BrandKeywords] Task ${taskId} handed off - retrying later (status: ${task.status_code})`);
+        const error = new Error(`Task handed off - temporary status`);
         (error as any).isTemporary = true;
         throw error;
       }
