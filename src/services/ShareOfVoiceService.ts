@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { BrandKeywordService } from './BrandKeywordService';
+import { CompetitorAnalysisService } from './CompetitorAnalysisService';
 
 export interface ShareOfVoiceMetrics {
   brand: string;
@@ -35,50 +37,66 @@ export interface StoredShareOfVoiceReport {
 
 export class ShareOfVoiceService {
   /**
-   * Calculate Share of Voice metrics for a brand
+   * Calculate Share of Voice metrics for a brand using new brand tracking system
    */
   static async calculateShareOfVoice(brandName: string): Promise<ShareOfVoiceMetrics> {
     try {
-      // Get brand keyword aggregate data
-      const { data: aggregateData, error } = await supabase
-        .from('brand_keyword_aggregate')
+      // Get brand keywords from the new brand tracking system
+      const brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
+      
+      if (!brandKeywords || brandKeywords.length === 0) {
+        throw new Error(`No keywords found for brand: ${brandName}. Please run keyword tracking first.`);
+      }
+
+      // Get detailed ranking data from keyword_rankings table
+      const keywordIds = brandKeywords.map(k => k.id).filter(Boolean);
+      const { data: rankingDetails, error } = await supabase
+        .from('keyword_rankings' as any)
         .select('*')
-        .eq('brand', brandName);
-      
-      if (error) throw error;
-      
-      // Get detailed ranking positions
-      const { data: rankingDetails } = await supabase
-        .from('brand_keyword_performance')
-        .select('keyword, position, asin')
-        .eq('brand_name', brandName)
+        .in('brand_keyword_id', keywordIds)
         .eq('is_brand_result', true)
         .not('position', 'is', null);
       
-      // Create a map of keyword to positions
+      if (error) {
+        console.error('Error fetching ranking details:', error);
+      }
+
+      // Create a map of keyword to brand positions
       const keywordPositionMap = new Map<string, number[]>();
       rankingDetails?.forEach(r => {
-        const key = r.keyword.toLowerCase();
-        if (!keywordPositionMap.has(key)) {
-          keywordPositionMap.set(key, []);
+        const keyword = brandKeywords.find(k => k.id === r.brand_keyword_id);
+        if (keyword) {
+          const key = keyword.keyword.toLowerCase();
+          if (!keywordPositionMap.has(key)) {
+            keywordPositionMap.set(key, []);
+          }
+          keywordPositionMap.get(key)?.push(r.position);
         }
-        keywordPositionMap.get(key)?.push(r.position);
       });
-      
-      // Calculate metrics
-      const keywordsWithRankings = aggregateData?.filter(k => k.asins_ranking > 0) || [];
-      const totalSearchVolume = aggregateData?.reduce((sum, k) => sum + (k.search_volume || 0), 0) || 0;
+
+      // Get competitor data for comparison
+      const competitorData = await CompetitorAnalysisService.getMarketShareAnalysis(brandName);
+      const ourBrandData = competitorData.find(c => 
+        c.brand_name.toLowerCase() === brandName.toLowerCase()
+      );
+
+      // Calculate metrics using brand keywords data
+      const totalSearchVolume = brandKeywords.reduce((sum, k) => sum + (k.search_volume || 0), 0);
+      const keywordsWithRankings = brandKeywords.filter(k => {
+        const positions = keywordPositionMap.get(k.keyword.toLowerCase()) || [];
+        return positions.length > 0;
+      });
       
       // Calculate weighted share of voice
       let weightedSoV = 0;
-      const keywordBreakdown = aggregateData?.map(kw => {
+      const keywordBreakdown = brandKeywords.map(kw => {
         const positions = keywordPositionMap.get(kw.keyword.toLowerCase()) || [];
         const top10Positions = positions.filter(p => p <= 10).length;
         const dominanceScore = top10Positions > 0 ? (top10Positions / 10) * 100 : 0;
         
         // Calculate this keyword's contribution to overall SoV
         // Weight by search volume and dominance
-        const volumeWeight = kw.search_volume / totalSearchVolume;
+        const volumeWeight = totalSearchVolume > 0 ? (kw.search_volume / totalSearchVolume) : 0;
         const contribution = dominanceScore * volumeWeight;
         weightedSoV += contribution;
         
@@ -89,7 +107,7 @@ export class ShareOfVoiceService {
           positions_owned: positions.sort((a, b) => a - b),
           contribution_to_sov: contribution * 100 // Convert to percentage
         };
-      }) || [];
+      });
       
       // Calculate other metrics
       const avgDominanceScore = keywordBreakdown.reduce((sum, k) => sum + k.dominance_score, 0) / 
@@ -102,17 +120,28 @@ export class ShareOfVoiceService {
       const top10Keywords = keywordBreakdown.filter(k => 
         k.positions_owned.some(p => p <= 10)
       ).length;
+
+      // Generate competitor comparison from our new competitor analysis
+      const topCompetitors = competitorData
+        .filter(c => c.brand_name.toLowerCase() !== brandName.toLowerCase())
+        .slice(0, 5)
+        .map(c => ({
+          competitor: c.brand_name,
+          share_of_voice: c.estimated_market_share,
+          overlap_keywords: c.total_keywords
+        }));
       
       return {
         brand: brandName,
         period: new Date().toISOString().split('T')[0],
-        total_keywords_tracked: aggregateData?.length || 0,
+        total_keywords_tracked: brandKeywords.length,
         keywords_with_rankings: keywordsWithRankings.length,
         total_search_volume: totalSearchVolume,
-        weighted_share_of_voice: weightedSoV,
+        weighted_share_of_voice: ourBrandData?.estimated_market_share || weightedSoV,
         average_dominance_score: avgDominanceScore,
-        top_3_share: (top3Keywords / (aggregateData?.length || 1)) * 100,
-        top_10_share: (top10Keywords / (aggregateData?.length || 1)) * 100,
+        top_3_share: (top3Keywords / (brandKeywords.length || 1)) * 100,
+        top_10_share: (top10Keywords / (brandKeywords.length || 1)) * 100,
+        competitor_comparison: topCompetitors,
         keyword_breakdown: keywordBreakdown
           .filter(k => k.dominance_score > 0)
           .sort((a, b) => b.contribution_to_sov - a.contribution_to_sov)
@@ -236,6 +265,112 @@ export class ShareOfVoiceService {
     } catch (error) {
       console.error('Error in saveReport:', error);
       return null;
+    }
+  }
+
+  /**
+   * Generate a comprehensive Share of Voice report and store it
+   * Integrates with brand keyword tracking and competitor analysis
+   */
+  static async generateAndStoreReport(
+    dealId: string, 
+    brandName: string, 
+    category?: string, 
+    isStoreUrl: boolean = false
+  ): Promise<StoredShareOfVoiceReport | null> {
+    try {
+      console.log(`[ShareOfVoice] Generating comprehensive report for ${brandName}`);
+      
+      // Step 1: Ensure brand keywords are tracked
+      const brandKeywords = await BrandKeywordService.getBrandKeywords(brandName);
+      if (!brandKeywords || brandKeywords.length === 0) {
+        console.log(`[ShareOfVoice] No brand keywords found. Setting up keywords for ${brandName}...`);
+        
+        // Try to get keywords from ASIN data if available
+        const { data: asinKeywords } = await supabase
+          .from('asin_keywords' as any)
+          .select('keyword, search_volume, ppc_bid_exact')
+          .eq('brand', brandName)
+          .not('keyword', 'is', null)
+          .gt('search_volume', 0)
+          .limit(100);
+
+        if (asinKeywords && asinKeywords.length > 0) {
+          // Import keywords from ASIN data
+          const keywordsToAdd = asinKeywords.map(kw => ({
+            keyword: kw.keyword,
+            search_volume: kw.search_volume || 1000,
+            cpc: kw.ppc_bid_exact || 1.0,
+            competition: 0.5,
+            difficulty: 50,
+            relevance_score: 0.8,
+            keyword_type: 'product' as const,
+            source: 'asin_import' as const
+          }));
+
+          await BrandKeywordService.addBrandKeywords(brandName, keywordsToAdd);
+          console.log(`[ShareOfVoice] Added ${keywordsToAdd.length} keywords for ${brandName}`);
+        } else {
+          throw new Error(`No keywords available for brand: ${brandName}. Please run keyword analysis first.`);
+        }
+      }
+
+      // Step 2: Track keyword rankings with competitor detection
+      console.log(`[ShareOfVoice] Tracking keyword rankings for ${brandName}...`);
+      const trackingResult = await BrandKeywordService.trackKeywordRankingsWithProgress(
+        brandName,
+        undefined, // Track all keywords
+        (stage, current, total, message) => {
+          console.log(`[ShareOfVoice] ${stage}: ${message} (${current}/${total})`);
+        },
+        100 // Full depth tracking
+      );
+
+      if (!trackingResult) {
+        throw new Error(`Failed to track keyword rankings for ${brandName}`);
+      }
+
+      // Step 3: Generate Share of Voice metrics
+      console.log(`[ShareOfVoice] Calculating Share of Voice metrics...`);
+      const shareOfVoiceMetrics = await this.calculateShareOfVoice(brandName);
+
+      // Step 4: Get competitor analysis data
+      console.log(`[ShareOfVoice] Analyzing competitive landscape...`);
+      const competitorInsights = await CompetitorAnalysisService.generateCompetitorInsights(brandName);
+      const marketConcentration = await CompetitorAnalysisService.calculateMarketConcentration(brandName);
+
+      // Step 5: Compile comprehensive report data
+      const reportData = {
+        shareOfVoice: shareOfVoiceMetrics,
+        competitorAnalysis: {
+          insights: competitorInsights,
+          marketConcentration,
+          generatedAt: new Date().toISOString()
+        },
+        metadata: {
+          brandName,
+          category,
+          isStoreUrl,
+          totalKeywordsTracked: shareOfVoiceMetrics.total_keywords_tracked,
+          keywordsWithRankings: shareOfVoiceMetrics.keywords_with_rankings,
+          competitorsDetected: competitorInsights.length,
+          generatedAt: new Date().toISOString()
+        }
+      };
+
+      // Step 6: Store the report
+      console.log(`[ShareOfVoice] Storing comprehensive report...`);
+      const storedReport = await this.saveReport(dealId, brandName, reportData);
+
+      if (storedReport) {
+        console.log(`[ShareOfVoice] ✅ Successfully generated and stored comprehensive report for ${brandName}`);
+        console.log(`[ShareOfVoice] Report includes: ${shareOfVoiceMetrics.total_keywords_tracked} keywords, ${competitorInsights.length} competitors`);
+      }
+
+      return storedReport;
+    } catch (error) {
+      console.error('[ShareOfVoice] Error generating and storing report:', error);
+      throw error;
     }
   }
 }
