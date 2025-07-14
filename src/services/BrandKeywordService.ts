@@ -29,6 +29,9 @@ interface KeywordRanking {
   is_brand_result?: boolean;
   brand_match_score?: number;
   brand_match_reason?: string;
+  detected_brand?: string;
+  detected_brand_confidence?: number;
+  is_competitor?: boolean;
 }
 
 interface SerpFeature {
@@ -1485,10 +1488,12 @@ export class BrandKeywordService {
         const rankingsBatch: Partial<KeywordRanking>[] = [];
         const featuresBatch: Partial<SerpFeature>[] = [];
         const brandMatches: string[] = [];
+        const competitorBrands = new Map<string, number>(); // Track competitor brand occurrences
         let nonBrandCount = 0;
         let unknownBrandCount = 0;
         
         for (const amazonResult of organicResults) {
+          let extractedBrand = ''; // Declare at the beginning of the loop
           if (!amazonResult.asin) {
             continue; // Skip results without ASIN
           }
@@ -1501,7 +1506,6 @@ export class BrandKeywordService {
             unknownBrandCount++;
             
             // Extract potential brand from title (usually first words before certain patterns)
-            let extractedBrand = '';
             const titleLower = amazonResult.title?.toLowerCase() || '';
             const title = amazonResult.title || '';
             
@@ -1565,6 +1569,26 @@ export class BrandKeywordService {
           // Compare brands (case-insensitive)
           const isBrandMatch = currentBrand && currentBrand.toLowerCase() === brandName.toLowerCase();
           
+          // Always store ranking data with competitor brand detection
+          const ranking: Partial<KeywordRanking> = {
+            brand_keyword_id: keyword.id,
+            asin: amazonResult.asin,
+            position: amazonResult.rank_absolute || amazonResult.position || 0,
+            page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute || 1) / 16),
+            url: amazonResult.url,
+            title: amazonResult.title,
+            domain: 'amazon.com',
+            location_code: 2840,
+            language_code: 'en_US',
+            check_date: new Date().toISOString(),
+            is_brand_result: isBrandMatch,
+            brand_match_score: isBrandMatch ? 1.0 : 0.0,
+            brand_match_reason: isBrandMatch ? 'database_brand_match' : 'competitor_product',
+            detected_brand: currentBrand || extractedBrand || null,
+            detected_brand_confidence: currentBrand ? 1.0 : (extractedBrand ? 0.7 : 0.0),
+            is_competitor: !isBrandMatch && currentBrand !== null
+          };
+          
           if (isBrandMatch) {
             console.log(`[BrandKeywords] DEBUG - Creating ranking for keyword ID: ${keyword.id}, keyword: "${keyword.keyword}"`);
             
@@ -1573,46 +1597,47 @@ export class BrandKeywordService {
               continue;
             }
             
-            const ranking: Partial<KeywordRanking> = {
-              brand_keyword_id: keyword.id,
-              asin: amazonResult.asin,
-              position: amazonResult.rank_absolute || amazonResult.position || 0,
-              page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute || 1) / 16),
-              url: amazonResult.url,
-              title: amazonResult.title,
-              domain: 'amazon.com',
-              location_code: 2840,
-              language_code: 'en_US',
-              check_date: new Date().toISOString(),
-              is_brand_result: true,
-              brand_match_score: 1.0, // 100% confidence from database
-              brand_match_reason: 'database_brand_match'
-            };
-
-            rankingsBatch.push(ranking);
             brandMatches.push(`"${keyword.keyword}": Position ${ranking.position} - ${amazonResult.title}`);
           } else {
             nonBrandCount++;
+            
+            // Track competitor brands
+            if (currentBrand && currentBrand !== brandName) {
+              competitorBrands.set(currentBrand, (competitorBrands.get(currentBrand) || 0) + 1);
+            }
           }
+          
+          // Add ranking to batch (both brand and competitor rankings)
+          rankingsBatch.push(ranking);
         }
         
         // Always log filtering results to confirm it's working
-        console.log(`[BrandKeywords] Keyword "${keyword.keyword}" filtering complete:`);
-        console.log(`  - ${brandMatches.length} ${brandName} products found and stored`);
-        console.log(`  - ${nonBrandCount} products from other brands filtered out`);
+        console.log(`[BrandKeywords] Keyword "${keyword.keyword}" analysis complete:`);
+        console.log(`  - ${brandMatches.length} ${brandName} products found`);
+        console.log(`  - ${nonBrandCount} products from other brands tracked`);
         console.log(`  - ${unknownBrandCount} unknown ASINs (${unknownBrandCount > 0 ? 'added to database' : 'none'})`);
+        
+        // Log competitor brands found
+        if (competitorBrands.size > 0) {
+          console.log(`  - Competitor brands detected:`);
+          Array.from(competitorBrands.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by occurrence count
+            .slice(0, 5) // Top 5 competitors
+            .forEach(([brand, count]) => {
+              console.log(`    • ${brand}: ${count} products`);
+            });
+        }
 
         // Add to batch instead of immediate insert
         if (rankingsBatch.length > 0 || featuresBatch.length > 0) {
           console.log(`[BrandKeywords] DEBUG - About to add to batch:`);
-          console.log(`  - Rankings: ${rankingsBatch.length}`);
+          console.log(`  - Total rankings: ${rankingsBatch.length} (${brandMatches.length} brand, ${rankingsBatch.length - brandMatches.length} competitors)`);
           console.log(`  - Features: ${featuresBatch.length}`);
-          console.log(`  - Sample ranking:`, rankingsBatch[0]);
           
           await this.addToBatch(rankingsBatch, featuresBatch);
           console.log(`[BrandKeywords] Added ${rankingsBatch.length} rankings and ${featuresBatch.length} features to batch for keyword: ${keyword.keyword}`);
         } else {
-          console.warn(`[BrandKeywords] No ${brandName} products found to store for keyword: ${keyword.keyword}`);
+          console.warn(`[BrandKeywords] No products found to store for keyword: ${keyword.keyword}`);
         }
 
         // Log brand matches

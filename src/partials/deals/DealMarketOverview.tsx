@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ShareOfVoiceService, StoredShareOfVoiceReport } from '../../services/ShareOfVoiceService';
 import ShareOfVoiceReportWithStorage from '../../components/analytics/ShareOfVoiceReportWithStorage';
+import { CompetitorMarketAnalysis } from '../../components/analytics/CompetitorMarketAnalysis';
 
 interface DealMarketOverviewProps {
   deal: Deal;
@@ -295,6 +296,14 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
           </div>
         )}
       </div>
+
+      {/* Competitor Market Analysis */}
+      {(reportExists || existingReport) && (
+        <CompetitorMarketAnalysis 
+          brandName={deal.brand_name || deal.business_name || 'Unknown Brand'} 
+          className="mt-6"
+        />
+      )}
     </div>
   );
 }
