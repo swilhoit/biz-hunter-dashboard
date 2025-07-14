@@ -24,6 +24,15 @@ export interface ShareOfVoiceMetrics {
   }>;
 }
 
+export interface StoredShareOfVoiceReport {
+  id: string;
+  deal_id: string;
+  brand_name: string;
+  report_data: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export class ShareOfVoiceService {
   /**
    * Calculate Share of Voice metrics for a brand
@@ -150,5 +159,83 @@ export class ShareOfVoiceService {
       share_of_voice: current.weighted_share_of_voice,
       keywords_tracked: current.total_keywords_tracked
     }];
+  }
+
+  /**
+   * Check if a Share of Voice report exists for a deal
+   */
+  static async checkReportExists(dealId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('share_of_voice_reports' as any)
+        .select('id')
+        .eq('deal_id', dealId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking for existing report:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in checkReportExists:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get the latest Share of Voice report for a deal
+   */
+  static async getLatestReport(dealId: string): Promise<StoredShareOfVoiceReport | null> {
+    try {
+      const { data, error } = await supabase
+        .from('share_of_voice_reports' as any)
+        .select('*')
+        .eq('deal_id', dealId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error('Error fetching latest report:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getLatestReport:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save a Share of Voice report for a deal
+   */
+  static async saveReport(dealId: string, brandName: string, reportData: any): Promise<StoredShareOfVoiceReport | null> {
+    try {
+      const { data, error } = await supabase
+        .from('share_of_voice_reports' as any)
+        .upsert({
+          deal_id: dealId,
+          brand_name: brandName,
+          report_data: reportData,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'deal_id'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving report:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in saveReport:', error);
+      return null;
+    }
   }
 }
