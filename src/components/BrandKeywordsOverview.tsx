@@ -29,10 +29,12 @@ import {
   AlertCircle,
   RefreshCw,
   Download,
-  Filter
+  Filter,
+  Plus
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { BrandKeywordService } from '../services/BrandKeywordService';
+import { KeywordService } from '../services/KeywordService';
 
 interface BrandKeywordsOverviewProps {
   brandName?: string;
@@ -69,6 +71,21 @@ interface BrandKeywordStats {
   total_search_volume: number;
 }
 
+interface ProgressUpdate {
+  stage: string;
+  current: number;
+  total: number;
+  message: string;
+  timestamp: string;
+}
+
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+}
+
 export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propBrandId }: BrandKeywordsOverviewProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>(propBrandName || '');
   const [selectedBrandId, setSelectedBrandId] = useState<string>(propBrandId || '');
@@ -79,6 +96,11 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
   const [filter, setFilter] = useState<'all' | 'ranking' | 'not-ranking'>('all');
   const [sortBy, setSortBy] = useState<'volume' | 'position' | 'asins'>('volume');
   const [selectedKeywordDetails, setSelectedKeywordDetails] = useState<KeywordPerformance | null>(null);
+  const [fetchingRankings, setFetchingRankings] = useState(false);
+  const [progress, setProgress] = useState<ProgressUpdate | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [hasSetupKeywords, setHasSetupKeywords] = useState(false);
 
   useEffect(() => {
     loadAvailableBrands();
@@ -87,8 +109,51 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
   useEffect(() => {
     if (selectedBrand) {
       loadBrandKeywordData();
+      checkKeywordSetup();
     }
   }, [selectedBrand, filter]);
+
+  // Progress tracking functions
+  const addLog = (level: LogEntry['level'], message: string) => {
+    const logEntry: LogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toLocaleTimeString(),
+      level,
+      message
+    };
+    setLogs(prev => [logEntry, ...prev.slice(0, 49)]); // Keep last 50 logs
+  };
+
+  const updateProgress = (stage: string, current: number, total: number, message: string) => {
+    setProgress({
+      stage,
+      current,
+      total,
+      message,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    addLog('info', `${stage}: ${message} (${current}/${total})`);
+  };
+
+  const checkKeywordSetup = async () => {
+    try {
+      // Check if brand has keywords in brand_keywords table
+      const { data, error } = await supabase
+        .from('brand_keywords' as any)
+        .select('id')
+        .eq('brand_name', selectedBrand)
+        .eq('is_active', true)
+        .limit(1);
+      
+      console.log('[BrandKeywordsOverview] Checking keyword setup for:', selectedBrand);
+      console.log('[BrandKeywordsOverview] Found keywords:', data?.length || 0);
+      console.log('[BrandKeywordsOverview] hasSetupKeywords will be:', !!(data && data.length > 0));
+      
+      setHasSetupKeywords(!!(data && data.length > 0));
+    } catch (error) {
+      console.error('Error checking keyword setup:', error);
+    }
+  };
 
   const loadAvailableBrands = async () => {
     try {
@@ -102,7 +167,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
       if (error) throw error;
       
       const uniqueBrands = [...new Set(data?.map(d => d.brand).filter(Boolean))];
-      setAvailableBrands(uniqueBrands);
+      setAvailableBrands(uniqueBrands.map(brand => ({ id: brand, name: brand })));
       
       // Auto-select first brand if none selected
       if (!selectedBrand && uniqueBrands.length > 0) {
@@ -118,24 +183,62 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
     try {
       // Try to use the optimized view first
       const { data: aggregatedData, error: viewError } = await supabase
-        .from('brand_keyword_aggregate')
+        .from('brand_keyword_aggregate' as any)
         .select('*')
         .eq('brand', selectedBrand);
       
       if (!viewError && aggregatedData) {
-        // Get detailed ranking information for each keyword
-        const { data: rankingDetails } = await supabase
-          .from('brand_keyword_performance')
-          .select('keyword, position, asin, title')
+        // Get detailed ranking information for each keyword from keyword_rankings table
+        // First get the brand_keyword IDs for this brand
+        const { data: brandKeywordIds } = await supabase
+          .from('brand_keywords' as any)
+          .select('id, keyword')
           .eq('brand_name', selectedBrand)
+          .eq('is_active', true);
+        
+        const keywordIds = brandKeywordIds?.map(bk => bk.id) || [];
+        const keywordIdMap = new Map(brandKeywordIds?.map(bk => [bk.id, bk.keyword]) || []);
+        
+        // Then get rankings for those keywords
+        const { data: rankingDetails } = await supabase
+          .from('keyword_rankings' as any)
+          .select('brand_keyword_id, position, asin, title')
+          .in('brand_keyword_id', keywordIds)
           .eq('is_brand_result', true)
           .not('position', 'is', null)
-          .order('keyword, position');
+          .order('position');
+        
+        // Get search volume data from brand_keywords table (AI recommendations)
+        const { data: brandKeywordData } = await supabase
+          .from('brand_keywords' as any)
+          .select('keyword, search_volume, competition, cpc, keyword_type')
+          .eq('brand_name', selectedBrand)
+          .eq('is_active', true);
+        
+        // Get ASINs for this brand first
+        const { data: brandAsinData } = await supabase
+          .from('asins')
+          .select('id, asin')
+          .eq('brand', selectedBrand);
+        
+        const asinIds = brandAsinData?.map(a => a.id) || [];
+        const asinIdToAsinMap = new Map(brandAsinData?.map(a => [a.id, a.asin]) || []);
+        
+        // Get keywords from actual ASIN data
+        const { data: asinKeywordData } = await supabase
+          .from('asin_keywords' as any)
+          .select('keyword, search_volume, rank_organic, rank_sponsored, ppc_bid_exact, asin_id')
+          .in('asin_id', asinIds)
+          .not('keyword', 'is', null)
+          .gt('search_volume', 0);
         
         // Create a map of keyword to ranking details
         const rankingDetailsMap = new Map<string, Array<{asin: string; position: number; title?: string}>>();
-        rankingDetails?.forEach(r => {
-          const key = r.keyword.toLowerCase();
+        rankingDetails?.forEach((r: any) => {
+          const keyword = keywordIdMap.get(r.brand_keyword_id);
+          if (!keyword) return;
+          
+          const key = keyword.toLowerCase();
           if (!rankingDetailsMap.has(key)) {
             rankingDetailsMap.set(key, []);
           }
@@ -146,27 +249,90 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
           });
         });
         
-        // Use the aggregated view data
-        const keywordData: KeywordPerformance[] = aggregatedData
-          .map(row => {
-            const details = rankingDetailsMap.get(row.keyword.toLowerCase()) || [];
+        // Create a map to merge keyword data from both sources
+        const allKeywordsMap = new Map<string, any>();
+        
+        // Add brand keywords (AI recommendations)
+        brandKeywordData?.forEach((bk: any) => {
+          const key = bk.keyword.toLowerCase();
+          allKeywordsMap.set(key, {
+            keyword: bk.keyword,
+            search_volume: bk.search_volume || 0,
+            competition: parseFloat(bk.competition) || 0,
+            cpc: parseFloat(bk.cpc) || 0,
+            keyword_type: bk.keyword_type || 'ai_recommendation',
+            source: 'brand_keywords'
+          });
+        });
+        
+        // Add/merge ASIN keywords (actual product associations)
+        asinKeywordData?.forEach((ak: any) => {
+          const key = ak.keyword.toLowerCase();
+          const asin = asinIdToAsinMap.get(ak.asin_id);
+          
+          if (allKeywordsMap.has(key)) {
+            // Merge with existing data
+            const existing = allKeywordsMap.get(key);
+            existing.has_asin_data = true;
+            existing.rank_organic = ak.rank_organic;
+            existing.rank_sponsored = ak.rank_sponsored;
+            // Add ASIN to ranking details if it has a rank
+            if (ak.rank_organic && asin) {
+              if (!rankingDetailsMap.has(key)) {
+                rankingDetailsMap.set(key, []);
+              }
+              rankingDetailsMap.get(key)?.push({
+                asin: asin,
+                position: ak.rank_organic,
+                title: ''
+              });
+            }
+          } else {
+            // New keyword from ASIN data
+            allKeywordsMap.set(key, {
+              keyword: ak.keyword,
+              search_volume: ak.search_volume || 0,
+              competition: 0, // No competition data in asin_keywords
+              cpc: ak.ppc_bid_exact || 0,
+              keyword_type: 'product_keyword',
+              source: 'asin_keywords',
+              has_asin_data: true,
+              rank_organic: ak.rank_organic,
+              rank_sponsored: ak.rank_sponsored
+            });
+            // Add to ranking details if has rank
+            if (ak.rank_organic && asin) {
+              rankingDetailsMap.set(key, [{
+                asin: asin,
+                position: ak.rank_organic,
+                title: ''
+              }]);
+            }
+          }
+        });
+        
+        // Convert map to array and process
+        const keywordData: KeywordPerformance[] = Array.from(allKeywordsMap.values())
+          .map((kw: any) => {
+            const details = rankingDetailsMap.get(kw.keyword.toLowerCase()) || [];
             const top10Count = details.filter(d => d.position <= 10).length;
             const dominanceScore = top10Count > 0 ? (top10Count / 10) * 100 : 0;
+            const bestPosition = details.length > 0 ? Math.min(...details.map(d => d.position)) : 0;
+            const avgPosition = details.length > 0 ? details.reduce((acc, d) => acc + d.position, 0) / details.length : 0;
             
             return {
-              keyword: row.keyword,
-              total_asins: row.total_asins || 0,
-              asins_ranking: row.ranking_asins || [],
+              keyword: kw.keyword,
+              total_asins: details.length,
+              asins_ranking: details.map(d => d.asin),
               ranking_details: details,
-              best_position: row.best_position || 0,
-              avg_position: row.avg_position || 0,
-              total_search_volume: row.search_volume || 0,
-              keyword_type: row.search_intents?.split(', ')[0] || 'general',
-              relevance_score: row.avg_relevance_score || 0,
-              competition: row.avg_competition || 0,
-              cpc: row.avg_cpc || 0,
-              trend: (row.avg_monthly_trend || 0) > 5 ? 'up' : 
-                     (row.avg_monthly_trend || 0) < -5 ? 'down' : 'stable',
+              best_position: bestPosition || 0,
+              avg_position: avgPosition || 0,
+              total_search_volume: kw.search_volume || 0,
+              keyword_type: kw.keyword_type || 'general',
+              relevance_score: 0, // No fake relevance scores
+              competition: kw.competition || 0,
+              cpc: kw.cpc || 0,
+              trend: 'stable' as 'up' | 'down' | 'stable',
               dominance_score: dominanceScore
             };
           })
@@ -192,20 +358,26 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
         
         setKeywords(keywordData);
         
-        // Calculate stats from aggregated data
+        // Calculate stats from brand keywords data
         const keywordsWithRankings = keywordData.filter(k => k.asins_ranking.length > 0);
         const allRankingAsins = new Set(keywordData.flatMap(k => k.asins_ranking));
-        const totalAsins = new Set(aggregatedData.flatMap(d => d.all_asins || [])).size;
+        
+        // Get total ASINs for the brand (not just those with rankings)
+        const { data: brandAsins } = await supabase
+          .from('asins')
+          .select('asin')
+          .eq('brand', selectedBrand);
+        const totalAsinsForBrand = brandAsins?.length || 0;
         
         setStats({
           total_keywords: keywordData.length,
           keywords_with_rankings: keywordsWithRankings.length,
-          total_asins_tracked: totalAsins,
+          total_asins_tracked: totalAsinsForBrand,
           asins_with_rankings: allRankingAsins.size,
           avg_position_overall: keywordsWithRankings.length > 0
             ? keywordsWithRankings.reduce((a, b) => a + b.avg_position, 0) / keywordsWithRankings.length
             : 0,
-          top_10_keywords: aggregatedData.reduce((sum, d) => sum + (d.asins_in_top_10 || 0), 0),
+          top_10_keywords: keywordsWithRankings.filter(k => k.best_position > 0 && k.best_position <= 10).length,
           total_search_volume: keywordData.reduce((a, b) => a + b.total_search_volume, 0)
         });
         
@@ -263,16 +435,34 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
         }
       });
       
+      // Get search volume data from brand_keywords table
+      const { data: brandKeywordData } = await supabase
+        .from('brand_keywords' as any)
+        .select('keyword, search_volume, competition, cpc')
+        .eq('brand_name', selectedBrand)
+        .eq('is_active', true);
+      
+      // Create a map of keyword to search volume data
+      const brandKeywordMap = new Map<string, {search_volume: number; competition: number; cpc: number}>();
+      brandKeywordData?.forEach((bk: any) => {
+        const key = bk.keyword.toLowerCase();
+        brandKeywordMap.set(key, {
+          search_volume: bk.search_volume || 0,
+          competition: parseFloat(bk.competition) || 0,
+          cpc: parseFloat(bk.cpc) || 0
+        });
+      });
+
       // Get ranking data from brand_keyword_performance
       const { data: rankings } = await supabase
-        .from('brand_keyword_performance')
+        .from('brand_keyword_performance' as any)
         .select('keyword, position, asin')
         .eq('brand_name', selectedBrand)
         .not('position', 'is', null);
       
       // Create ranking map
       const rankingMap = new Map<string, any[]>();
-      rankings?.forEach(r => {
+      rankings?.forEach((r: any) => {
         const key = r.keyword.toLowerCase();
         if (!rankingMap.has(key)) {
           rankingMap.set(key, []);
@@ -292,6 +482,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
           })).filter(r => r.asin && r.position > 0);
           const top10Count = rankingDetails.filter(d => d.position <= 10).length;
           const dominanceScore = top10Count > 0 ? (top10Count / 10) * 100 : 0;
+          const brandData = brandKeywordMap.get(key);
           
           return {
             keyword: data.keyword,
@@ -302,14 +493,14 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
             avg_position: positions.length > 0 
               ? positions.reduce((a, b) => a + b, 0) / positions.length 
               : 0,
-            total_search_volume: data.total_search_volume,
+            total_search_volume: brandData?.search_volume || 0,
             keyword_type: data.keyword_type,
             relevance_score: data.relevance_scores.length > 0
               ? data.relevance_scores.reduce((a: number, b: number) => a + b, 0) / data.relevance_scores.length
               : 0,
-            competition: data.competition,
-            cpc: data.cpc,
-            trend: data.monthly_trend > 5 ? 'up' : data.monthly_trend < -5 ? 'down' : 'stable',
+            competition: brandData?.competition || 0,
+            cpc: brandData?.cpc || 0,
+            trend: (data.monthly_trend > 5 ? 'up' : data.monthly_trend < -5 ? 'down' : 'stable') as 'up' | 'down' | 'stable',
             dominance_score: dominanceScore
           };
         })
@@ -355,6 +546,165 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
       console.error('Error loading keyword data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const setupKeywordsFromASINData = async () => {
+    if (!selectedBrand) return;
+    
+    setFetchingRankings(true);
+    setShowProgressModal(true);
+    setLogs([]);
+    setProgress(null);
+    
+    try {
+      addLog('info', `Setting up keywords for ${selectedBrand} from existing ASIN data...`);
+      updateProgress('Setup', 0, 100, 'Gathering keywords from your ASINs...');
+      
+      // Get all ASINs for the brand
+      const { data: brandAsins } = await supabase
+        .from('asins')
+        .select('id, asin')
+        .eq('brand', selectedBrand);
+      
+      if (!brandAsins || brandAsins.length === 0) {
+        addLog('error', 'No ASINs found for this brand');
+        return;
+      }
+      
+      const asinIds = brandAsins.map(a => a.id);
+      addLog('success', `Found ${brandAsins.length} ASINs for ${selectedBrand}`);
+      
+      // Get all keywords from asin_keywords table
+      updateProgress('Setup', 20, 100, 'Fetching keywords from ASIN data...');
+      const { data: asinKeywords } = await supabase
+        .from('asin_keywords' as any)
+        .select('keyword, search_volume, ppc_bid_exact')
+        .in('asin_id', asinIds)
+        .not('keyword', 'is', null)
+        .gt('search_volume', 0);
+      
+      if (!asinKeywords || asinKeywords.length === 0) {
+        addLog('warning', 'No keywords found in ASIN data');
+        return;
+      }
+      
+      addLog('success', `Found ${asinKeywords.length} keywords from ASIN data`);
+      updateProgress('Setup', 40, 100, 'Processing unique keywords...');
+      
+      // Deduplicate keywords
+      const uniqueKeywordsMap = new Map<string, any>();
+      asinKeywords.forEach((kw: any) => {
+        const key = kw.keyword.toLowerCase();
+        if (!uniqueKeywordsMap.has(key) || kw.search_volume > uniqueKeywordsMap.get(key).search_volume) {
+          uniqueKeywordsMap.set(key, {
+            keyword: kw.keyword,
+            search_volume: kw.search_volume || 1000,
+            cpc: kw.ppc_bid_exact || 1.0,
+            competition: 0.5,
+            difficulty: 50,
+            relevance_score: 0.8,
+            keyword_type: 'product',
+            source: 'asin_import'
+          });
+        }
+      });
+      
+      const keywordsToAdd = Array.from(uniqueKeywordsMap.values());
+      addLog('info', `Processed ${keywordsToAdd.length} unique keywords`);
+      
+      // Add keywords to brand_keywords table
+      updateProgress('Setup', 60, 100, `Adding ${keywordsToAdd.length} keywords to tracking...`);
+      const success = await BrandKeywordService.addBrandKeywords(selectedBrand, keywordsToAdd);
+      
+      if (success) {
+        addLog('success', `Successfully added ${keywordsToAdd.length} keywords for tracking`);
+        updateProgress('Setup', 80, 100, 'Keywords added successfully');
+        setHasSetupKeywords(true);
+        
+        // Reload the data
+        updateProgress('Setup', 90, 100, 'Refreshing data...');
+        await loadBrandKeywordData();
+        await checkKeywordSetup();
+        
+        updateProgress('Complete', 100, 100, 'Keyword setup complete!');
+        addLog('success', 'Setup complete! You can now fetch rankings.');
+      } else {
+        addLog('error', 'Failed to add keywords to tracking');
+      }
+      
+    } catch (error) {
+      console.error('Error setting up keywords:', error);
+      addLog('error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setFetchingRankings(false);
+      setTimeout(() => {
+        setShowProgressModal(false);
+      }, 3000);
+    }
+  };
+
+  const fetchRankingsForAllASINs = async () => {
+    if (!selectedBrand) return;
+    
+    setFetchingRankings(true);
+    setShowProgressModal(true);
+    setLogs([]);
+    setProgress(null);
+    
+    try {
+      addLog('info', `Starting Amazon ranking update for ${selectedBrand}...`);
+      
+      // Use the same progress callback pattern as BrandKeywordTracker
+      const progressCallback = (stage: string, current: number, total: number, message: string) => {
+        updateProgress(stage, current, total, message);
+        
+        // Extract meaningful info from the message and add to logs
+        if (message.includes('Successfully submitted')) {
+          addLog('success', message);
+        } else if (message.includes('Processing') || message.includes('Processed')) {
+          addLog('info', message);
+        } else if (message.includes('Error') || message.includes('Failed')) {
+          addLog('error', message);
+        } else if (message.includes('Warning')) {
+          addLog('warning', message);
+        } else if (message.includes('Complete') || message.includes('Successfully')) {
+          addLog('success', message);
+        } else if (message.includes('Found') || message.includes('Submitted')) {
+          addLog('success', message);
+        } else {
+          addLog('info', message);
+        }
+      };
+      
+      // Use the existing BrandKeywordService that already handles Amazon rankings correctly
+      const result = await BrandKeywordService.trackKeywordRankingsWithProgress(
+        selectedBrand,
+        undefined, // Track all keywords
+        progressCallback,
+        100 // Depth of 100 for thorough tracking
+      );
+      
+      if (result) {
+        addLog('success', 'All Amazon ranking tracking completed successfully!');
+        updateProgress('Complete', 100, 100, 'Amazon ranking update complete');
+        
+        // Reload the keywords to show updated rankings
+        await loadBrandKeywordData();
+      } else {
+        addLog('error', 'Tracking failed - please check your DataForSEO credentials');
+      }
+      
+    } catch (error) {
+      console.error('Error fetching rankings:', error);
+      addLog('error', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setFetchingRankings(false);
+      setTimeout(() => {
+        if (progress?.current === progress?.total) {
+          setShowProgressModal(false);
+        }
+      }, 3000);
     }
   };
 
@@ -407,7 +757,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
             >
               <option value="">Select Brand</option>
               {availableBrands.map(brand => (
-                <option key={brand} value={brand}>{brand}</option>
+                <option key={brand.id} value={brand.name}>{brand.name}</option>
               ))}
             </select>
             
@@ -419,6 +769,30 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+            
+            {(() => {
+              console.log('[BrandKeywordsOverview] Button state:', { hasSetupKeywords, selectedBrand });
+              return !hasSetupKeywords && selectedBrand ? (
+                <button
+                  onClick={setupKeywordsFromASINData}
+                  disabled={fetchingRankings}
+                  className="btn bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
+                >
+                  <Plus className={`w-4 h-4 mr-2 ${fetchingRankings ? 'animate-pulse' : ''}`} />
+                  {fetchingRankings ? 'Setting up...' : 'Setup Keywords'}
+                </button>
+              ) : (
+                <button
+                  onClick={fetchRankingsForAllASINs}
+                  disabled={!selectedBrand || fetchingRankings || !hasSetupKeywords}
+                  className="btn bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
+                  title={!hasSetupKeywords ? 'Please setup keywords first' : ''}
+                >
+                  <Target className={`w-4 h-4 mr-2 ${fetchingRankings ? 'animate-pulse' : ''}`} />
+                  {fetchingRankings ? 'Fetching Rankings...' : 'Fetch Rankings'}
+                </button>
+              );
+            })()}
             
             <button
               onClick={exportToCSV}
@@ -755,6 +1129,90 @@ export function BrandKeywordsOverview({ brandName: propBrandName, brandId: propB
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Modal */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  Fetching Keyword Rankings
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Brand: {selectedBrand}
+                </span>
+              </div>
+              
+              {/* Progress Bar */}
+              {progress && (
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <span>{progress.stage}</span>
+                    <span>{progress.current}/{progress.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-violet-500 to-violet-600 h-full rounded-full transition-all duration-300 flex items-center justify-center text-xs text-white font-medium"
+                      style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                    >
+                      {progress.total > 0 && Math.round((progress.current / progress.total) * 100)}%
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    {progress.message}
+                  </p>
+                </div>
+              )}
+              
+              {/* Activity Log */}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 max-h-64 overflow-y-auto">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Activity Log</h4>
+                <div className="space-y-1 text-xs font-mono">
+                  {logs.length === 0 && (
+                    <p className="text-gray-500 dark:text-gray-400">Waiting to start...</p>
+                  )}
+                  {logs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2">
+                      <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                        {log.timestamp}
+                      </span>
+                      <span className={`
+                        ${log.level === 'error' ? 'text-red-600 dark:text-red-400' : ''}
+                        ${log.level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : ''}
+                        ${log.level === 'success' ? 'text-green-600 dark:text-green-400' : ''}
+                        ${log.level === 'info' ? 'text-gray-700 dark:text-gray-300' : ''}
+                      `}>
+                        {log.message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="mt-6 flex justify-end gap-3">
+                {progress?.stage === 'Complete' ? (
+                  <button
+                    onClick={() => setShowProgressModal(false)}
+                    className="btn bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    Complete
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowProgressModal(false)}
+                    disabled={fetchingRankings}
+                    className="btn bg-gray-500 hover:bg-gray-600 text-white disabled:opacity-50"
+                  >
+                    {fetchingRankings ? 'Processing...' : 'Close'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

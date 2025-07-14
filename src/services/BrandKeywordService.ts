@@ -59,6 +59,43 @@ interface BrandRankingSummary {
 type ProgressCallback = (stage: string, current: number, total: number, message: string) => void;
 
 export class BrandKeywordService {
+  // Rate limit tracking
+  private static rateLimitTracker = {
+    requestsInLastMinute: [] as number[],
+    lastRateLimitError: 0,
+    dynamicBatchSize: 50 // Start with 50, adjust based on rate limit feedback
+  };
+
+  /**
+   * Track API request for rate limiting
+   */
+  private static trackApiRequest(): void {
+    const now = Date.now();
+    this.rateLimitTracker.requestsInLastMinute.push(now);
+    // Remove requests older than 1 minute
+    this.rateLimitTracker.requestsInLastMinute = this.rateLimitTracker.requestsInLastMinute.filter(
+      time => now - time < 60000
+    );
+  }
+
+  /**
+   * Get current request rate and adjust batch size
+   */
+  private static getOptimalBatchSize(): number {
+    const now = Date.now();
+    const timeSinceLastError = now - this.rateLimitTracker.lastRateLimitError;
+    
+    // If we hit rate limit recently, back off
+    if (timeSinceLastError < 60000) {
+      this.rateLimitTracker.dynamicBatchSize = Math.max(10, Math.floor(this.rateLimitTracker.dynamicBatchSize * 0.7));
+    } else if (timeSinceLastError > 120000) {
+      // No rate limit errors for 2 minutes, increase batch size
+      this.rateLimitTracker.dynamicBatchSize = Math.min(100, Math.floor(this.rateLimitTracker.dynamicBatchSize * 1.2));
+    }
+    
+    return this.rateLimitTracker.dynamicBatchSize;
+  }
+
   /**
    * Helper function to check if a keyword contains the exact brand name
    */
@@ -637,10 +674,22 @@ export class BrandKeywordService {
 
       console.log(`[BrandKeywords] Starting parallel ranking tracking for ${keywordsToTrack.length} keywords`);
       
-      // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks)
+      // Debug: Log first few keywords
+      if (keywordsToTrack.length > 0) {
+        console.log(`[BrandKeywords] Sample keywords to track:`, keywordsToTrack.slice(0, 3).map(k => ({
+          id: k.id,
+          keyword: k.keyword,
+          search_volume: k.search_volume
+        })));
+      }
+      console.log(`[BrandKeywords] DEBUG - Sample keyword with ID:`, keywordsToTrack[0]);
+      
+      // Submit ALL tasks in parallel (DataForSEO can handle up to 100 tasks per request)
       const maxBatchSize = 100;
-      // Maximize parallel batch submissions for speed
-      const maxParallelBatches = 20; // Submit up to 20 batches simultaneously (2000 keywords)
+      // DataForSEO allows 2000 requests/minute = 33 requests/second
+      // With batches of 100, we can submit 3300 keywords/second
+      // Use dynamic parallelization based on rate limit feedback
+      const maxParallelBatches = this.getOptimalBatchSize(); // Dynamic batch size based on rate limits
       
       onProgress?.('Loading', 15, 100, `Found ${keywordsToTrack.length} keywords for brand "${brandName}"`);
       onProgress?.('Loading', 20, 100, `Preparing to submit ${Math.ceil(keywordsToTrack.length / maxBatchSize)} batch${Math.ceil(keywordsToTrack.length / maxBatchSize) > 1 ? 'es' : ''}...`);
@@ -712,9 +761,11 @@ export class BrandKeywordService {
         return false;
       }
 
+      const currentRequestRate = this.rateLimitTracker.requestsInLastMinute.length;
       console.log(`[BrandKeywords] Successfully submitted ${allTasks.length} SERP tasks. Starting parallel processing...`);
+      console.log(`[BrandKeywords] Current request rate: ${currentRequestRate}/minute (limit: 2000/minute)`);
       onProgress?.('Submitted', 38, 100, `✅ Successfully submitted ${allTasks.length} keyword${allTasks.length > 1 ? 's' : ''} for tracking`);
-      onProgress?.('Processing', 40, 100, `🔄 Starting parallel processing to check rankings...`);
+      onProgress?.('Processing', 40, 100, `🔄 Starting parallel processing (${currentRequestRate} req/min, batch size: ${this.rateLimitTracker.dynamicBatchSize})...`);
 
       // Process all tasks in parallel with optimized polling
       await this.processAllSerpTasksInParallelWithProgress(allTasks, brandName, credentials, onProgress);
@@ -746,6 +797,9 @@ export class BrandKeywordService {
     credentials: string
   ): Promise<Array<{ taskId: string; keyword: BrandKeyword }> | null> {
     try {
+      // Track this request for rate limiting
+      this.trackApiRequest();
+      
       const response = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/task_post', {
         method: 'POST',
         headers: {
@@ -757,6 +811,13 @@ export class BrandKeywordService {
 
       if (!response.ok) {
         console.error(`[DataForSEO] SERP batch submission failed:`, response.status);
+        
+        // Check if it's a rate limit error
+        if (response.status === 429 || response.status === 503) {
+          this.rateLimitTracker.lastRateLimitError = Date.now();
+          console.warn(`[DataForSEO] Rate limit hit. Adjusting batch size from ${this.rateLimitTracker.dynamicBatchSize} to ${this.getOptimalBatchSize()}`);
+        }
+        
         return null;
       }
 
@@ -929,7 +990,7 @@ export class BrandKeywordService {
     let processedKeywords: string[] = [];
     
     const maxWaitTime = 180000; // 3 minutes max
-    const pollInterval = 500; // Check every 500ms for even faster response
+    const pollInterval = 200; // Check every 200ms for maximum throughput
     const startTime = Date.now();
     
     let completedTasks = new Set<string>();
@@ -945,6 +1006,7 @@ export class BrandKeywordService {
           `⏱️ Checking task status... (${completedTasks.size}/${allTasks.length} complete, ${elapsedSeconds}s elapsed)`);
         
         // Use GET to check ready tasks
+        this.trackApiRequest(); // Track this request for rate limiting
         const readyResponse = await fetch('https://api.dataforseo.com/v3/merchant/amazon/products/tasks_ready', {
           method: 'GET',
           headers: {
@@ -1056,9 +1118,12 @@ export class BrandKeywordService {
                 const progressPercent = 45 + Math.round((completedTasks.size / allTasks.length) * 45); // 45-90%
                 const remainingTime = completedTasks.size > 0 ? 
                   Math.round(((Date.now() - startTime) / completedTasks.size) * (allTasks.length - completedTasks.size) / 1000) : 0;
+                
+                const currentRate = this.rateLimitTracker.requestsInLastMinute.length;
+                const throughput = completedTasks.size > 0 ? Math.round(completedTasks.size / ((Date.now() - startTime) / 1000)) : 0;
                   
                 onProgress?.('Processing', progressPercent, 100, 
-                  `📊 Processed "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length} complete, ~${remainingTime}s remaining)`);
+                  `📊 Processed "${task.keyword.keyword}" (${completedTasks.size}/${allTasks.length} complete, ~${remainingTime}s remaining, ${throughput} kw/s, ${currentRate} req/min)`);
               }).catch((error) => {
                 processingPromises.delete(task.taskId);
                 
@@ -1104,9 +1169,9 @@ export class BrandKeywordService {
         console.warn('[BrandKeywords] Error in parallel polling:', error);
       }
       
-      // Add longer initial wait for first attempt to reduce "in queue" errors
+      // Add shorter initial wait for first attempt to start processing faster
       const elapsedTime = Date.now() - startTime;
-      const minWaitBeforeFirstAttempt = 10000; // Wait 10 seconds before first attempt
+      const minWaitBeforeFirstAttempt = 3000; // Wait only 3 seconds before first attempt
       
       if (elapsedTime < minWaitBeforeFirstAttempt && processingPromises.size === 0 && completedTasks.size === 0) {
         const waitRemaining = Math.round((minWaitBeforeFirstAttempt - elapsedTime) / 1000);
@@ -1180,13 +1245,13 @@ export class BrandKeywordService {
     }
     
     // Execute batch insert more frequently for real-time updates
-    if (this.pendingRankings.length >= 100 || this.pendingSerpFeatures.length >= 50) { // Reduced thresholds
+    if (this.pendingRankings.length >= 50 || this.pendingSerpFeatures.length >= 25) { // Further reduced thresholds
       await this.executeBatchInsert();
     } else {
       // Otherwise, wait a bit to collect more data
       this.batchInsertTimeout = setTimeout(() => {
         this.executeBatchInsert();
-      }, 250); // Reduced from 1000ms to 250ms for faster updates
+      }, 100); // Reduced to 100ms for near real-time updates
     }
   }
 
@@ -1211,12 +1276,14 @@ export class BrandKeywordService {
           for (let i = 0; i < rankingsToInsert.length; i += chunkSize) {
             const chunk = rankingsToInsert.slice(i, i + chunkSize);
             insertPromises.push(
-              supabase.from('keyword_rankings').insert(chunk)
+              supabase.from('keyword_rankings' as any).insert(chunk)
                 .then(({ error }) => {
                   if (error) {
                     console.error(`[BrandKeywords] Error batch inserting rankings:`, error);
+                    console.error(`[BrandKeywords] Failed chunk sample:`, chunk[0]);
                   } else {
-                    console.log(`[BrandKeywords] Batch inserted ${chunk.length} rankings`);
+                    console.log(`[BrandKeywords] Batch inserted ${chunk.length} rankings successfully`);
+                    console.log(`[BrandKeywords] Sample inserted ranking:`, chunk[0]);
                   }
                 })
             );
@@ -1229,7 +1296,7 @@ export class BrandKeywordService {
           const featuresToInsert = [...this.pendingSerpFeatures];
           this.pendingSerpFeatures = [];
           
-          const { error } = await supabase.from('keyword_serp_features').insert(featuresToInsert);
+          const { error } = await supabase.from('keyword_serp_features' as any).insert(featuresToInsert);
           if (error) {
             console.error(`[BrandKeywords] Error batch inserting SERP features:`, error);
           } else {
@@ -1255,6 +1322,7 @@ export class BrandKeywordService {
   ): Promise<void> {
     try {
       // Get Amazon SERP results
+      this.trackApiRequest(); // Track this request for rate limiting
       const response = await fetch(`https://api.dataforseo.com/v3/merchant/amazon/products/task_get/advanced/${taskId}`, {
         method: 'GET',
         headers: {
@@ -1307,8 +1375,15 @@ export class BrandKeywordService {
         resultLength: task.result?.length,
         hasFirstResult: !!task.result?.[0],
         hasItems: !!task.result?.[0]?.items,
-        itemsLength: task.result?.[0]?.items?.length || 0
+        itemsLength: task.result?.[0]?.items?.length || 0,
+        keyword: keyword.keyword
       });
+      
+      // Debug: Log the actual items types
+      if (task.result?.[0]?.items) {
+        const itemTypes = [...new Set(task.result[0].items.map((item: any) => item.type))];
+        console.log(`[BrandKeywords] Item types found for "${keyword.keyword}":`, itemTypes);
+      }
       
       if (task.result?.[0]?.items) {
         const items = task.result[0].items;
@@ -1321,18 +1396,39 @@ export class BrandKeywordService {
         }
         
         // Process Amazon search results
-        // According to DataForSEO docs, Amazon products have type "amazon_serp"
-        let organicResults = items.filter((item: any) => 
-          item.type === 'amazon_serp' && item.asin
-        );
+        // First log all unique types to understand what we're getting
+        const uniqueTypes = [...new Set(items.map((item: any) => item.type))];
+        console.log(`[BrandKeywords] DEBUG - All item types in response:`, uniqueTypes);
         
-        // If no results with amazon_serp, try other product types
-        if (organicResults.length === 0 && items.length > 0) {
-          console.log(`[BrandKeywords] No results with type 'amazon_serp', trying alternative filter...`);
-          organicResults = items.filter((item: any) => 
-            item.asin && item.title && !item.type?.includes('paid')
-          );
-        }
+        // Log a sample of each type
+        uniqueTypes.forEach(type => {
+          const sampleItem = items.find((item: any) => item.type === type);
+          console.log(`[BrandKeywords] DEBUG - Sample ${type} item:`, {
+            type: sampleItem.type,
+            hasAsin: !!sampleItem.asin,
+            hasTitle: !!sampleItem.title,
+            hasRankAbsolute: !!sampleItem.rank_absolute,
+            hasPosition: !!sampleItem.position,
+            asin: sampleItem.asin,
+            title: sampleItem.title?.substring(0, 50) + '...'
+          });
+        });
+        
+        // Filter for Amazon products - DataForSEO uses data_asin field
+        let organicResults = items.filter((item: any) => {
+          // DataForSEO stores ASIN in data_asin field
+          const asin = item.data_asin || item.asin;
+          const isOrganic = item.type === 'amazon_serp' && !item.type?.includes('paid');
+          return asin && isOrganic;
+        });
+        
+        console.log(`[BrandKeywords] Found ${organicResults.length} organic results with ASINs`);
+        
+        // Map data_asin to asin for consistency
+        organicResults = organicResults.map((item: any) => ({
+          ...item,
+          asin: item.data_asin || item.asin
+        }));
 
         console.log(`[BrandKeywords] Found ${organicResults.length} organic results for keyword: ${keyword.keyword}`);
         
@@ -1470,11 +1566,18 @@ export class BrandKeywordService {
           const isBrandMatch = currentBrand && currentBrand.toLowerCase() === brandName.toLowerCase();
           
           if (isBrandMatch) {
+            console.log(`[BrandKeywords] DEBUG - Creating ranking for keyword ID: ${keyword.id}, keyword: "${keyword.keyword}"`);
+            
+            if (!keyword.id) {
+              console.error(`[BrandKeywords] ERROR - Keyword missing ID:`, keyword);
+              continue;
+            }
+            
             const ranking: Partial<KeywordRanking> = {
-              brand_keyword_id: keyword.id!,
+              brand_keyword_id: keyword.id,
               asin: amazonResult.asin,
-              position: amazonResult.rank_absolute || amazonResult.position,
-              page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute) / 16),
+              position: amazonResult.rank_absolute || amazonResult.position || 0,
+              page: Math.ceil((amazonResult.rank_absolute || amazonResult.position_absolute || 1) / 16),
               url: amazonResult.url,
               title: amazonResult.title,
               domain: 'amazon.com',
@@ -1501,6 +1604,11 @@ export class BrandKeywordService {
 
         // Add to batch instead of immediate insert
         if (rankingsBatch.length > 0 || featuresBatch.length > 0) {
+          console.log(`[BrandKeywords] DEBUG - About to add to batch:`);
+          console.log(`  - Rankings: ${rankingsBatch.length}`);
+          console.log(`  - Features: ${featuresBatch.length}`);
+          console.log(`  - Sample ranking:`, rankingsBatch[0]);
+          
           await this.addToBatch(rankingsBatch, featuresBatch);
           console.log(`[BrandKeywords] Added ${rankingsBatch.length} rankings and ${featuresBatch.length} features to batch for keyword: ${keyword.keyword}`);
         } else {
@@ -1570,7 +1678,7 @@ export class BrandKeywordService {
     try {
       // Get latest rankings and calculate summary
       const { data: performanceData } = await supabase
-        .from('brand_keyword_performance')
+        .from('brand_keyword_performance' as any)
         .select('*')
         .eq('brand_name', brandName);
 
@@ -1579,20 +1687,20 @@ export class BrandKeywordService {
       }
 
       const totalKeywords = performanceData.length;
-      const rankingKeywords = performanceData.filter(p => p.position && p.position <= 100).length;
-      const top10Keywords = performanceData.filter(p => p.position && p.position <= 10).length;
-      const top3Keywords = performanceData.filter(p => p.position && p.position <= 3).length;
+      const rankingKeywords = performanceData.filter((p: any) => p.position && p.position <= 100).length;
+      const top10Keywords = performanceData.filter((p: any) => p.position && p.position <= 10).length;
+      const top3Keywords = performanceData.filter((p: any) => p.position && p.position <= 3).length;
       
       const positions = performanceData
-        .filter(p => p.position && p.position <= 100)
-        .map(p => p.position);
+        .filter((p: any) => p.position && p.position <= 100)
+        .map((p: any) => p.position);
       const avgPosition = positions.length > 0 ? 
-        positions.reduce((sum, pos) => sum + pos, 0) / positions.length : 0;
+        positions.reduce((sum: number, pos: number) => sum + pos, 0) / positions.length : 0;
 
-      const totalSearchVolume = performanceData.reduce((sum, p) => sum + (p.search_volume || 0), 0);
+      const totalSearchVolume = performanceData.reduce((sum: number, p: any) => sum + (p.search_volume || 0), 0);
       
       // Calculate visibility score (weighted by search volume and position)
-      const visibilityScore = performanceData.reduce((score, p) => {
+      const visibilityScore = performanceData.reduce((score: number, p: any) => {
         if (!p.position || p.position > 100) return score;
         const positionWeight = Math.max(0, (101 - p.position) / 100);
         return score + (p.search_volume || 0) * positionWeight;
@@ -1613,8 +1721,8 @@ export class BrandKeywordService {
       };
 
       await supabase
-        .from('brand_ranking_summary')
-        .upsert(summary, { 
+        .from('brand_ranking_summary' as any)
+        .upsert(summary as any, { 
           onConflict: 'brand_name,check_date_only' 
         });
 
@@ -1630,7 +1738,7 @@ export class BrandKeywordService {
   static async getBrandPerformance(brandName: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('brand_keyword_performance')
+        .from('brand_keyword_performance' as any)
         .select('*')
         .eq('brand_name', brandName)
         .order('relevance_score', { ascending: false });
@@ -1643,7 +1751,7 @@ export class BrandKeywordService {
       // Filter to show:
       // 1. Keywords where the brand IS ranking (position is not null and is_brand_result is true)
       // 2. Keywords where the brand is NOT ranking (position is null)
-      const filteredData = (data || []).filter(item => {
+      const filteredData = (data || []).filter((item: any) => {
         // If there's a ranking position, only show if it's our brand
         if (item.position !== null) {
           return item.is_brand_result === true;
@@ -1665,7 +1773,7 @@ export class BrandKeywordService {
   static async getBrandVisibilityPerformance(brandName: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('brand_keyword_performance')
+        .from('brand_keyword_performance' as any)
         .select('*')
         .eq('brand_name', brandName)
         .eq('is_brand_result', true)
@@ -1689,7 +1797,7 @@ export class BrandKeywordService {
   static async getBrandRankingHistory(brandName: string, days: number = 30): Promise<BrandRankingSummary[]> {
     try {
       const { data, error } = await supabase
-        .from('brand_ranking_summary')
+        .from('brand_ranking_summary' as any)
         .select('*')
         .eq('brand_name', brandName)
         .gte('check_date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
@@ -1700,7 +1808,7 @@ export class BrandKeywordService {
         return [];
       }
 
-      return data || [];
+      return (data || []) as BrandRankingSummary[];
     } catch (error) {
       console.error('Error in getBrandRankingHistory:', error);
       return [];

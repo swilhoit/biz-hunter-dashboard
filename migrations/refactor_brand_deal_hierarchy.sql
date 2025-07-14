@@ -1,6 +1,9 @@
 -- Migration to properly separate brands from deals
 -- This establishes the correct hierarchy: Brand -> Deal -> Deal-specific data
 
+-- 1. Drop existing brands table if it exists (be careful with this in production!)
+-- DROP TABLE IF EXISTS brands CASCADE;
+
 -- 1. Create a proper brands table
 CREATE TABLE IF NOT EXISTS brands (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

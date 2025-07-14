@@ -43,16 +43,26 @@ export class KeywordService {
       }
 
       const credentials = btoa(`${username}:${password}`);
-      const endpoint = 'https://api.dataforseo.com/v3/dataforseo_labs/amazon/ranked_keywords/live';
+      
+      // First, we need to find the Amazon URL for this ASIN
+      const amazonUrl = `amazon.com/dp/${asin}`;
+      console.log('[DataForSEO] Using Amazon URL:', amazonUrl);
+      
+      // Use the Google keywords_for_site endpoint which provides ranking data
+      const endpoint = 'https://api.dataforseo.com/v3/dataforseo_labs/google/keywords_for_site/live';
       
       const payload = [{
-        asin: asin,
+        target: amazonUrl,
         location_code: 2840, // USA
         language_code: 'en',
-        limit: 1000 // Maximum keywords to return
+        limit: 1000,
+        include_subdomains: false,
+        filters: [
+          ["ranked_serp_element.serp_item.rank_absolute", "<=", 100] // Only keywords where we rank in top 100
+        ]
       }];
 
-      console.log('[DataForSEO] Fetching ranked keywords for ASIN:', asin);
+      console.log('[DataForSEO] Fetching ranked keywords for Amazon URL:', amazonUrl);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -83,16 +93,16 @@ export class KeywordService {
         // Map DataForSEO results to our KeywordData interface
         return items.map((item: any, index: number) => ({
           id: `${asin}-${index}`, // Generate unique ID
-          keyword: item.keyword_data?.keyword || item.keyword || '',
+          keyword: item.keyword || '',
           search_volume: item.keyword_data?.keyword_info?.search_volume || 0,
-          relevancy_score: item.keyword_data?.keyword_info?.keyword_difficulty || 50, // Use difficulty as relevancy proxy
-          monthly_trend: 0, // DataForSEO doesn't provide this in same format
+          relevancy_score: item.keyword_data?.keyword_info?.keyword_difficulty || 50,
+          monthly_trend: 0, // Calculate from monthly_searches if needed
           quarterly_trend: 0,
           ppc_bid_broad: item.keyword_data?.keyword_info?.cpc || 0,
           ppc_bid_exact: item.keyword_data?.keyword_info?.cpc || 0,
-          organic_product_count: item.ranked_serp_element?.serp_item?.total_count || 0,
-          sponsored_product_count: 0, // Not provided by DataForSEO
-          rank_organic: item.ranked_serp_element?.rank_absolute || null,
+          organic_product_count: item.keyword_data?.keyword_info?.search_results || 0,
+          sponsored_product_count: 0, // Not provided by this endpoint
+          rank_organic: item.ranked_serp_element?.serp_item?.rank_absolute || null,
           rank_sponsored: null // Not provided in this endpoint
         }));
       }
