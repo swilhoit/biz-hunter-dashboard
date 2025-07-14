@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, TrendingDown, Download, Filter, RefreshCw, AlertCircle, Sparkles, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Download, Filter, RefreshCw, AlertCircle, Sparkles, ChevronDown, ChevronUp, Trash2, BarChart3, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ASINService } from '../../services/ASINService';
 import KeywordRecommendationService from '../../services/KeywordRecommendationService';
+import { BrandKeywordsOverview } from '../../components/BrandKeywordsOverview';
 
 function DealKeywords({ dealId }) {
   const [keywords, setKeywords] = useState([]);
   const [asins, setAsins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dealData, setDealData] = useState(null);
+  const [activeView, setActiveView] = useState('individual'); // 'individual' or 'aggregate'
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,7 +60,17 @@ function DealKeywords({ dealId }) {
       setLoading(true);
       setError(null);
       
-      // First load ASINs for this deal
+      // First load the deal information
+      const { data: deal, error: dealError } = await supabase
+        .from('deals')
+        .select('*')
+        .eq('id', dealId)
+        .single();
+        
+      if (dealError) throw dealError;
+      setDealData(deal);
+      
+      // Then load ASINs for this deal
       const dealASINs = await ASINService.fetchDealASINs(dealId);
       setAsins(dealASINs);
       
@@ -376,23 +389,58 @@ function DealKeywords({ dealId }) {
 
   return (
     <div className="space-y-6">
-      {/* Header with Refresh */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Keywords Analysis</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Aggregated keywords from all ASINs in this deal
-          </p>
-        </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveView('individual')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2
+              ${activeView === 'individual'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }
+            `}
+          >
+            <Package className="w-4 h-4" />
+            <span>ASIN Keywords</span>
+          </button>
+          <button
+            onClick={() => setActiveView('aggregate')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2
+              ${activeView === 'aggregate'
+                ? 'border-violet-500 text-violet-600 dark:text-violet-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }
+            `}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Brand Overview</span>
+          </button>
+        </nav>
       </div>
+
+      {/* Tab Content */}
+      {activeView === 'aggregate' && dealData ? (
+        <BrandKeywordsOverview brandName={dealData.business_name} />
+      ) : (
+        <>
+          {/* Header with Refresh */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Keywords Analysis</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Aggregated keywords from all ASINs in this deal
+              </p>
+            </div>
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -806,6 +854,8 @@ function DealKeywords({ dealId }) {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
