@@ -42,6 +42,11 @@ interface KeywordPerformance {
   keyword: string;
   total_asins: number;
   asins_ranking: string[];
+  ranking_details: Array<{
+    asin: string;
+    position: number;
+    title?: string;
+  }>;
   best_position: number;
   avg_position: number;
   total_search_volume: number;
@@ -50,6 +55,7 @@ interface KeywordPerformance {
   competition: number;
   cpc: number;
   trend: 'up' | 'down' | 'stable';
+  dominance_score: number; // % of top 10 positions owned by brand
 }
 
 interface BrandKeywordStats {
@@ -70,6 +76,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'ranking' | 'not-ranking'>('all');
   const [sortBy, setSortBy] = useState<'volume' | 'position' | 'asins'>('volume');
+  const [selectedKeywordDetails, setSelectedKeywordDetails] = useState<KeywordPerformance | null>(null);
 
   useEffect(() => {
     loadAvailableBrands();
@@ -114,22 +121,53 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
         .eq('brand', selectedBrand);
       
       if (!viewError && aggregatedData) {
+        // Get detailed ranking information for each keyword
+        const { data: rankingDetails } = await supabase
+          .from('brand_keyword_performance')
+          .select('keyword, position, asin, title')
+          .eq('brand_name', selectedBrand)
+          .eq('is_brand_result', true)
+          .not('position', 'is', null)
+          .order('keyword, position');
+        
+        // Create a map of keyword to ranking details
+        const rankingDetailsMap = new Map<string, Array<{asin: string; position: number; title?: string}>>();
+        rankingDetails?.forEach(r => {
+          const key = r.keyword.toLowerCase();
+          if (!rankingDetailsMap.has(key)) {
+            rankingDetailsMap.set(key, []);
+          }
+          rankingDetailsMap.get(key)?.push({
+            asin: r.asin,
+            position: r.position,
+            title: r.title
+          });
+        });
+        
         // Use the aggregated view data
         const keywordData: KeywordPerformance[] = aggregatedData
-          .map(row => ({
-            keyword: row.keyword,
-            total_asins: row.total_asins || 0,
-            asins_ranking: row.ranking_asins || [],
-            best_position: row.best_position || 0,
-            avg_position: row.avg_position || 0,
-            total_search_volume: row.search_volume || 0,
-            keyword_type: row.search_intents?.split(', ')[0] || 'general',
-            relevance_score: row.avg_relevance_score || 0,
-            competition: row.avg_competition || 0,
-            cpc: row.avg_cpc || 0,
-            trend: (row.avg_monthly_trend || 0) > 5 ? 'up' : 
-                   (row.avg_monthly_trend || 0) < -5 ? 'down' : 'stable'
-          }))
+          .map(row => {
+            const details = rankingDetailsMap.get(row.keyword.toLowerCase()) || [];
+            const top10Count = details.filter(d => d.position <= 10).length;
+            const dominanceScore = top10Count > 0 ? (top10Count / 10) * 100 : 0;
+            
+            return {
+              keyword: row.keyword,
+              total_asins: row.total_asins || 0,
+              asins_ranking: row.ranking_asins || [],
+              ranking_details: details,
+              best_position: row.best_position || 0,
+              avg_position: row.avg_position || 0,
+              total_search_volume: row.search_volume || 0,
+              keyword_type: row.search_intents?.split(', ')[0] || 'general',
+              relevance_score: row.avg_relevance_score || 0,
+              competition: row.avg_competition || 0,
+              cpc: row.avg_cpc || 0,
+              trend: (row.avg_monthly_trend || 0) > 5 ? 'up' : 
+                     (row.avg_monthly_trend || 0) < -5 ? 'down' : 'stable',
+              dominance_score: dominanceScore
+            };
+          })
           .filter(kw => {
             if (filter === 'ranking') return kw.asins_ranking.length > 0;
             if (filter === 'not-ranking') return kw.asins_ranking.length === 0;
@@ -245,11 +283,19 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
         .map(([key, data]) => {
           const rankings = rankingMap.get(key) || [];
           const positions = rankings.map(r => r.position).filter(p => p > 0);
+          const rankingDetails = rankings.map(r => ({
+            asin: r.asin,
+            position: r.position,
+            title: r.title
+          })).filter(r => r.asin && r.position > 0);
+          const top10Count = rankingDetails.filter(d => d.position <= 10).length;
+          const dominanceScore = top10Count > 0 ? (top10Count / 10) * 100 : 0;
           
           return {
             keyword: data.keyword,
             total_asins: data.asins.size,
             asins_ranking: rankings.map(r => r.asin).filter(Boolean),
+            ranking_details: rankingDetails,
             best_position: positions.length > 0 ? Math.min(...positions) : 0,
             avg_position: positions.length > 0 
               ? positions.reduce((a, b) => a + b, 0) / positions.length 
@@ -261,7 +307,8 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
               : 0,
             competition: data.competition,
             cpc: data.cpc,
-            trend: data.monthly_trend > 5 ? 'up' : data.monthly_trend < -5 ? 'down' : 'stable'
+            trend: data.monthly_trend > 5 ? 'up' : data.monthly_trend < -5 ? 'down' : 'stable',
+            dominance_score: dominanceScore
           };
         })
         .filter(kw => {
@@ -310,7 +357,7 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
   };
 
   const exportToCSV = () => {
-    const headers = ['Keyword', 'Search Volume', 'ASINs', 'Ranking ASINs', 'Best Position', 'Avg Position', 'Competition', 'CPC'];
+    const headers = ['Keyword', 'Search Volume', 'ASINs', 'Ranking ASINs', 'Best Position', 'Avg Position', 'Dominance', 'Competition', 'CPC', 'Ranking Details'];
     const rows = keywords.map(k => [
       k.keyword,
       k.total_search_volume,
@@ -318,8 +365,10 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
       k.asins_ranking.length,
       k.best_position || 'Not Ranking',
       k.avg_position ? k.avg_position.toFixed(1) : 'N/A',
+      k.dominance_score > 0 ? k.dominance_score.toFixed(0) + '%' : '-',
       (k.competition * 100).toFixed(0) + '%',
-      '$' + k.cpc.toFixed(2)
+      '$' + k.cpc.toFixed(2),
+      k.ranking_details.map(d => `${d.asin} (#${d.position})`).join('; ') || '-'
     ]);
     
     const csvContent = [headers, ...rows]
@@ -498,8 +547,8 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100">Keyword</th>
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-right">Volume</th>
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">ASINs</th>
-                    <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Best Pos.</th>
-                    <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Avg Pos.</th>
+                    <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Rankings</th>
+                    <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Dominance</th>
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Competition</th>
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-right">CPC</th>
                     <th className="pb-3 font-medium text-gray-900 dark:text-gray-100 text-center">Trend</th>
@@ -538,21 +587,63 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
                           )}
                         </span>
                       </td>
-                      <td className="py-3 text-center">
-                        {keyword.best_position > 0 ? (
-                          <span className={`font-medium ${
-                            keyword.best_position <= 10 ? 'text-green-600' : 
-                            keyword.best_position <= 30 ? 'text-yellow-600' : 
-                            'text-gray-600'
-                          }`}>
-                            #{keyword.best_position}
-                          </span>
+                      <td className="py-3">
+                        {keyword.ranking_details.length > 0 ? (
+                          <div className="space-y-1">
+                            {keyword.ranking_details.slice(0, 2).map((detail, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-xs">
+                                <span className={`font-medium ${
+                                  detail.position <= 10 ? 'text-green-600' : 
+                                  detail.position <= 30 ? 'text-yellow-600' : 
+                                  'text-gray-600'
+                                }`}>
+                                  #{detail.position}
+                                </span>
+                                <span className="text-gray-500 truncate max-w-[120px]" title={detail.title || detail.asin}>
+                                  {detail.asin}
+                                </span>
+                              </div>
+                            ))}
+                            {keyword.ranking_details.length > 2 && (
+                              <button
+                                onClick={() => setSelectedKeywordDetails(keyword)}
+                                className="text-xs text-violet-600 hover:text-violet-700 font-medium"
+                              >
+                                +{keyword.ranking_details.length - 2} more
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="py-3 text-center text-gray-600 dark:text-gray-300">
-                        {keyword.avg_position > 0 ? keyword.avg_position.toFixed(1) : '-'}
+                      <td className="py-3 text-center">
+                        {keyword.dominance_score > 0 ? (
+                          <div 
+                            className="flex flex-col items-center cursor-help"
+                            title={`${keyword.ranking_details.filter(d => d.position <= 10).length} of top 10 positions owned by your brand`}
+                          >
+                            <span className={`font-medium ${
+                              keyword.dominance_score >= 30 ? 'text-green-600' : 
+                              keyword.dominance_score >= 20 ? 'text-yellow-600' : 
+                              'text-gray-600'
+                            }`}>
+                              {keyword.dominance_score.toFixed(0)}%
+                            </span>
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5 mt-1">
+                              <div 
+                                className={`h-1.5 rounded-full ${
+                                  keyword.dominance_score >= 30 ? 'bg-green-500' :
+                                  keyword.dominance_score >= 20 ? 'bg-yellow-500' :
+                                  'bg-gray-500'
+                                }`}
+                                style={{ width: `${keyword.dominance_score}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="py-3 text-center">
                         <div className="flex justify-center">
@@ -598,6 +689,75 @@ export function BrandKeywordsOverview({ brandName: propBrandName }: BrandKeyword
           )}
         </div>
       </div>
+
+      {/* Ranking Details Modal */}
+      {selectedKeywordDetails && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedKeywordDetails(null)} />
+            
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    Rankings for "{selectedKeywordDetails.keyword}"
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {selectedKeywordDetails.ranking_details.length} ASINs ranking • 
+                    Dominance Score: {selectedKeywordDetails.dominance_score.toFixed(0)}%
+                  </p>
+                </div>
+                
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-gray-900 dark:text-gray-100">Position</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-900 dark:text-gray-100">ASIN</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-900 dark:text-gray-100">Title</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {selectedKeywordDetails.ranking_details
+                        .sort((a, b) => a.position - b.position)
+                        .map((detail, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-3 py-2">
+                              <span className={`font-medium ${
+                                detail.position <= 10 ? 'text-green-600' : 
+                                detail.position <= 30 ? 'text-yellow-600' : 
+                                'text-gray-600'
+                              }`}>
+                                #{detail.position}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">
+                              {detail.asin}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs">
+                              {detail.title || '-'}
+                            </td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <button
+                  type="button"
+                  className="btn bg-violet-500 hover:bg-violet-600 text-white"
+                  onClick={() => setSelectedKeywordDetails(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
