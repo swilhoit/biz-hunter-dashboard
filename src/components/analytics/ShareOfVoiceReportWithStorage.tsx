@@ -60,7 +60,7 @@ export default function ShareOfVoiceReportWithStorage({
 
   const addLog = (level: LogEntry['level'], message: string, icon?: React.ReactNode) => {
     const log: LogEntry = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toLocaleTimeString(),
       level,
       message,
