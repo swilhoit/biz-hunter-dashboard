@@ -91,7 +91,7 @@ class BigQueryService {
       }
 
       const response = await axios.get<ListingsResponse>(
-        `${this.baseUrl}/api/bigquery/listings?${params.toString()}&x-vercel-protection-bypass=f8b6ec1a2fc5aea26344a9fc859f2aa7c1e3994554cf77a6cf7cd68e91af3914`
+        `${this.baseUrl}/api/bigquery/listings?${params.toString()}`
       );
       
       return response.data.listings;
@@ -105,7 +105,7 @@ class BigQueryService {
   async getListingById(id: string): Promise<BusinessListing | null> {
     try {
       const response = await axios.get<BusinessListing>(
-        `${this.baseUrl}/api/bigquery/listings/${id}?x-vercel-protection-bypass=f8b6ec1a2fc5aea26344a9fc859f2aa7c1e3994554cf77a6cf7cd68e91af3914`
+        `${this.baseUrl}/api/bigquery/listings/${id}`
       );
       return response.data;
     } catch (error) {
@@ -125,7 +125,7 @@ class BigQueryService {
 
   async getStats(): Promise<any> {
     try {
-      const response = await axios.get(`${this.baseUrl}/api/bigquery/stats?x-vercel-protection-bypass=f8b6ec1a2fc5aea26344a9fc859f2aa7c1e3994554cf77a6cf7cd68e91af3914`);
+      const response = await axios.get(`${this.baseUrl}/api/bigquery/stats`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch stats from BigQuery:', error);
