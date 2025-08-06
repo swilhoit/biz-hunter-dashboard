@@ -31,3 +31,4 @@ bun.lockb
 *.sw?
 get-refresh-token.html
 google-ads-visual-guide.html
+bigquery-credentials.json

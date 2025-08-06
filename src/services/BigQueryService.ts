@@ -1,5 +1,5 @@
 // BigQuery Service for Business Listings
-// This service will connect to BigQuery to fetch business listings data
+import axios from 'axios';
 
 export interface BusinessListing {
   id: string;
@@ -17,6 +17,12 @@ export interface BusinessListing {
   seller_email?: string;
   multiple?: number;
   inventory_value?: number;
+  is_amazon_fba?: boolean;
+  amazon_business_type?: string;
+  established_year?: string;
+  monthly_traffic?: string;
+  seller_financing?: string;
+  reason_for_selling?: string;
   status: 'active' | 'pending' | 'sold';
   created_at: string;
   updated_at: string;
@@ -31,136 +37,128 @@ export interface ListingsFilter {
   location?: string;
   source?: string;
   searchTerm?: string;
+  isAmazonFba?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListingsResponse {
+  listings: BusinessListing[];
+  total: number;
+  offset: number;
+  limit: number;
 }
 
 class BigQueryService {
   private baseUrl: string;
 
   constructor() {
-    // This will be configured to point to your BigQuery API endpoint
-    this.baseUrl = process.env.VITE_BIGQUERY_API_URL || '/api/bigquery';
+    // Detect if we're on Vercel or local development
+    if (typeof window !== 'undefined') {
+      // Client-side
+      const isVercel = window.location.hostname.includes('vercel.app') || 
+                      window.location.hostname !== 'localhost';
+      
+      if (isVercel) {
+        // Use relative URLs for Vercel (will use the same domain)
+        this.baseUrl = '';
+      } else {
+        // Local development
+        this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      }
+    } else {
+      // Server-side (shouldn't happen in a Vite app, but just in case)
+      this.baseUrl = process.env.VITE_API_BASE_URL || '';
+    }
   }
 
   async getListings(filters?: ListingsFilter): Promise<BusinessListing[]> {
-    // For now, return mock data
-    // In production, this will fetch from BigQuery
-    return this.getMockListings(filters);
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters) {
+        if (filters.minPrice) params.append('minPrice', filters.minPrice.toString());
+        if (filters.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
+        if (filters.minRevenue) params.append('minRevenue', filters.minRevenue.toString());
+        if (filters.maxRevenue) params.append('maxRevenue', filters.maxRevenue.toString());
+        if (filters.industry) params.append('industry', filters.industry);
+        if (filters.location) params.append('location', filters.location);
+        if (filters.source) params.append('source', filters.source);
+        if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
+        if (filters.isAmazonFba !== undefined) params.append('isAmazonFba', filters.isAmazonFba.toString());
+        params.append('limit', (filters.limit || 100).toString());
+        params.append('offset', (filters.offset || 0).toString());
+      }
+
+      const response = await axios.get<ListingsResponse>(
+        `${this.baseUrl}/api/bigquery/listings?${params.toString()}`
+      );
+      
+      return response.data.listings;
+    } catch (error) {
+      console.error('Failed to fetch listings from BigQuery:', error);
+      // Return empty array on error
+      return [];
+    }
   }
 
   async getListingById(id: string): Promise<BusinessListing | null> {
-    const listings = await this.getMockListings();
-    return listings.find(l => l.id === id) || null;
+    try {
+      const response = await axios.get<BusinessListing>(
+        `${this.baseUrl}/api/bigquery/listings/${id}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch listing from BigQuery:', error);
+      return null;
+    }
   }
 
   async getOffMarketDeals(): Promise<BusinessListing[]> {
-    const listings = await this.getMockListings();
-    return listings.filter(l => l.source === 'off-market');
+    // Off-market deals would be filtered by a specific source or flag
+    // For now, we'll return listings from specific sources that might be off-market
+    return this.getListings({
+      source: 'off-market',
+      limit: 100
+    });
   }
 
-  private getMockListings(filters?: ListingsFilter): BusinessListing[] {
-    // Mock data for development
-    const mockListings: BusinessListing[] = [
-      {
-        id: '1',
-        business_name: 'Premium Amazon FBA Electronics Store',
-        asking_price: 2500000,
-        annual_revenue: 5000000,
-        cash_flow: 750000,
-        location: 'United States',
-        industry: 'E-commerce',
-        description: 'Established Amazon FBA business selling premium electronics with strong brand presence',
-        listing_url: 'https://example.com/listing/1',
-        source: 'BizBuySell',
-        date_listed: '2024-01-15',
-        multiple: 3.3,
-        inventory_value: 250000,
-        status: 'active',
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-01-15T10:00:00Z'
-      },
-      {
-        id: '2',
-        business_name: 'Health & Beauty Amazon Brand',
-        asking_price: 1800000,
-        annual_revenue: 3200000,
-        cash_flow: 540000,
-        location: 'California',
-        industry: 'Health & Beauty',
-        description: 'Fast-growing health and beauty brand on Amazon with proprietary products',
-        listing_url: 'https://example.com/listing/2',
-        source: 'QuietLight',
-        date_listed: '2024-01-20',
-        multiple: 3.3,
-        inventory_value: 180000,
-        status: 'active',
-        created_at: '2024-01-20T10:00:00Z',
-        updated_at: '2024-01-20T10:00:00Z'
-      },
-      {
-        id: '3',
-        business_name: 'Pet Supplies Amazon Business',
-        asking_price: 950000,
-        annual_revenue: 1800000,
-        cash_flow: 285000,
-        location: 'Texas',
-        industry: 'Pet Supplies',
-        description: 'Profitable pet supplies business with recurring customers',
-        listing_url: '',
-        source: 'off-market',
-        date_listed: '2024-01-25',
-        seller_name: 'John Doe',
-        seller_email: 'john@example.com',
-        multiple: 3.3,
-        inventory_value: 95000,
-        status: 'active',
-        created_at: '2024-01-25T10:00:00Z',
-        updated_at: '2024-01-25T10:00:00Z'
-      }
-    ];
-
-    // Apply filters if provided
-    let filtered = [...mockListings];
-
-    if (filters) {
-      if (filters.minPrice) {
-        filtered = filtered.filter(l => l.asking_price >= filters.minPrice!);
-      }
-      if (filters.maxPrice) {
-        filtered = filtered.filter(l => l.asking_price <= filters.maxPrice!);
-      }
-      if (filters.minRevenue) {
-        filtered = filtered.filter(l => l.annual_revenue >= filters.minRevenue!);
-      }
-      if (filters.maxRevenue) {
-        filtered = filtered.filter(l => l.annual_revenue <= filters.maxRevenue!);
-      }
-      if (filters.industry) {
-        filtered = filtered.filter(l => l.industry.toLowerCase().includes(filters.industry!.toLowerCase()));
-      }
-      if (filters.location) {
-        filtered = filtered.filter(l => l.location.toLowerCase().includes(filters.location!.toLowerCase()));
-      }
-      if (filters.source) {
-        filtered = filtered.filter(l => l.source === filters.source);
-      }
-      if (filters.searchTerm) {
-        const term = filters.searchTerm.toLowerCase();
-        filtered = filtered.filter(l => 
-          l.business_name.toLowerCase().includes(term) ||
-          l.description.toLowerCase().includes(term) ||
-          l.industry.toLowerCase().includes(term)
-        );
-      }
+  async getStats(): Promise<any> {
+    try {
+      const response = await axios.get(`${this.baseUrl}/api/bigquery/stats`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch stats from BigQuery:', error);
+      return null;
     }
-
-    return filtered;
   }
 
-  // Future BigQuery integration
+  // Get unique sources for filtering
+  async getSources(): Promise<string[]> {
+    try {
+      // For now, return known sources
+      return [
+        'empireflippers',
+        'flippa',
+        'quietlight',
+        'feinternational',
+        'websiteclosers',
+        'bizbuysell',
+        'bizquest',
+        'acquire',
+        'websiteproperties'
+      ];
+    } catch (error) {
+      console.error('Failed to fetch sources:', error);
+      return [];
+    }
+  }
+
+  // Execute raw BigQuery query (for advanced use cases)
   async executeBigQuery(query: string): Promise<any> {
-    // This will execute actual BigQuery queries
-    // For now, it's a placeholder
-    console.log('BigQuery query:', query);
+    console.log('Executing BigQuery:', query);
+    // This would need a separate endpoint on the server
+    // For security reasons, we might not want to expose this directly
     return { rows: [] };
   }
 }

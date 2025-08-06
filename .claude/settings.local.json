@@ -134,7 +134,8 @@
       "mcp__supabase__generate_typescript_types",
       "WebFetch(domain:localhost)",
       "WebFetch(domain:sandbox.dataforseo.com)",
-      "Bash(nslookup:*)"
+      "Bash(nslookup:*)",
+      "Bash(bq:*)"
     ],
     "deny": []
   }
