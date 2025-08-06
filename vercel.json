@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/bigquery/:path*",
-      "destination": "https://biz-scraper-api-yqqo3qn66q-uc.a.run.app/api/bigquery/:path*"
+      "destination": "https://biz-scraper-api-xnz2dmzblq-uc.a.run.app/api/bigquery/:path*"
     }
   ],
   "headers": [
