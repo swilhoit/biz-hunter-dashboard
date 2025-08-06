@@ -39,11 +39,11 @@ function App() {
         {/* Main route redirects to listings */}
         <Route exact path="/" element={<Navigate to="/listings" replace />} />
         
-        {/* Core business listings routes */}
-        <Route path="/listings" element={<ProtectedRoute><ListingsFeed /></ProtectedRoute>} />
-        <Route path="/listings/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
-        <Route path="/off-market-deals" element={<ProtectedRoute><OffMarketDeals /></ProtectedRoute>} />
-        <Route path="/off-market-seller/:id" element={<ProtectedRoute><OffMarketSellerDetails /></ProtectedRoute>} />
+        {/* Core business listings routes - PUBLIC ACCESS */}
+        <Route path="/listings" element={<ListingsFeed />} />
+        <Route path="/listings/:id" element={<ListingDetail />} />
+        <Route path="/off-market-deals" element={<OffMarketDeals />} />
+        <Route path="/off-market-seller/:id" element={<OffMarketSellerDetails />} />
         
         {/* Basic auth routes - will simplify later */}
         <Route path="/signin" element={<Signin />} />

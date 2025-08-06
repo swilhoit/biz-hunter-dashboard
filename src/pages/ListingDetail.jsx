@@ -48,17 +48,8 @@ function ListingDetail() {
   };
 
   const handleAddToPipeline = async () => {
-    if (listing) {
-      try {
-        const result = await addToPipelineMutation.mutateAsync(listing);
-        showSuccess(`"${listing.business_name || listing.name}" added to pipeline successfully!`);
-        console.log('✅ Successfully added to pipeline:', result);
-      } catch (error) {
-        const errorMessage = error.message || 'Failed to add listing to pipeline';
-        showError(`Error: ${errorMessage}`);
-        console.error('❌ Failed to add to pipeline:', error);
-      }
-    }
+    // Pipeline functionality temporarily disabled
+    showError('Pipeline functionality is currently disabled');
   };
 
   if (isLoading) {
@@ -195,14 +186,10 @@ function ListingDetail() {
                   )}
                   <button
                     onClick={handleAddToPipeline}
-                    disabled={addToPipelineMutation.isLoading}
+                    disabled={false}
                     className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
-                    {addToPipelineMutation.isLoading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Plus className="w-4 h-4 mr-2" />
-                    )}
+                    <Plus className="w-4 h-4 mr-2" />
                     Add to Pipeline
                   </button>
                 </div>
