@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
-import { useBusinessListing, useAddToPipeline } from '../hooks/useBusinessListings';
+import { useBusinessListing } from '../hooks/useBusinessListings';
 import { useToast } from '../contexts/ToastContext';
 import { 
   ArrowLeft, 
@@ -32,7 +32,7 @@ function ListingDetail() {
     error 
   } = useBusinessListing(id);
   
-  const addToPipelineMutation = useAddToPipeline();
+  // const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
   
 
