@@ -10,7 +10,6 @@ import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { DuplicateManager } from '../components/DuplicateManager';
 import ScrapingResultsModal from '../components/ScrapingResultsModal';
 import ScrapingProgressModal from '../components/ScrapingProgressModal';
 import SavedFilters from '../components/SavedFilters';
@@ -27,7 +26,6 @@ function ListingsFeed() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedListings, setSelectedListings] = useState([]);
   const [hideDuplicates, setHideDuplicates] = useState(false);
-  const [showDuplicateManager, setShowDuplicateManager] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const [sitesForScraper] = useState(['quietlight', 'bizbuysell']);
@@ -617,16 +615,6 @@ function ListingsFeed() {
                         </button>
                         
                         {/* Duplicate Management */}
-                        <button 
-                          onClick={() => {
-                            setShowDuplicateManager(true);
-                            setShowAdminDropdown(false);
-                          }}
-                          className="w-full flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                        >
-                          <AlertTriangle className="w-4 h-4 mr-3 text-amber-600" />
-                          Manage Duplicates
-                        </button>
                         
                         <button 
                           onClick={() => {
@@ -941,11 +929,6 @@ function ListingsFeed() {
         </main>
       </div>
       
-      {/* Duplicate Manager Modal */}
-      <DuplicateManager 
-        isOpen={showDuplicateManager}
-        onClose={() => setShowDuplicateManager(false)}
-      />
       
       {/* Scraping Results Modal */}
       <ScrapingResultsModal 
