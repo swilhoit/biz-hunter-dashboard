@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
-import SidebarLinkGroup from "./SidebarLinkGroup";
 import FBAHunterLogo from "../components/FBAHunterLogo";
 
 function Sidebar({
@@ -90,119 +89,52 @@ function Sidebar({
 
         {/* Links */}
         <div className="space-y-8">
-          {/* Business group */}
+          {/* Main Navigation */}
           <div>
             <h3 className="text-xs uppercase text-gray-400 dark:text-gray-500 font-semibold pl-3">
               <span className="hidden lg:block lg:sidebar-expanded:hidden 2xl:hidden text-center w-6" aria-hidden="true">
                 •••
               </span>
-              <span className="lg:hidden lg:sidebar-expanded:block 2xl:block">Business</span>
+              <span className="lg:hidden lg:sidebar-expanded:block 2xl:block">Business Listings</span>
             </h3>
             <ul className="mt-3">
-              {/* Feed */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
+              {/* Business Listings */}
+              <li className={`pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-[linear-gradient(135deg,var(--tw-gradient-stops))] ${pathname.includes("/listings") && "from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]"}`}>
                 <NavLink
                   end
                   to="/listings"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
+                  className={`block text-gray-800 dark:text-gray-100 truncate transition duration-150 ${pathname.includes("/listings") ? "" : "hover:text-gray-900 dark:hover:text-white"}`}
                 >
                   <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('listings') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <path d="M3 3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3Zm1 0v2h8V3H4Z"/>
-                      <path d="M3 7a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Zm1 0v2h8V7H4Z"/>
-                      <path d="M3 11a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2Zm1 0v2h8v-2H4Z"/>
+                    <svg className={`shrink-0 fill-current ${pathname.includes("/listings") ? "text-violet-500" : ""}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+                      <path d="M5 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H5ZM3 4a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V4Z" />
+                      <path d="M5 5.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5ZM5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5ZM5 9.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5Z" />
                     </svg>
                     <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      Feed
-                    </span>
-                  </div>
-                </NavLink>
-              </li>
-              {/* Deals */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
-                <NavLink
-                  end
-                  to="/deals"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
-                >
-                  <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('deals') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <path d="M2 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4Z"/>
-                      <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-1a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-                    </svg>
-                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      Deals
-                    </span>
-                  </div>
-                </NavLink>
-              </li>
-              {/* Portfolio */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
-                <NavLink
-                  end
-                  to="/portfolio"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
-                >
-                  <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('portfolio') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <path d="M6 2a2 2 0 0 0-2 2v1H2.5A1.5 1.5 0 0 0 1 6.5v7A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 13.5 5H12V4a2 2 0 0 0-2-2H6zm4 1a1 1 0 0 1 1 1v1H5V4a1 1 0 0 1 1-1h4zm-7.5 3h11a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5z"/>
-                    </svg>
-                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      Portfolio
+                      Business Listings
                     </span>
                   </div>
                 </NavLink>
               </li>
 
-              {/* Explorer */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
+              {/* Off-Market Deals */}
+              <li className={`pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-[linear-gradient(135deg,var(--tw-gradient-stops))] ${pathname.includes("/off-market") && "from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]"}`}>
                 <NavLink
                   end
-                  to="/explorer"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
+                  to="/off-market-deals"
+                  className={`block text-gray-800 dark:text-gray-100 truncate transition duration-150 ${pathname.includes("/off-market") ? "" : "hover:text-gray-900 dark:hover:text-white"}`}
                 >
                   <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('explorer') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                      <path d="M8 3v5l3.5 3.5"/>
+                    <svg className={`shrink-0 fill-current ${pathname.includes("/off-market") ? "text-violet-500" : ""}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+                      <path d="M14.5 2h-13a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5Zm-13-1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 14.5 1h-13Z" />
+                      <path d="M3 5.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5ZM3 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 8Zm0 2.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5Z" />
                     </svg>
                     <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      Explorer
+                      Off-Market Deals
                     </span>
                   </div>
                 </NavLink>
               </li>
-
-              {/* Share of Voice */}
-              <li className="px-3 py-2 rounded-lg mb-0.5 last:mb-0">
-                <NavLink
-                  end
-                  to="/share-of-voice"
-                  className={({ isActive }) =>
-                    "block text-gray-800 dark:text-gray-100 truncate transition duration-150 " + (isActive ? "" : "hover:text-gray-900 dark:hover:text-white")
-                  }
-                >
-                  <div className="flex items-center">
-                    <svg className={`shrink-0 fill-current ${pathname.includes('share-of-voice') ? 'text-violet-500' : 'text-gray-400 dark:text-gray-500'}`} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-                      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                      <path d="M8 4a.5.5 0 0 1 .5.5V8a.5.5 0 0 1-.252.434l-3.5 2a.5.5 0 0 1-.496-.868L7.5 7.752V4.5A.5.5 0 0 1 8 4z"/>
-                    </svg>
-                    <span className="text-sm font-medium ml-4 lg:opacity-0 lg:sidebar-expanded:opacity-100 2xl:opacity-100 duration-200">
-                      Share of Voice
-                    </span>
-                  </div>
-                </NavLink>
-              </li>
-
-
             </ul>
           </div>
         </div>

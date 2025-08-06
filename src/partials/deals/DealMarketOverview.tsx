@@ -3,10 +3,11 @@ import { Deal } from '../../types/deal';
 import { 
   TrendingUp, Globe, Package, MessageCircle, Search, DollarSign, 
   Users, BarChart3, Mic, ShoppingCart, Store, Monitor, RefreshCw,
-  CheckCircle, AlertCircle, Clock
+  CheckCircle, AlertCircle, Clock, Eye
 } from 'lucide-react';
 import { ShareOfVoiceService, StoredShareOfVoiceReport } from '../../services/ShareOfVoiceService';
 import ShareOfVoiceReportWithStorage from '../../components/analytics/ShareOfVoiceReportWithStorage';
+import StoredShareOfVoiceReportComponent from '../../components/analytics/StoredShareOfVoiceReport';
 import { CompetitorMarketAnalysis } from '../../components/analytics/CompetitorMarketAnalysis';
 
 interface DealMarketOverviewProps {
@@ -20,6 +21,7 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
   const [existingReport, setExistingReport] = useState<StoredShareOfVoiceReport | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [migrationNeeded, setMigrationNeeded] = useState(false);
+  const [showFullReport, setShowFullReport] = useState(false);
 
   useEffect(() => {
     checkForExistingReport();
@@ -56,6 +58,7 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
     await checkForExistingReport();
     setGeneratingReport(false);
     setShowShareOfVoice(false); // Hide the modal after completion
+    setShowFullReport(false); // Reset full report view
   };
 
   const handleReportCancel = () => {
@@ -138,62 +141,82 @@ function DealMarketOverview({ deal }: DealMarketOverviewProps) {
 
         {/* Show existing report summary if available */}
         {reportExists && existingReport && !showShareOfVoice && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <Mic className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <span className="text-xs text-gray-500">Market Share</span>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Mic className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs text-gray-500">Market Share</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {existingReport.brand_market_share?.toFixed(1) || '0'}%
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Rank #{existingReport.brand_rank || 'N/A'} of {existingReport.total_brands || 'N/A'}
+                </p>
               </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {existingReport.brand_market_share?.toFixed(1) || '0'}%
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Rank #{existingReport.brand_rank || 'N/A'} of {existingReport.total_brands || 'N/A'}
-              </p>
+              
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span className="text-xs text-gray-500">Revenue Share</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  ${((existingReport.brand_revenue || 0) / 1000000).toFixed(1)}M
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  of ${((existingReport.total_market_revenue || 0) / 1000000).toFixed(1)}M total
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Package className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <span className="text-xs text-gray-500">Products</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {existingReport.brand_product_count || 0}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Avg {existingReport.avg_products_per_brand?.toFixed(0) || 0} per brand
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Search className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  <span className="text-xs text-gray-500">Keyword Share</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {existingReport.brand_keyword_share?.toFixed(1) || '0'}%
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Avg presence in searches
+                </p>
+              </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-xs text-gray-500">Revenue Share</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                ${((existingReport.brand_revenue || 0) / 1000000).toFixed(1)}M
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                of ${((existingReport.total_market_revenue || 0) / 1000000).toFixed(1)}M total
-              </p>
+            {/* View Full Report Button */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => setShowFullReport(!showFullReport)}
+                className="btn bg-gray-600 hover:bg-gray-700 text-white text-sm"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                {showFullReport ? 'Hide Full Report' : 'View Full Report'}
+              </button>
             </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <Package className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <span className="text-xs text-gray-500">Products</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {existingReport.brand_product_count || 0}
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Avg {existingReport.avg_products_per_brand?.toFixed(0) || 0} per brand
-              </p>
-            </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <Search className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                <span className="text-xs text-gray-500">Keyword Share</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {existingReport.brand_keyword_share?.toFixed(1) || '0'}%
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Avg presence in searches
-              </p>
-            </div>
+          </>
+        )}
+
+        {/* Show full stored report when requested */}
+        {showFullReport && existingReport && !showShareOfVoice && (
+          <div className="mt-6">
+            <StoredShareOfVoiceReportComponent report={existingReport} />
           </div>
         )}
 
-        {/* Show full report when requested */}
+        {/* Show report generation when requested */}
         {showShareOfVoice && (
           <div className="mt-6">
             <ShareOfVoiceReportWithStorage
