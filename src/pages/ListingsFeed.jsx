@@ -163,7 +163,7 @@ function ListingsFeed() {
     if (listings.length > 0) {
       console.log('  First 3 listings:');
       listings.slice(0, 3).forEach((listing, idx) => {
-        console.log(`    ${idx + 1}. ${listing.name} - $${listing.asking_price?.toLocaleString() || 'N/A'} - ${listing.source}`);
+        console.log(`    ${idx + 1}. ${listing.business_name || listing.name} - $${listing.asking_price?.toLocaleString() || 'N/A'} - ${listing.source}`);
         console.log(`       Category fields: amazon_category="${listing.amazon_category}", niche="${listing.niche}", industry="${listing.industry}"`);
       });
     }
@@ -209,7 +209,6 @@ function ListingsFeed() {
     // Search term filter
     const matchesSearch = searchTerm === '' || 
       listing.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      listing.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       listing.niche?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       listing.industry?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       listing.source?.toLowerCase().includes(searchTerm.toLowerCase()) ||

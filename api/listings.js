@@ -151,18 +151,18 @@ export default async function handler(req, res) {
       description: row.description || '',
       listing_url: row.listing_url,
       source: row.source_site,
-      date_listed: row.date_listed,
+      date_listed: row.date_listed?.value || row.date_listed,
       multiple: parseFloat(row.multiple) || 0,
       inventory_value: parseFloat(row.inventory_value) || 0,
-      is_amazon_fba: row.is_amazon_fba,
+      is_amazon_fba: row.is_amazon_fba || false,
       amazon_business_type: row.amazon_business_type,
       established_year: row.established_year,
       monthly_traffic: row.monthly_traffic,
       seller_financing: row.seller_financing,
       reason_for_selling: row.reason_for_selling,
       status: 'active',
-      created_at: row.date_listed,
-      updated_at: row.updated_at || row.date_listed
+      created_at: row.date_listed?.value || row.date_listed,
+      updated_at: (row.updated_at?.value || row.updated_at) || (row.date_listed?.value || row.date_listed)
     }));
 
     res.status(200).json({
