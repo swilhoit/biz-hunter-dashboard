@@ -11,8 +11,6 @@ import './css/style.css';
 // Import only essential pages for business listings
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
-import OffMarketDeals from './pages/OffMarketDeals';
-import OffMarketSellerDetails from './pages/OffMarketSellerDetails';
 
 // Simple auth pages (will be simplified later)
 import Signin from './pages/Signin';
@@ -42,8 +40,6 @@ function App() {
         {/* Core business listings routes - PUBLIC ACCESS */}
         <Route path="/listings" element={<ListingsFeed />} />
         <Route path="/listings/:id" element={<ListingDetail />} />
-        <Route path="/off-market-deals" element={<OffMarketDeals />} />
-        <Route path="/off-market-seller/:id" element={<OffMarketSellerDetails />} />
         
         {/* Basic auth routes - will simplify later */}
         <Route path="/signin" element={<Signin />} />
