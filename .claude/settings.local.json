@@ -141,7 +141,8 @@
       "Bash(--condition=None)",
       "Bash(--member=\"serviceAccount:bigquery-vercel@tetrahedron-366117.iam.gserviceaccount.com\" )",
       "Bash(--role=\"roles/bigquery.jobUser\" )",
-      "Bash(--iam-account=bigquery-vercel@tetrahedron-366117.iam.gserviceaccount.com)"
+      "Bash(--iam-account=bigquery-vercel@tetrahedron-366117.iam.gserviceaccount.com)",
+      "Bash(vercel:*)"
     ],
     "deny": []
   }
