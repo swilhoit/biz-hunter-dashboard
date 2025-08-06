@@ -5,7 +5,7 @@ import ListingsTable from '../partials/deals/ListingsTable';
 import ListingsFilters from '../partials/deals/ListingsFilters';
 import ListingCard from '../partials/deals/ListingCard';
 import OffMarketSellers from '../partials/deals/OffMarketSellers';
-import { useBusinessListings, useAddToPipeline, useClearListings } from '../hooks/useBusinessListings';
+import { useBusinessListings } from '../hooks/useBusinessListings';
 import { useManualScraping } from '../hooks/useManualScraping';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../hooks/useAuth';
@@ -171,7 +171,7 @@ function ListingsFeed() {
   }, [listings, isLoading, error]);
   
   
-  const addToPipelineMutation = useAddToPipeline();
+  // const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
   const { 
     startScraping,
@@ -184,7 +184,7 @@ function ListingsFeed() {
     handleProgressModalClose,
     handleProgressModalComplete
   } = useManualScraping();
-  const clearListingsMutation = useClearListings();
+  // const clearListingsMutation = useClearListings();
 
   // Close admin dropdown when clicking outside
   React.useEffect(() => {
