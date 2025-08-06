@@ -1,11 +1,22 @@
 import { BigQuery } from '@google-cloud/bigquery';
 
 // Initialize BigQuery client
-const bigquery = new BigQuery({
-  projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117',
-  credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS ? 
-    JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS) : undefined
-});
+let bigquery;
+try {
+  const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS ? 
+    JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS) : undefined;
+  
+  bigquery = new BigQuery({
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117',
+    credentials: credentials
+  });
+} catch (error) {
+  console.error('Failed to initialize BigQuery:', error);
+  // Fallback to default credentials (for local development)
+  bigquery = new BigQuery({
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117'
+  });
+}
 
 export default async function handler(req, res) {
   // Enable CORS
