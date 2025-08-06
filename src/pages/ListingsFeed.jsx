@@ -147,11 +147,11 @@ function ListingsFeed() {
 
   // Fetch real business listings data
   const { 
-    data: listings = [], 
-    isLoading, 
+    listings = [], 
+    loading: isLoading, 
     error, 
     refetch 
-  } = useBusinessListings({ hideDuplicates, sortBy, sortDirection });
+  } = useBusinessListings();
   
   // Log listings data when it changes
   React.useEffect(() => {
