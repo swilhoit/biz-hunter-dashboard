@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
-import { X, Upload, FileText, Loader2, AlertCircle, Brain, Save, CheckCircle, DollarSign, Building, Globe, Calendar, Phone, Mail, User, Tag } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Loader2, Save, Upload, X, FileText, Bot, BrainCircuit, CheckCircle, AlertTriangle, Info, Building, DollarSign, Globe, Calendar, Phone, Mail, User, Tag, AlertCircle, Brain } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { dealsAdapter, filesAdapter, mapDealStatus } from '../lib/database-adapter';
 import { Deal, DealStatus, DealSource } from '../types/deal';
-import { dealsAdapter, filesAdapter } from '../lib/database-adapter';
 import { DocumentAnalysisService, DocumentAnalysis } from '../services/AIAnalysisService';
+import PDFUploadGuide from './PDFUploadGuide';
+import { useAuth } from '../hooks/useAuth';
 
 interface AddDealModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDealCreated: (deal: Deal) => void;
+  initialData?: Partial<Deal>;
 }
 
 interface FileAnalysis {
@@ -29,10 +34,20 @@ const initialDealData: Partial<Deal> = {
   monthly_revenue: 0,
   monthly_profit: 0,
   valuation_multiple: 0,
+  ebitda: 0,
+  sde: 0,
   business_age: 0,
+  employee_count: 0,
+  inventory_value: 0,
   date_listed: '',
   listing_url: '',
   website_url: '',
+  city: '',
+  state: '',
+  country: 'USA',
+  industry: '',
+  sub_industry: '',
+  niche_keywords: [],
   seller_name: '',
   seller_email: '',
   seller_phone: '',
@@ -46,12 +61,15 @@ const initialDealData: Partial<Deal> = {
   amazon_store_url: '',
   seller_account_health: '',
   fba_percentage: 0,
+  monthly_sessions: 0,
+  conversion_rate: 0,
+  brand_names: [],
   notes: '',
   tags: []
 };
 
-export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDealModalProps) {
-  const [dealData, setDealData] = useState<Partial<Deal>>(initialDealData);
+export default function AddDealModal({ isOpen, onClose, onDealCreated, initialData }: AddDealModalProps) {
+  const [dealData, setDealData] = useState<Partial<Deal>>(initialData || initialDealData);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [fileAnalyses, setFileAnalyses] = useState<FileAnalysis[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -59,10 +77,15 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   const [isSaving, setIsSaving] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<FileAnalysis | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisMessage, setAnalysisMessage] = useState('');
+  const [showPDFGuide, setShowPDFGuide] = useState(false);
+  const { user } = useAuth();
 
   const dealStatuses: { value: DealStatus; label: string }[] = [
     { value: 'prospecting', label: 'Prospecting' },
     { value: 'initial_contact', label: 'Initial Contact' },
+    { value: 'analysis', label: 'Analysis' },
     { value: 'loi_submitted', label: 'LOI Submitted' },
     { value: 'due_diligence', label: 'Due Diligence' },
     { value: 'negotiation', label: 'Negotiation' },
@@ -117,6 +140,8 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     console.log('Starting file upload for', files.length, 'files');
     setUploadedFiles(prev => [...prev, ...files]);
     setIsAnalyzing(true);
+    setAnalysisProgress(5);
+    setAnalysisMessage('Starting analysis...');
 
     const newAnalyses: FileAnalysis[] = files.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -132,9 +157,23 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
       const file = files[i];
       const analysisId = newAnalyses[i].id;
       console.log(`Analyzing file ${i + 1}/${files.length}: ${file.name}`);
+      
+      setAnalysisProgress(prev => Math.min(95, prev + 15));
+      setAnalysisMessage(`Analyzing ${file.name}...`);
 
       try {
-        const analysis = await DocumentAnalysisService.analyzeDocument(file);
+        const analysis = await DocumentAnalysisService.analyzeDocument(
+          file,
+          (progress: string) => {
+            setAnalysisMessage(progress);
+            if (progress.includes('Scanning')) setAnalysisProgress(15);
+            if (progress.includes('important pages')) setAnalysisProgress(25);
+            if (progress.includes('direct text')) setAnalysisProgress(40);
+            if (progress.includes('image analysis')) setAnalysisProgress(50);
+            if (progress.includes('Processing prioritized page')) setAnalysisProgress(p => Math.min(90, p + 5));
+            if (progress.includes('Finalizing analysis')) setAnalysisProgress(95);
+          }
+        );
         console.log('Analysis result for', file.name, ':', analysis);
         
         setFileAnalyses(prev => prev.map(fa => 
@@ -144,15 +183,42 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
         ));
       } catch (error: any) {
         console.error('Analysis error for', file.name, ':', error);
+        
+        // Provide user-friendly error feedback
+        const errorType = error.message?.includes('vision') || error.message?.includes('MIME type') 
+          ? 'AI_VISION_ERROR'
+          : error.message?.includes('PDF')
+          ? 'PDF_PROCESSING_ERROR' 
+          : 'ANALYSIS_ERROR';
+        
+        let userFriendlyError = '';
+        switch (errorType) {
+          case 'AI_VISION_ERROR':
+            userFriendlyError = 'AI analysis temporarily unavailable - file uploaded successfully';
+            console.log(`⚠️ AI analysis unavailable for ${file.name} (vision API issue) - file will still be saved`);
+            break;
+          case 'PDF_PROCESSING_ERROR':
+            userFriendlyError = 'PDF analysis failed - file uploaded successfully';
+            console.log(`⚠️ PDF text extraction failed for ${file.name} - file will still be saved`);
+            setShowPDFGuide(true);
+            break;
+          default:
+            userFriendlyError = 'AI analysis failed - file uploaded successfully';
+            console.log(`⚠️ AI analysis failed for ${file.name} - file will still be saved`);
+        }
+        
         setFileAnalyses(prev => prev.map(fa => 
           fa.id === analysisId
-            ? { ...fa, status: 'error', error: error.message }
+            ? { ...fa, status: 'error', error: userFriendlyError }
             : fa
         ));
       }
     }
 
     setIsAnalyzing(false);
+    setAnalysisProgress(100);
+    setAnalysisMessage('Analysis complete! Form autofilled.');
+    setTimeout(() => setIsAnalyzing(false), 2000);
     console.log('File analysis complete');
   };
 
@@ -211,6 +277,31 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
     if (analysis.websiteUrl && !dealData.website_url) {
       updates.website_url = analysis.websiteUrl;
     }
+    // Additional business details from nested structures
+    if (analysis.additionalInfo?.employeeCount && !dealData.employee_count) {
+      updates.employee_count = analysis.additionalInfo.employeeCount;
+    }
+    if (analysis.additionalInfo?.inventoryValue && !dealData.inventory_value) {
+      updates.inventory_value = analysis.additionalInfo.inventoryValue;
+    }
+    if (analysis.amazonInfo?.storeName && !dealData.amazon_store_name) {
+      updates.amazon_store_name = analysis.amazonInfo.storeName;
+    }
+    if (analysis.amazonInfo?.subcategory && !dealData.amazon_subcategory) {
+      updates.amazon_subcategory = analysis.amazonInfo.subcategory;
+    }
+    if (analysis.amazonInfo?.storeUrl && !dealData.amazon_store_url) {
+      updates.amazon_store_url = analysis.amazonInfo.storeUrl;
+    }
+    if (analysis.amazonInfo?.fbaPercentage && !dealData.fba_percentage) {
+      updates.fba_percentage = analysis.amazonInfo.fbaPercentage;
+    }
+    if (analysis.amazonInfo?.accountHealth && !dealData.seller_account_health) {
+      updates.seller_account_health = analysis.amazonInfo.accountHealth;
+    }
+    if (analysis.amazonInfo?.category && !dealData.amazon_category) {
+      updates.amazon_category = analysis.amazonInfo.category;
+    }
 
     // Contact Information
     if (analysis.brokerInfo?.name && !dealData.broker_name) {
@@ -235,25 +326,7 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
       updates.seller_phone = analysis.sellerInfo.phone;
     }
 
-    // Amazon Information
-    if (analysis.amazonInfo?.storeName && !dealData.amazon_store_name) {
-      updates.amazon_store_name = analysis.amazonInfo.storeName;
-    }
-    if (analysis.amazonInfo?.category && !dealData.amazon_category) {
-      updates.amazon_category = analysis.amazonInfo.category;
-    }
-    if (analysis.amazonInfo?.subcategory && !dealData.amazon_subcategory) {
-      updates.amazon_subcategory = analysis.amazonInfo.subcategory;
-    }
-    if (analysis.amazonInfo?.storeUrl && !dealData.amazon_store_url) {
-      updates.amazon_store_url = analysis.amazonInfo.storeUrl;
-    }
-    if (analysis.amazonInfo?.fbaPercentage && !dealData.fba_percentage) {
-      updates.fba_percentage = analysis.amazonInfo.fbaPercentage;
-    }
-    if (analysis.amazonInfo?.accountHealth && !dealData.seller_account_health) {
-      updates.seller_account_health = analysis.amazonInfo.accountHealth;
-    }
+    // Amazon Information (consolidated with above mapping)
 
     // Additional Information to Notes
     const additionalNotes: string[] = [];
@@ -291,44 +364,94 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
   };
 
   const handleSave = async () => {
-    if (!dealData.business_name) {
+    if (!dealData.business_name?.trim()) {
       alert('Please enter a business name');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Create the deal
-      const createdDeal = await dealsAdapter.createDeal(dealData);
+      // Prepare data for creation - only include non-empty values
+      const dataToCreate: Record<string, any> = {
+        business_name: dealData.business_name.trim(),
+        status: dealData.status || 'prospecting',
+        source: dealData.source || 'other',
+        user_id: user?.id || null,
+      };
+
+      // Add other fields only if they have values
+      Object.entries(dealData).forEach(([key, value]) => {
+        if (key !== 'business_name' && key !== 'status' && key !== 'source' && key !== 'user_id') {
+          // Skip empty/zero values for optional fields
+          if (value !== null && value !== undefined && value !== '' && value !== 0) {
+            dataToCreate[key] = value;
+          }
+        }
+      });
+
+      console.log('Creating deal with data:', dataToCreate);
+      const createdDeal = await dealsAdapter.createDeal(dataToCreate);
       
       // Upload files if any
       if (uploadedFiles.length > 0) {
-        for (const file of uploadedFiles) {
-          await filesAdapter.uploadFile(createdDeal.id, file, {
-            category: 'other',
-            description: 'Added with manual deal creation',
-            is_confidential: false
-          });
+        try {
+          for (const file of uploadedFiles) {
+            await filesAdapter.uploadFile(createdDeal.id, file, {
+              category: 'other',
+              description: 'Added with manual deal creation',
+              is_confidential: false,
+            });
+          }
+        } catch (uploadError: any) {
+          console.error('Error uploading files:', uploadError);
+          // Don't fail the whole operation if file upload fails
+          alert('Deal created successfully, but some files failed to upload.');
         }
       }
 
       // Fetch the complete deal data to return
-      const completeDeal = await dealsAdapter.fetchDealById(createdDeal.id);
-      if (completeDeal) {
-        onDealCreated(completeDeal);
+      try {
+        const completeDeal = await dealsAdapter.fetchDealById(createdDeal.id);
+        if (completeDeal) {
+          onDealCreated(completeDeal as Deal);
+        }
+      } catch (fetchError: any) {
+        console.error('Error fetching created deal:', fetchError);
+        // Map the created deal to ensure it has the required fields
+        const mappedDeal: Deal = {
+          ...createdDeal,
+          status: mapDealStatus(createdDeal.stage || 'prospecting') as DealStatus,
+          source: createdDeal.source || 'other',
+          ...createdDeal.custom_fields,
+        } as Deal;
+        onDealCreated(mappedDeal);
       }
       
       onClose();
     } catch (error: any) {
       console.error('Error creating deal:', error);
-      alert(`Failed to create deal: ${error.message}`);
+      
+      // Provide more helpful error messages
+      let errorMessage = 'Failed to create deal: ';
+      
+      if (error.message?.includes('not found in the schema')) {
+        errorMessage += 'Database schema error. Please contact support.';
+      } else if (error.message?.includes('violates foreign key constraint')) {
+        errorMessage += 'Invalid user. Please log in again.';
+      } else if (error.message?.includes('Business name is required')) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += error.message || 'Unknown error occurred';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsSaving(false);
     }
   };
 
   const resetForm = () => {
-    setDealData(initialDealData);
+    setDealData(initialData || initialDealData);
     setUploadedFiles([]);
     setFileAnalyses([]);
     setIsAnalyzing(false);
@@ -377,8 +500,8 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
               </p>
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-4">
                 <p className="text-xs text-blue-800 dark:text-blue-200">
-                  💡 <strong>Best Results:</strong> Plain text files (.txt) work best. For PDF/Word/Excel files, 
-                  consider copying the content and saving as .txt for optimal AI analysis.
+                  💡 <strong>Supported Formats:</strong> PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG). 
+                  For PDFs, we'll extract up to 10 pages. Broker teasers, P&L statements (Excel/PDF), and listing screenshots work great!
                 </p>
               </div>
               
@@ -407,8 +530,28 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                   {isAnalyzing ? 'AI analyzing documents...' : 'Drop documents here or click to browse'}
                 </p>
                 <p className="text-sm text-gray-500">
-                  Supports .txt, .pdf, .doc/.docx, .xls/.xlsx • Best results with plain text files
+                  Supports PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG)
                 </p>
+                
+                {/* Progress bar */}
+                {isAnalyzing && analysisProgress < 100 && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                      <span>{analysisMessage}</span>
+                      <span>{analysisProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className={`bg-indigo-600 h-2 rounded-full transition-all duration-300 ${
+                          analysisProgress >= 70 ? 'bg-green-500' :
+                          analysisProgress >= 40 ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        }`}
+                        style={{ width: `${analysisProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* File Analysis Results */}
@@ -490,6 +633,21 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                               {analysis.analysis.confidence < 30 ? 'Insufficient Data' : 'Apply to Form'}
                             </button>
                           </div>
+                        </div>
+                      )}
+                      {analysis.status === 'error' && (
+                        <div className="flex items-center">
+                          <span className="text-xs text-red-600 mr-2">
+                            {analysis.error?.includes('OpenAI API key') ? 'API Key Missing' : 'Processing Failed'}
+                          </span>
+                          <button
+                            onClick={() => {
+                              alert(analysis.error);
+                            }}
+                            className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200 transition-colors"
+                          >
+                            View Error
+                          </button>
                         </div>
                       )}
                     </div>
@@ -630,6 +788,187 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      EBITDA ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.ebitda || ''}
+                      onChange={(e) => handleInputChange('ebitda', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      SDE ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.sde || ''}
+                      onChange={(e) => handleInputChange('sde', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Revenue ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_revenue || ''}
+                      onChange={(e) => handleInputChange('monthly_revenue', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Profit ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_profit || ''}
+                      onChange={(e) => handleInputChange('monthly_profit', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Employee Count
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.employee_count || ''}
+                      onChange={(e) => handleInputChange('employee_count', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Inventory Value ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.inventory_value || ''}
+                      onChange={(e) => handleInputChange('inventory_value', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Business & Industry Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                  <Building className="w-5 h-5 mr-2 text-indigo-600" />
+                  Business & Industry
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.industry || ''}
+                      onChange={(e) => handleInputChange('industry', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., E-commerce, SaaS, Manufacturing"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Sub-Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.sub_industry || ''}
+                      onChange={(e) => handleInputChange('sub_industry', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., Pet Supplies, B2B Software"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.city || ''}
+                      onChange={(e) => handleInputChange('city', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.state || ''}
+                      onChange={(e) => handleInputChange('state', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="State"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.country || ''}
+                      onChange={(e) => handleInputChange('country', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="Country"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    value={dealData.website_url || ''}
+                    onChange={(e) => handleInputChange('website_url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="https://company-website.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Listing URL
+                  </label>
+                  <input
+                    type="url"
+                    value={dealData.listing_url || ''}
+                    onChange={(e) => handleInputChange('listing_url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="https://marketplace-listing.com"
+                  />
+                </div>
               </div>
 
               {/* Contact Information */}
@@ -726,6 +1065,19 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Amazon Store Name
+                  </label>
+                  <input
+                    type="text"
+                    value={dealData.amazon_store_name || ''}
+                    onChange={(e) => handleInputChange('amazon_store_name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="Amazon store name"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -741,6 +1093,21 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Amazon Subcategory
+                    </label>
+                    <input
+                      type="text"
+                      value={dealData.amazon_subcategory || ''}
+                      onChange={(e) => handleInputChange('amazon_subcategory', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="e.g., Kitchen & Dining"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       FBA Percentage (%)
                     </label>
                     <input
@@ -751,6 +1118,52 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
                       onChange={(e) => handleInputChange('fba_percentage', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
                       placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Seller Account Health
+                    </label>
+                    <select
+                      value={dealData.seller_account_health || ''}
+                      onChange={(e) => handleInputChange('seller_account_health', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                    >
+                      <option value="">Select account health</option>
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Poor">Poor</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Sessions
+                    </label>
+                    <input
+                      type="number"
+                      value={dealData.monthly_sessions || ''}
+                      onChange={(e) => handleInputChange('monthly_sessions', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Conversion Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={dealData.conversion_rate || ''}
+                      onChange={(e) => handleInputChange('conversion_rate', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+                      placeholder="0.0"
                     />
                   </div>
                 </div>
@@ -894,6 +1307,11 @@ export default function AddDealModal({ isOpen, onClose, onDealCreated }: AddDeal
             </div>
           </div>
         </div>
+      )}
+
+      {/* PDF Upload Guide Modal */}
+      {showPDFGuide && (
+        <PDFUploadGuide onClose={() => setShowPDFGuide(false)} />
       )}
     </>
   );

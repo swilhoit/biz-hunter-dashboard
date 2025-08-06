@@ -1,9 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Deal } from '../../types/deal';
-import { Package, Star, TrendingUp, BarChart3, ShoppingCart, Award } from 'lucide-react';
+import { AmazonCompetitor } from '../../types/market-analysis';
+import { Package, Star, TrendingUp, BarChart3, ShoppingCart, Award, Target, Users, AlertCircle } from 'lucide-react';
 import DoughnutChart from '../../charts/DoughnutChart';
+import BarChart02 from '../../charts/BarChart02';
 import { tailwindConfig } from '../../utils/Utils';
 import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
+import { ASINService } from '../../services/ASINService';
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -14,47 +17,123 @@ interface DealAmazonMetricsProps {
 function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
   const barChartRef = useRef<HTMLCanvasElement>(null);
   const barChartInstance = useRef<Chart | null>(null);
-  // Mock ASIN data - in real app this would come from API
-  const topASINs = [
+  const [showCompetitors, setShowCompetitors] = useState(false);
+  const [realASINs, setRealASINs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Mock competitor data for demonstration
+  const amazonCompetitors: AmazonCompetitor[] = [
     {
-      asin: 'B08N5WRWNW',
-      product_name: 'Premium Dog Food Bowl Set',
-      monthly_revenue: 45000,
-      monthly_units: 1500,
-      rank: 1250,
-      reviews: 2847,
-      rating: 4.7,
-      profit_margin: 35,
+      id: '1',
+      deal_id: deal.id,
+      competitor_name: 'PetLife Essentials',
+      store_url: 'https://amazon.com/stores/petlife',
+      estimated_revenue: 3200000,
+      product_count: 87,
+      avg_rating: 4.6,
+      review_count: 15420,
+      price_range_low: 12.99,
+      price_range_high: 89.99,
+      market_share_percentage: 18,
+      strengths: ['Brand recognition', 'Product variety', 'Prime shipping'],
+      weaknesses: ['Higher prices', 'Limited customer service'],
+      threat_level: 'high',
     },
     {
-      asin: 'B07QXZL5PM',
-      product_name: 'Interactive Pet Toy Bundle',
-      monthly_revenue: 32000,
-      monthly_units: 800,
-      rank: 892,
-      reviews: 1923,
-      rating: 4.8,
-      profit_margin: 42,
-    },
-    {
-      asin: 'B09MKJH6T2',
-      product_name: 'Organic Pet Treats Variety Pack',
-      monthly_revenue: 28000,
-      monthly_units: 2100,
-      rank: 2341,
-      reviews: 3156,
-      rating: 4.6,
-      profit_margin: 38,
+      id: '2',
+      deal_id: deal.id,
+      competitor_name: 'NaturePaws',
+      store_url: 'https://amazon.com/stores/naturepaws',
+      estimated_revenue: 2100000,
+      product_count: 54,
+      avg_rating: 4.8,
+      review_count: 8932,
+      price_range_low: 15.99,
+      price_range_high: 125.00,
+      market_share_percentage: 12,
+      strengths: ['Premium quality', 'Organic focus', 'High ratings'],
+      weaknesses: ['Limited product range', 'Premium pricing'],
+      threat_level: 'medium',
     },
   ];
+
+  // Fetch real ASIN data
+  useEffect(() => {
+    const fetchASINData = async () => {
+      try {
+        setLoading(true);
+        const asins = await ASINService.fetchDealASINs(deal.id);
+        setRealASINs(asins);
+      } catch (error) {
+        console.error('Error fetching ASINs:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (deal.id) {
+      fetchASINData();
+    }
+  }, [deal.id]);
+
+  // Get top performing ASINs sorted by monthly revenue
+  const topASINs = realASINs
+    .sort((a, b) => b.monthly_revenue - a.monthly_revenue)
+    .slice(0, 5)
+    .map(asin => ({
+      asin: asin.asin,
+      product_name: asin.product_name,
+      monthly_revenue: asin.monthly_revenue,
+      monthly_units: asin.monthly_units,
+      rank: asin.rank_current,
+      reviews: asin.reviews,
+      rating: asin.rating,
+      profit_margin: asin.profit_margin || 30, // Default to 30% if not available
+    }));
+
+  // Calculate real metrics from ASIN data
+  const totalRevenue = realASINs.reduce((sum, asin) => sum + asin.monthly_revenue, 0);
+  const totalUnits = realASINs.reduce((sum, asin) => sum + asin.monthly_units, 0);
+  const avgRating = realASINs.length > 0 
+    ? (realASINs.reduce((sum, asin) => sum + asin.rating, 0) / realASINs.length).toFixed(1)
+    : 'N/A';
+  const totalReviews = realASINs.reduce((sum, asin) => sum + asin.reviews, 0);
 
   const amazonMetrics = [
     {
       title: 'Total ASINs',
-      value: Array.isArray(deal.asin_list) ? deal.asin_list.length.toString() : 'N/A',
+      value: realASINs.length.toString(),
       icon: Package,
       color: 'text-blue-600 dark:text-blue-400',
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    },
+    {
+      title: 'Total Revenue',
+      value: `$${totalRevenue.toLocaleString()}`,
+      icon: TrendingUp,
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-50 dark:bg-green-900/20',
+    },
+    {
+      title: 'Monthly Units',
+      value: totalUnits.toLocaleString(),
+      icon: ShoppingCart,
+      color: 'text-purple-600 dark:text-purple-400',
+      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    },
+    {
+      title: 'Avg Rating',
+      value: avgRating,
+      icon: Star,
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
+    },
+    {
+      title: 'Total Reviews',
+      value: totalReviews.toLocaleString(),
+      icon: Users,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
     },
     {
       title: 'FBA Percentage',
@@ -69,13 +148,6 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
       icon: TrendingUp,
       color: 'text-green-600 dark:text-green-400',
       bgColor: 'bg-green-50 dark:bg-green-900/20',
-    },
-    {
-      title: 'Avg. Rating',
-      value: '4.7/5',
-      icon: Star,
-      color: 'text-yellow-600 dark:text-yellow-400',
-      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
     },
   ];
 
@@ -141,12 +213,20 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
         barChartInstance.current.destroy();
       }
     };
-  }, []);
+  }, [topASINs]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Amazon Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {amazonMetrics.map((metric, index) => {
           const Icon = metric.icon;
           return (
@@ -251,11 +331,15 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
                     tailwindConfig().theme.colors.blue[500],
                     tailwindConfig().theme.colors.emerald[500],
                     tailwindConfig().theme.colors.purple[500],
+                    tailwindConfig().theme.colors.orange[500],
+                    tailwindConfig().theme.colors.pink[500],
                   ],
                   hoverBackgroundColor: [
                     tailwindConfig().theme.colors.blue[600],
                     tailwindConfig().theme.colors.emerald[600],
                     tailwindConfig().theme.colors.purple[600],
+                    tailwindConfig().theme.colors.orange[600],
+                    tailwindConfig().theme.colors.pink[600],
                   ],
                   borderWidth: 0,
                 }]
@@ -271,13 +355,20 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Top Performing ASINs</h3>
-          <button className="btn bg-indigo-600 text-white hover:bg-indigo-700 text-sm">
+          <button 
+            onClick={() => {
+              const event = new CustomEvent('navigate-to-asins', { detail: { dealId: deal.id } });
+              window.dispatchEvent(event);
+            }}
+            className="btn bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
+          >
             View All ASINs
           </button>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        {topASINs.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -340,6 +431,15 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
             </tbody>
           </table>
         </div>
+        ) : (
+          <div className="text-center py-8">
+            <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">No ASINs found for this deal</p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+              Add ASINs from the ASINs tab to see performance metrics
+            </p>
+          </div>
+        )}
       </div>
 
       {/* AI Market Analysis */}
@@ -358,44 +458,221 @@ function DealAmazonMetrics({ deal }: DealAmazonMetricsProps) {
               <h4 className="font-medium text-blue-900 dark:text-blue-100">Market Opportunity</h4>
               <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">High</p>
+            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+              {totalRevenue > 5000000 ? 'High' : totalRevenue > 2000000 ? 'Medium' : 'Low'}
+            </p>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-              Pet supplies market growing 8.6% YoY
+              {deal.amazon_category || 'Category'} revenue ${(totalRevenue / 1000).toFixed(0)}k/mo
             </p>
           </div>
 
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-green-900 dark:text-green-100">Competition Level</h4>
+              <h4 className="font-medium text-green-900 dark:text-green-100">Product Performance</h4>
               <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
-            <p className="text-2xl font-bold text-green-900 dark:text-green-100">Medium</p>
+            <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+              {parseFloat(avgRating) >= 4.5 ? 'Excellent' : parseFloat(avgRating) >= 4.0 ? 'Good' : 'Fair'}
+            </p>
             <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-              Moderate competition in niche
+              {avgRating} avg rating, {totalReviews.toLocaleString()} reviews
             </p>
           </div>
 
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-purple-900 dark:text-purple-100">Risk Assessment</h4>
+              <h4 className="font-medium text-purple-900 dark:text-purple-100">Portfolio Size</h4>
               <ShoppingCart className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">Low</p>
+            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+              {realASINs.length} ASINs
+            </p>
             <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
-              Stable demand, strong reviews
+              {totalUnits.toLocaleString()} units/mo
             </p>
           </div>
         </div>
 
-        <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-          <h4 className="font-medium text-yellow-900 dark:text-yellow-100 mb-2">Key Insights</h4>
-          <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
-            <li>• Strong seasonal trends in Q4 with 35% revenue increase</li>
-            <li>• Premium positioning allows for higher margins</li>
-            <li>• Brand loyalty evidenced by repeat purchase rate of 42%</li>
-            <li>• Opportunity to expand into related categories</li>
-          </ul>
+        {realASINs.length > 0 && (
+          <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+            <h4 className="font-medium text-yellow-900 dark:text-yellow-100 mb-2">Key Insights</h4>
+            <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
+              <li>• Portfolio generates ${(totalRevenue / 1000).toFixed(0)}k monthly revenue across {realASINs.length} products</li>
+              <li>• Average product rating of {avgRating} with {(totalReviews / realASINs.length).toFixed(0)} reviews per product</li>
+              <li>• Top product generates ${(topASINs[0]?.monthly_revenue / 1000).toFixed(0)}k/mo ({((topASINs[0]?.monthly_revenue / totalRevenue) * 100).toFixed(0)}% of total)</li>
+              <li>• {realASINs.filter(a => a.rating >= 4.5).length} products with 4.5+ star ratings</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Competitive Analysis Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Amazon Competitive Analysis</h3>
+          <button 
+            onClick={() => setShowCompetitors(!showCompetitors)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            {showCompetitors ? 'Hide' : 'Show'} Competitors
+          </button>
         </div>
+        
+        {showCompetitors && (
+          <div className="space-y-4">
+            {/* Competitive Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Target className="w-8 h-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {realASINs.length > 0 ? Math.round(realASINs.reduce((sum, a) => sum + (a.rank_current || 999999), 0) / realASINs.length / 1000) + 'k' : 'N/A'}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Avg BSR Rank</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <Users className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{realASINs.length}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Active Products</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {realASINs.length > 0 ? Math.round((realASINs.filter(a => a.rating >= 4.0).length / realASINs.length) * 100) : 0}%
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Quality Score</p>
+              </div>
+            </div>
+
+            {/* Competitor Comparison */}
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Revenue Comparison</h4>
+              <BarChart02
+                data={{
+                  labels: [deal.business_name || 'Your Business', ...amazonCompetitors.map(c => c.competitor_name)],
+                  datasets: [{
+                    label: 'Annual Revenue',
+                    data: [
+                      deal.annual_revenue || 2500000,
+                      ...amazonCompetitors.map(c => c.estimated_revenue || 0)
+                    ],
+                    backgroundColor: [
+                      tailwindConfig().theme.colors.green[500],
+                      tailwindConfig().theme.colors.red[500],
+                      tailwindConfig().theme.colors.orange[500],
+                    ],
+                    hoverBackgroundColor: [
+                      tailwindConfig().theme.colors.green[600],
+                      tailwindConfig().theme.colors.red[600],
+                      tailwindConfig().theme.colors.orange[600],
+                    ],
+                    borderRadius: 4,
+                  }],
+                }}
+                width={595}
+                height={248}
+              />
+            </div>
+
+            {/* Competitor Details */}
+            <div className="space-y-4">
+              {amazonCompetitors.map((competitor) => (
+                <div key={competitor.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{competitor.competitor_name}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {competitor.product_count} products • {competitor.market_share_percentage}% market share
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      competitor.threat_level === 'high' 
+                        ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' 
+                        : competitor.threat_level === 'medium'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                    }`}>
+                      {competitor.threat_level?.toUpperCase()} THREAT
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Est. Revenue</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        ${(competitor.estimated_revenue || 0).toLocaleString()}/yr
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.avg_rating} ({competitor.review_count?.toLocaleString()} reviews)
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Price Range</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        ${competitor.price_range_low} - ${competitor.price_range_high}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Products</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {competitor.product_count}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Strengths</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.strengths?.map((strength, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-green-500 mr-1">+</span> {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Weaknesses</p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400">
+                        {competitor.weaknesses?.map((weakness, idx) => (
+                          <li key={idx} className="flex items-start">
+                            <span className="text-red-500 mr-1">-</span> {weakness}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Competitive Opportunities */}
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Portfolio Analysis
+              </h4>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                {realASINs.length > 0 ? (
+                  <>
+                    <li>• Revenue concentration: Top 3 products generate {topASINs.slice(0, 3).reduce((sum, a) => sum + ((a.monthly_revenue / totalRevenue) * 100), 0).toFixed(0)}% of revenue</li>
+                    <li>• {realASINs.filter(a => a.rank_current && a.rank_current < 50000).length} products in top 50k BSR ranks</li>
+                    <li>• Average price point: ${(realASINs.reduce((sum, a) => sum + (a.price || 0), 0) / realASINs.length).toFixed(2)}</li>
+                    <li>• {realASINs.filter(a => a.monthly_revenue > 10000).length} products generating &gt;$10k/mo</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• Add ASINs to see portfolio analysis</li>
+                    <li>• Import products from Amazon store URL</li>
+                    <li>• Track competitor products</li>
+                  </>
+                )}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

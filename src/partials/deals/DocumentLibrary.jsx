@@ -1,92 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 function DocumentLibrary({ selectedDeal }) {
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('date');
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const documents = [
-    {
-      id: 1,
-      name: 'Q3 2024 Financial Statement',
-      type: 'Financial Statements',
-      deal: 'Kitchen Gadgets Pro',
-      size: '2.4 MB',
-      uploadDate: '2024-12-01',
-      uploadedBy: 'Sarah Chen',
-      status: 'verified',
-      tags: ['Q3', 'financials', 'verified'],
-      fileType: 'pdf',
-      analyzed: true
-    },
-    {
-      id: 2,
-      name: 'Amazon Seller Central Report November',
-      type: 'Amazon Reports',
-      deal: 'Kitchen Gadgets Pro',
-      size: '856 KB',
-      uploadDate: '2024-12-01',
-      uploadedBy: 'Mike Johnson',
-      status: 'pending-review',
-      tags: ['amazon', 'november', 'sales'],
-      fileType: 'xlsx',
-      analyzed: false
-    },
-    {
-      id: 3,
-      name: 'Bank Statement October 2024',
-      type: 'Bank Statements',
-      deal: 'Kitchen Gadgets Pro',
-      size: '1.2 MB',
-      uploadDate: '2024-11-30',
-      uploadedBy: 'Emily Davis',
-      status: 'verified',
-      tags: ['bank', 'october', 'cash-flow'],
-      fileType: 'pdf',
-      analyzed: true
-    },
-    {
-      id: 4,
-      name: 'Supplier Agreement - China Manufacturing',
-      type: 'Supplier Agreements',
-      deal: 'SmartHome Essentials',
-      size: '3.1 MB',
-      uploadDate: '2024-11-29',
-      uploadedBy: 'Alex Rodriguez',
-      status: 'needs-attention',
-      tags: ['supplier', 'manufacturing', 'china'],
-      fileType: 'pdf',
-      analyzed: true
-    },
-    {
-      id: 5,
-      name: 'Tax Return 2023',
-      type: 'Tax Returns',
-      deal: 'Pet Supplies Direct',
-      size: '4.8 MB',
-      uploadDate: '2024-11-28',
-      uploadedBy: 'Sarah Chen',
-      status: 'verified',
-      tags: ['tax', '2023', 'irs'],
-      fileType: 'pdf',
-      analyzed: true
-    },
-    {
-      id: 6,
-      name: 'Inventory Valuation Report',
-      type: 'Inventory Reports',
-      deal: 'SmartHome Essentials',
-      size: '2.7 MB',
-      uploadDate: '2024-11-27',
-      uploadedBy: 'Mike Johnson',
-      status: 'verified',
-      tags: ['inventory', 'valuation', 'Q4'],
-      fileType: 'xlsx',
-      analyzed: false
+  const [documents, setDocuments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [selectedDeal]);
+
+  const loadDocuments = async () => {
+    try {
+      setIsLoading(true);
+      
+      let query = supabase
+        .from('deal_documents')
+        .select(`
+          *,
+          deals!inner(business_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Filter by selected deal if provided
+      if (selectedDeal) {
+        query = query.eq('deal_id', selectedDeal.id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      
+      const mappedDocuments = data?.map(doc => ({
+        id: doc.id,
+        name: doc.file_name,
+        type: doc.category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'General',
+        deal: doc.deals?.business_name || 'Unknown Deal',
+        size: formatFileSize(doc.file_size),
+        uploadDate: new Date(doc.created_at).toISOString().split('T')[0],
+        uploadedBy: 'User',
+        status: 'uploaded',
+        tags: doc.tags || [],
+        fileType: getFileExtension(doc.file_name),
+        analyzed: false
+      })) || [];
+
+      setDocuments(mappedDocuments);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      setDocuments([]);
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return 'Unknown';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const getFileExtension = (filename) => {
+    if (!filename) return 'unknown';
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return ext || 'unknown';
+  };
+
   
   const getFileIcon = (fileType) => {
     switch (fileType) {
@@ -211,7 +195,24 @@ function DocumentLibrary({ selectedDeal }) {
       </header>
       
       <div className="p-5">
-        {viewMode === 'grid' ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+              <p className="text-gray-500 dark:text-gray-400">Loading documents...</p>
+            </div>
+          </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3 className="mt-4 text-sm font-medium text-gray-900 dark:text-gray-100">No documents found</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {selectedDeal ? `Upload documents for ${selectedDeal.business_name}` : 'No documents have been uploaded yet.'}
+            </p>
+          </div>
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDocuments.map((doc) => (
               <div key={doc.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">

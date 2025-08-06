@@ -89,9 +89,9 @@ function DealOverview({ deal }) {
               <Target className="w-6 h-6 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Priority</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Opportunity Score</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {deal.priority ? `P${deal.priority}` : 'N/A'}
+                {deal.priority ? deal.priority : 'N/A'}
               </p>
             </div>
           </div>
@@ -226,6 +226,23 @@ function DealOverview({ deal }) {
                     className="text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {deal.amazon_store_name || 'View Store'}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {deal.listing_url && (
+              <div className="flex items-center">
+                <Globe className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Original Listing</p>
+                  <a 
+                    href={deal.listing_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    View on {deal.listing_source || 'Listing Site'}
                   </a>
                 </div>
               </div>

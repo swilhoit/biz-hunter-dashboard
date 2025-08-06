@@ -104,6 +104,7 @@ function PipelineStats({ deals }: PipelineStatsProps) {
   // Prepare data for stage distribution chart
   const stageLabels = {
     'prospecting': 'Prospecting',
+    'analysis': 'Analysis',
     'initial_contact': 'Initial Contact',
     'loi_submitted': 'LOI Submitted',
     'due_diligence': 'Due Diligence',

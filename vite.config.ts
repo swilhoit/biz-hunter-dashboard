@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import react from '@vitejs/plugin-react'
 import path from 'path'
+import { apiConfigPlugin } from './vite-plugin-api-config.js'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiConfigPlugin()],
+  build: {
+    outDir: 'dist'
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -18,7 +22,13 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true
+      }
+    }
   },
   preview: {
     host: '0.0.0.0',
@@ -28,6 +38,11 @@ export default defineConfig({
     format: 'es'
   },
   optimizeDeps: {
-    exclude: ['pdfjs-dist']
+    exclude: ['pdfjs-dist'],
+    include: ['pdfjs-dist/build/pdf.min.js']
+  },
+  define: {
+    // Disable PDF.js worker in development to avoid CORS issues
+    global: 'globalThis',
   }
 })

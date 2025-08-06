@@ -1,6 +1,7 @@
 export type DealStatus = 
   | 'prospecting'
   | 'initial_contact'
+  | 'analysis'
   | 'loi_submitted'
   | 'due_diligence'
   | 'negotiation'

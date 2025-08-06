@@ -1,0 +1,35 @@
+{
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "functions": {
+    "api/listings.js": {
+      "maxDuration": 30
+    },
+    "api/listings/[id].js": {
+      "maxDuration": 30
+    },
+    "api/stats.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/bigquery/listings/:id",
+      "destination": "/api/listings/[id]"
+    },
+    {
+      "source": "/api/bigquery/listings",
+      "destination": "/api/listings"
+    },
+    {
+      "source": "/api/bigquery/stats",
+      "destination": "/api/stats"
+    }
+  ],
+  "env": {
+    "BIGQUERY_PROJECT_ID": "tetrahedron-366117"
+  }
+}

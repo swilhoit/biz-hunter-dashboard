@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, ImageIcon, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useAuth } from '../../hooks/useAuth';
 
-function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete }) {
+function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick, sortBy, sortDirection, onSort }) {
   const { user } = useAuth();
   const [deletingId, setDeletingId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
@@ -59,6 +59,15 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
     }
   };
 
+  const renderSortIcon = (column) => {
+    if (sortBy !== column) {
+      return <ChevronsUpDown className="w-4 h-4 text-gray-400" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="w-4 h-4 text-indigo-600" />
+      : <ChevronDown className="w-4 h-4 text-indigo-600" />;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="overflow-x-auto">
@@ -80,16 +89,34 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 Marketplace
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Price & Multiple
+                <button
+                  onClick={() => onSort && onSort('asking_price')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Price & Multiple
+                  {onSort && renderSortIcon('asking_price')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Revenue & Profit
+                <button
+                  onClick={() => onSort && onSort('annual_revenue')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Revenue & Profit
+                  {onSort && renderSortIcon('annual_revenue')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Amazon Metrics
+                YoY Trend
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Listed
+                <button
+                  onClick={() => onSort && onSort('created_at')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  Listed
+                  {onSort && renderSortIcon('created_at')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Status
@@ -114,21 +141,37 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                   <div className="flex items-center">
                     <div>
                       <div className="flex items-center">
-                        <Link 
-                          to={`/listings/${listing.id}`}
-                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                        >
-                          {listing.business_name || listing.name}
-                        </Link>
+                        {onListingClick ? (
+                          <button
+                            onClick={() => onListingClick(listing.id)}
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
+                          >
+                            {listing.business_name || listing.name}
+                          </button>
+                        ) : (
+                          <Link 
+                            to={`/listings/${listing.id}`}
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          >
+                            {listing.business_name || listing.name}
+                          </Link>
+                        )}
                         {listing.isNew && (
                           <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
                             New
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        <Building2 className="w-4 h-4 mr-1" />
-                        {listing.amazon_category || listing.industry || 'Unknown Category'}
+                      <div className="flex flex-col gap-1 mt-1">
+                        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                          <Building2 className="w-4 h-4 mr-1" />
+                          {listing.industry || 'Unknown Type'}
+                        </div>
+                        {listing.amazon_category && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {listing.amazon_category}
+                          </span>
+                        )}
                       </div>
                       {listing.tags && (
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -168,18 +211,20 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-gray-100">
-                    {Array.isArray(listing.asin_list) ? listing.asin_list.length : 'Unknown'} ASINs
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {listing.fba_percentage || 'Unknown'}% FBA
-                  </div>
-                  <div className="flex items-center mt-1">
-                    <Star className="w-3 h-3 text-yellow-400 mr-1" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {listing.seller_account_health || 'Unknown'}
-                    </span>
-                  </div>
+                  {listing.yoy_trend_percent !== null && listing.yoy_trend_percent !== undefined ? (
+                    <div className={`flex items-center text-sm font-medium ${
+                      listing.yoy_trend_percent > 0 ? 'text-green-600 dark:text-green-400' : 
+                      listing.yoy_trend_percent < 0 ? 'text-red-600 dark:text-red-400' : 
+                      'text-gray-600 dark:text-gray-400'
+                    }`}>
+                      {listing.yoy_trend_percent > 0 && '↑'}
+                      {listing.yoy_trend_percent < 0 && '↓'}
+                      {listing.yoy_trend_percent === 0 && '→'}
+                      <span className="ml-1">{Math.abs(listing.yoy_trend_percent)}%</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">-</div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">

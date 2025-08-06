@@ -17,7 +17,21 @@ import {
 import AIAnalysisService from '../../services/AIAnalysisService';
 
 interface DealAnalysisProps {
-  deal: any;
+  deal: {
+    id: string;
+    business_name: string;
+    amazon_category: string;
+    amazon_subcategory?: string;
+    asking_price: number;
+    annual_revenue: number;
+    annual_profit: number;
+    monthly_revenue?: number;
+    monthly_profit?: number;
+    amazon_store_url?: string;
+    fba_percentage?: number;
+    business_age?: number;
+    [key: string]: unknown;
+  };
 }
 
 interface AnalysisReport {
@@ -35,6 +49,8 @@ interface AnalysisReport {
       marketTrends: string[];
     };
     positioningAnalysis: string;
+    criticalRisks?: string[];
+    redFlags?: string[];
   };
   keywordAnalysis: {
     primaryKeywords: Array<{
@@ -57,10 +73,13 @@ interface AnalysisReport {
     };
     reasoning: string;
     improvements: string[];
+    majorConcerns?: string[];
+    dealBreakers?: string[];
   };
   riskFactors: string[];
   growthOpportunities: string[];
   recommendations: string[];
+  dueDiligencePriorities?: string[];
   confidenceLevel: number;
   lastUpdated: string;
 }
@@ -68,6 +87,7 @@ interface AnalysisReport {
 function DealAnalysis({ deal }: DealAnalysisProps) {
   const [analysis, setAnalysis] = useState<AnalysisReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [aiService] = useState(() => new AIAnalysisService());
 
@@ -80,14 +100,18 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
     
     setLoading(true);
     setError(null);
+    setLoadingStage('Initializing analysis...');
     
     try {
-      const report = await aiService.generateDealAnalysis(deal);
+      const report = await aiService.generateDealAnalysis(deal, (stage) => {
+        setLoadingStage(stage);
+      });
       setAnalysis(report);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate analysis');
     } finally {
       setLoading(false);
+      setLoadingStage('');
     }
   };
 
@@ -117,7 +141,12 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Generating AI analysis...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">This may take a few moments</p>
+          <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">{loadingStage || 'This may take a few moments'}</p>
+          {loadingStage.includes('document') && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+              Analyzing uploaded documents for deeper insights...
+            </p>
+          )}
         </div>
       </div>
     );
@@ -190,6 +219,14 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           </div>
         </div>
         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{analysis.summary}</p>
+        {analysis.summary.includes('document') && (
+          <div className="mt-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Analysis enhanced with uploaded documents
+          </div>
+        )}
       </div>
 
       {/* Opportunity Score */}
@@ -228,6 +265,39 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <p className="text-sm text-gray-700 dark:text-gray-300">{analysis.opportunityScore.reasoning}</p>
         </div>
+        
+        {/* Major Concerns and Deal Breakers */}
+        {(analysis.opportunityScore.majorConcerns?.length > 0 || analysis.opportunityScore.dealBreakers?.length > 0) && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {analysis.opportunityScore.majorConcerns?.length > 0 && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Major Concerns
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.opportunityScore.majorConcerns.map((concern, index) => (
+                    <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {concern}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysis.opportunityScore.dealBreakers?.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Potential Deal Breakers
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.opportunityScore.dealBreakers.map((breaker, index) => (
+                    <li key={index} className="text-sm text-red-700 dark:text-red-300">• {breaker}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Competitive Analysis */}
@@ -283,6 +353,39 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Positioning Analysis</h5>
           <p className="text-sm text-gray-700 dark:text-gray-300">{analysis.competitiveAnalysis.positioningAnalysis}</p>
         </div>
+        
+        {/* Critical Risks and Red Flags from Competitive Analysis */}
+        {(analysis.competitiveAnalysis.criticalRisks?.length > 0 || analysis.competitiveAnalysis.redFlags?.length > 0) && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {analysis.competitiveAnalysis.criticalRisks?.length > 0 && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Critical Market Risks
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.competitiveAnalysis.criticalRisks.map((risk, index) => (
+                    <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {risk}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysis.competitiveAnalysis.redFlags?.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Red Flags
+                </h5>
+                <ul className="space-y-1">
+                  {analysis.competitiveAnalysis.redFlags.map((flag, index) => (
+                    <li key={index} className="text-sm text-red-700 dark:text-red-300">• {flag}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Keyword Analysis */}
@@ -384,6 +487,27 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           ))}
         </div>
       </div>
+
+      {/* Due Diligence Priorities */}
+      {analysis.dueDiligencePriorities?.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Due Diligence Priorities</h3>
+          </div>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">Critical items to verify before proceeding:</p>
+            <ul className="space-y-2">
+              {analysis.dueDiligencePriorities.map((priority, index) => (
+                <li key={index} className="text-sm text-yellow-700 dark:text-yellow-300 flex items-start">
+                  <span className="font-bold mr-2">{index + 1}.</span>
+                  {priority}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

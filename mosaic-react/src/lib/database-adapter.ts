@@ -11,6 +11,7 @@ export const mapDealStatus = (status: string): string => {
     'prospecting': 'prospecting',
     'qualified_leads': 'initial_contact',
     'first_contact': 'initial_contact',
+    'analysis': 'analysis',
     'due_diligence': 'due_diligence',
     'loi': 'loi_submitted',
     'under_contract': 'under_contract',

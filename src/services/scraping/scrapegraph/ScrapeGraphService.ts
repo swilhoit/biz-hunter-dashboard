@@ -486,7 +486,7 @@ export class ScrapeGraphService {
 
 // Export convenience function
 export async function createScrapeGraphService(apiKey?: string): Promise<ScrapeGraphService> {
-  const key = apiKey || process.env.VITE_SCRAPEGRAPH_API_KEY || process.env.SCRAPEGRAPH_API_KEY;
+      const key = apiKey || import.meta.env.VITE_SCRAPEGRAPH_API_KEY || '';
   
   if (!key) {
     throw new Error('ScrapeGraph API key not found. Set VITE_SCRAPEGRAPH_API_KEY in .env');

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Loader2 } from 'lucide-react';
-
-// Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+import { Document, Page } from '../pdf/PDFComponents';
 
 interface PDFViewerProps {
   blob: Blob;

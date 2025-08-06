@@ -13,37 +13,44 @@
 - Ready for deeper analysis
 - Broker contact initiated
 
-### 3. **First Contact**
+### 3. **Analysis**
+- Initial deal analysis and evaluation
+- Financial metrics review
+- Market analysis and competitive research
+- Investment thesis development
+- Go/No-go decision making
+
+### 4. **Initial Contact**
 - Initial communication with broker/seller
 - NDA status tracking
 - Information packet received
 - Initial questions sent
 
-### 4. **Due Diligence**
+### 5. **Due Diligence**
 - Financials review (P&L, tax returns, bank statements)
 - Legal review (contracts, leases, licenses)
 - Operations review (processes, employees, systems)
 - Market analysis
 - Multiple sub-stages: Initial DD, Deep DD, Final DD
 
-### 5. **LOI (Letter of Intent)**
+### 6. **LOI (Letter of Intent)**
 - LOI drafted and sent
 - Negotiation phase
 - Terms being discussed
 - Financing arrangements
 
-### 6. **Under Contract**
+### 7. **Under Contract**
 - Purchase agreement signed
 - Final due diligence
 - Financing secured
 - Closing preparations
 
-### 7. **Closed Won**
+### 8. **Closed Won**
 - Deal completed
 - Transition planning
 - Post-acquisition tracking
 
-### 8. **Closed Lost**
+### 9. **Closed Lost**
 - Deal didn't proceed
 - Reason tracking
 - Learning repository

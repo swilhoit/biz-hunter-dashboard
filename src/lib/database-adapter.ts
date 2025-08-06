@@ -4,8 +4,8 @@
  */
 
 import { supabase } from './supabase';
+import { encodeFilePath } from '../utils/fileUtils';
 import { getBusinessImage } from '../utils/imageUtils';
-import { ensureStorageBucketExists } from './storage-setup';
 
 // Map deal status values
 export const mapDealStatus = (status: string): string => {
@@ -13,6 +13,7 @@ export const mapDealStatus = (status: string): string => {
     'prospecting': 'prospecting',
     'qualified_leads': 'initial_contact',
     'first_contact': 'initial_contact',
+    'analysis': 'analysis',
     'due_diligence': 'due_diligence',
     'loi': 'loi_submitted',
     'under_contract': 'under_contract',
@@ -25,39 +26,73 @@ export const mapDealStatus = (status: string): string => {
   return statusMap[status] || status;
 };
 
+// Format listing source names for display
+export const formatListingSource = (source: string): string => {
+  const sourceMap: { [key: string]: string } = {
+    'empire_flippers': 'Empire Flippers',
+    'empire-flippers': 'Empire Flippers',
+    'flippa': 'Flippa',
+    'quietlight': 'Quiet Light',
+    'quiet_light': 'Quiet Light',
+    'quietlightbrokerage': 'Quiet Light',
+    'fe_international': 'FE International',
+    'fe-international': 'FE International',
+    'feinternational': 'FE International',
+    'investors_club': 'Investors Club',
+    'investors-club': 'Investors Club',
+    'investorsclub': 'Investors Club',
+    'website_closers': 'Website Closers',
+    'website-closers': 'Website Closers',
+    'microacquire': 'MicroAcquire',
+    'acquire.com': 'Acquire.com',
+    'bizbuysell': 'BizBuySell'
+  };
+  return sourceMap[source?.toLowerCase()] || source || 'Unknown';
+};
+
 // Adapter functions to work with existing database structure
 export const dealsAdapter = {
   // Fetch deals with proper mapping
   async fetchDeals() {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select(`
+        *,
+        listing:business_listings(
+          original_url,
+          source
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
     // Map the data to match mosaic-react expectations
-    return data?.map(deal => ({
+    return data?.map((deal: any) => ({
       ...deal,
       status: mapDealStatus(deal.stage || 'prospecting'),
       // Add any other field mappings needed
       valuation_multiple: deal.multiple,
-      monthly_revenue: deal.monthly_revenue || (deal.annual_revenue ? deal.annual_revenue / 12 : null),
-      monthly_profit: deal.monthly_profit || (deal.annual_profit ? deal.annual_profit / 12 : null),
-      // Map broker fields from actual database columns
-      broker_company: deal.source, // Use source as broker company fallback
-      amazon_store_url: deal.amazon_store_link,
+      monthly_revenue: deal.custom_fields?.monthly_revenue || (deal.annual_revenue ? deal.annual_revenue / 12 : null),
+      monthly_profit: deal.custom_fields?.monthly_profit || (deal.annual_profit ? deal.annual_profit / 12 : null),
+      // Extract custom fields
+      ...deal.custom_fields,
+      // Map opportunity_score to priority for frontend compatibility
+      priority: deal.opportunity_score || deal.priority,
+      // Ensure specific fields are available
       seller_name: deal.seller_name || 'Unknown',
       seller_email: deal.seller_email || '',
       seller_phone: deal.seller_phone || '',
       fba_percentage: deal.fba_percentage || 0,
-      amazon_subcategory: deal.sub_industry,
       first_contact_date: deal.created_at,
       due_diligence_start_date: deal.stage === 'due_diligence' ? deal.stage_updated_at : null,
       expected_close_date: deal.next_action_date,
       notes: deal.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: deal.image_url || getBusinessImage(deal.business_name)
+      image_url: deal.custom_fields?.image_url || getBusinessImage(deal.business_name),
+      // Add listing information
+      listing_url: deal.custom_fields?.listing_url || deal.listing?.original_url || '',
+      listing_source: formatListingSource(deal.listing?.source || deal.source || 'Unknown')
     }));
   },
 
@@ -65,7 +100,13 @@ export const dealsAdapter = {
   async fetchDealById(dealId: string) {
     const { data, error } = await supabase
       .from('deals')
-      .select('*')
+      .select(`
+        *,
+        listing:business_listings(
+          original_url,
+          source
+        )
+      `)
       .eq('id', dealId)
       .single();
 
@@ -74,27 +115,32 @@ export const dealsAdapter = {
     if (!data) return null;
 
     // Map the data to match mosaic-react expectations
+    const dealData = data as any;
     const mappedDeal = {
-      ...data,
-      status: mapDealStatus(data.stage || 'prospecting'),
+      ...dealData,
+      status: mapDealStatus(dealData.stage || 'prospecting'),
       // Add any other field mappings needed
-      valuation_multiple: data.multiple,
-      monthly_revenue: data.monthly_revenue || (data.annual_revenue ? data.annual_revenue / 12 : null),
-      monthly_profit: data.monthly_profit || (data.annual_profit ? data.annual_profit / 12 : null),
-      // Map broker fields from actual database columns
-      broker_company: data.source, // Use source as broker company fallback
-      amazon_store_url: data.amazon_store_link,
-      seller_name: data.seller_name || 'Unknown',
-      seller_email: data.seller_email || '',
-      seller_phone: data.seller_phone || '',
-      fba_percentage: data.fba_percentage || 0,
-      amazon_subcategory: data.sub_industry,
-      first_contact_date: data.created_at,
-      due_diligence_start_date: data.stage === 'due_diligence' ? data.stage_updated_at : null,
-      expected_close_date: data.next_action_date,
-      notes: data.custom_fields?.notes || '',
+      valuation_multiple: dealData.multiple,
+      monthly_revenue: dealData.custom_fields?.monthly_revenue || (dealData.annual_revenue ? dealData.annual_revenue / 12 : null),
+      monthly_profit: dealData.custom_fields?.monthly_profit || (dealData.annual_profit ? dealData.annual_profit / 12 : null),
+      // Extract custom fields
+      ...dealData.custom_fields,
+      // Map opportunity_score to priority for frontend compatibility
+      priority: dealData.opportunity_score || dealData.priority,
+      // Ensure specific fields are available
+      seller_name: dealData.seller_name || 'Unknown',
+      seller_email: dealData.seller_email || '',
+      seller_phone: dealData.seller_phone || '',
+      fba_percentage: dealData.fba_percentage || 0,
+      first_contact_date: dealData.created_at,
+      due_diligence_start_date: dealData.stage === 'due_diligence' ? dealData.stage_updated_at : null,
+      expected_close_date: dealData.next_action_date,
+      notes: dealData.custom_fields?.notes || '',
       // Add placeholder image if none exists
-      image_url: data.image_url || getBusinessImage(data.business_name)
+      image_url: dealData.custom_fields?.image_url || getBusinessImage(dealData.business_name),
+      // Add listing information
+      listing_url: dealData.custom_fields?.listing_url || dealData.listing?.original_url || '',
+      listing_source: dealData.listing?.source || dealData.source || 'Unknown'
     };
 
     return mappedDeal;
@@ -104,72 +150,124 @@ export const dealsAdapter = {
   async createDeal(dealData: Record<string, any>) {
     const mappedData: Record<string, any> = {};
     
+    // Fields that exist as actual columns in the deals table
+    const directMappedFields = [
+      'business_name',
+      'asking_price',
+      'annual_revenue',
+      'annual_profit',
+      'amazon_category',
+      'amazon_subcategory',
+      'amazon_store_name',
+      'amazon_store_url',
+      'business_age',
+      'date_listed',
+      'dba_names',
+      'ebitda',
+      'employee_count',
+      'entity_type',
+      'fba_percentage',
+      'inventory_value',
+      'list_price',
+      'listing_id',
+      'multiple',
+      'sde',
+      'seller_account_health',
+      'seller_email',
+      'seller_location',
+      'seller_name',
+      'seller_phone',
+    ];
+
+    // Fields that need to go into custom_fields
+    const customFields = [
+      'monthly_revenue',
+      'monthly_profit',
+      'image_url',
+      'notes',
+      'description',
+      'listing_url',
+      'website_url',
+      'city',
+      'state',
+      'country',
+      'industry',
+      'sub_industry',
+      'niche_keywords',
+      'broker_name',
+      'broker_email',
+      'broker_phone',
+      'broker_company',
+      'brand_names',
+      'tags',
+      'monthly_sessions',
+      'conversion_rate'
+    ];
+    
     // Map frontend fields to database fields
     Object.keys(dealData).forEach(key => {
-      switch (key) {
-        case 'status':
-          mappedData.stage = mapDealStatus(dealData.status);
-          break;
-        case 'valuation_multiple':
-          mappedData.multiple = dealData.valuation_multiple;
-          break;
-        case 'broker_company':
-          mappedData.source = dealData.broker_company;
-          break;
-        case 'amazon_store_url':
-          mappedData.amazon_store_link = dealData.amazon_store_url;
-          break;
-        case 'notes':
-          if (!mappedData.custom_fields) mappedData.custom_fields = {};
-          mappedData.custom_fields.notes = dealData.notes;
-          break;
-        case 'amazon_subcategory':
-          mappedData.sub_industry = dealData.amazon_subcategory;
-          break;
-        case 'business_name':
-        case 'asking_price':
-        case 'annual_revenue':
-        case 'annual_profit':
-        case 'industry':
-        case 'city':
-        case 'state':
-        case 'listing_url':
-        case 'broker_name':
-        case 'broker_email':
-        case 'broker_phone':
-        case 'amazon_category':
-        case 'business_age':
-        case 'tags':
-        case 'original_listing_id':
-        case 'date_listed':
-        case 'description':
-          mappedData[key] = dealData[key];
-          break;
-        case 'monthly_revenue':
-        case 'monthly_profit':
-        case 'fba_percentage':
-        case 'seller_account_health':
-        case 'image_url':
-          // Store these fields in custom_fields since they don't exist as columns
-          if (!mappedData.custom_fields) mappedData.custom_fields = {};
-          mappedData.custom_fields[key] = dealData[key];
-          break;
-        default:
-          // Skip unknown fields to prevent database errors
-          console.warn(`Skipping unknown field: ${key}`);
-          break;
+      const value = dealData[key];
+      
+      // Skip null, undefined, or empty string values for non-required fields
+      if (value === null || value === undefined || value === '') {
+        return;
+      }
+      
+      // Handle special field mappings
+      if (key === 'status') {
+        mappedData.stage = mapDealStatus(dealData.status);
+      } else if (key === 'valuation_multiple') {
+        mappedData.multiple = value;
+      } else if (key === 'priority') {
+        // Map priority to opportunity_score
+        mappedData.opportunity_score = value;
+      } else if (key === 'description') {
+        mappedData.business_description = value;
+      } else if (directMappedFields.includes(key)) {
+        // Direct mapping for fields that exist as columns
+        mappedData[key] = value;
+      } else if (customFields.includes(key)) {
+        // Store in custom_fields
+        if (!mappedData.custom_fields) mappedData.custom_fields = {};
+        mappedData.custom_fields[key] = value;
+      } else if (key === 'source' || key === 'user_id') {
+        // These are valid fields, map them directly
+        mappedData[key] = value;
+      } else {
+        // Skip unknown fields to prevent database errors
+        console.log(`Skipping field '${key}' - not in database schema`);
       }
     });
 
-    mappedData.created_by = (await supabase.auth.getUser()).data.user?.id;
+    // Set the user_id if not already set
+    if (!mappedData.user_id) {
+      const { data: userData } = await supabase.auth.getUser();
+      mappedData.user_id = userData.user?.id || mappedData.created_by;
+    }
+
+    // Ensure required fields have default values
+    if (!mappedData.business_name) {
+      throw new Error('Business name is required');
+    }
+
+    // Set default stage if not provided
+    if (!mappedData.stage) {
+      mappedData.stage = 'prospecting';
+    }
+
+    console.log('Creating deal with data:', mappedData);
 
     const { data, error } = await supabase
       .from('deals')
-      .insert(mappedData)
+      .insert(mappedData as any)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error creating deal:', error);
+      throw error;
+    }
+    
     return data;
   },
 
@@ -179,52 +277,91 @@ export const dealsAdapter = {
     let needsCustomFieldsUpdate = false;
     const customFieldsUpdates: Record<string, any> = {};
     
+    // Fields that exist as actual columns in the deals table
+    const directMappedFields = [
+      'business_name',
+      'asking_price',
+      'annual_revenue',
+      'annual_profit',
+      'amazon_category',
+      'amazon_subcategory',
+      'amazon_store_name',
+      'amazon_store_url',
+      'business_age',
+      'date_listed',
+      'dba_names',
+      'ebitda',
+      'employee_count',
+      'entity_type',
+      'fba_percentage',
+      'inventory_value',
+      'list_price',
+      'listing_id',
+      'multiple',
+      'sde',
+      'seller_account_health',
+      'seller_email',
+      'seller_location',
+      'seller_name',
+      'seller_phone',
+    ];
+
+    // Fields that need to go into custom_fields
+    const customFields = [
+      'monthly_revenue',
+      'monthly_profit',
+      'image_url',
+      'notes',
+      'listing_url',
+      'website_url',
+      'city',
+      'state',
+      'country',
+      'industry',
+      'sub_industry',
+      'niche_keywords',
+      'broker_name',
+      'broker_email',
+      'broker_phone',
+      'broker_company',
+      'brand_names',
+      'tags',
+      'monthly_sessions',
+      'conversion_rate',
+      'opportunity_score'
+    ];
+    
     // Map frontend fields to database fields
     Object.keys(updates).forEach(key => {
-      switch (key) {
-        case 'status':
-          mappedUpdates.stage = mapDealStatus(updates.status);
-          break;
-        case 'valuation_multiple':
-          mappedUpdates.multiple = updates.valuation_multiple;
-          break;
-        case 'broker_company':
-          mappedUpdates.source = updates.broker_company;
-          break;
-        case 'amazon_store_url':
-          mappedUpdates.amazon_store_link = updates.amazon_store_url;
-          break;
-        case 'seller_name':
-        case 'seller_email':
-        case 'seller_phone':
-        case 'business_name':
-        case 'asking_price':
-        case 'annual_revenue':
-        case 'annual_profit':
-        case 'amazon_category':
-        case 'broker_name':
-        case 'broker_email':
-        case 'broker_phone':
-        case 'priority':
-          mappedUpdates[key] = updates[key];
-          break;
-        case 'notes':
-          customFieldsUpdates.notes = updates.notes;
-          needsCustomFieldsUpdate = true;
-          break;
-        case 'amazon_subcategory':
-          mappedUpdates.sub_industry = updates.amazon_subcategory;
-          break;
-        default:
-          console.warn(`Skipping unknown field in update: ${key}`);
-          break;
+      const value = updates[key];
+      
+      // Handle special field mappings
+      if (key === 'status') {
+        mappedUpdates.stage = mapDealStatus(value);
+      } else if (key === 'valuation_multiple') {
+        mappedUpdates.multiple = value;
+      } else if (key === 'priority') {
+        // Map priority to opportunity_score in custom_fields for now
+        customFieldsUpdates.opportunity_score = value;
+        needsCustomFieldsUpdate = true;
+      } else if (key === 'description') {
+        mappedUpdates.business_description = value;
+      } else if (directMappedFields.includes(key)) {
+        // Direct mapping for fields that exist as columns
+        mappedUpdates[key] = value;
+      } else if (customFields.includes(key)) {
+        // Store in custom_fields
+        customFieldsUpdates[key] = value;
+        needsCustomFieldsUpdate = true;
+      } else {
+        console.log(`Skipping field '${key}' in update - not in database schema`);
       }
     });
 
     // Handle custom_fields update if needed
     if (needsCustomFieldsUpdate) {
-      const { data: existingDeal } = await supabase.from('deals').select('custom_fields').eq('id', dealId).single();
-      const existingCustomFields = existingDeal?.custom_fields || {};
+      const { data: existingDeal } = await supabase.from('deals').select('*').eq('id', dealId).single();
+      const existingCustomFields = (existingDeal as any)?.custom_fields || {};
       mappedUpdates.custom_fields = { ...existingCustomFields, ...customFieldsUpdates };
     }
 
@@ -236,6 +373,8 @@ export const dealsAdapter = {
     // Always update the updated_at timestamp
     mappedUpdates.updated_at = new Date().toISOString();
 
+    console.log('Updating deal with data:', mappedUpdates);
+
     const { data, error } = await supabase
       .from('deals')
       .update(mappedUpdates)
@@ -243,7 +382,11 @@ export const dealsAdapter = {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error updating deal:', error);
+      throw error;
+    }
+    
     return data;
   },
 
@@ -282,14 +425,14 @@ export const filesAdapter = {
     if (error) throw error;
 
     // Map the results to expected format
-    const allFiles = (data || []).map(doc => ({
+    const allFiles = (data || []).map((doc: any) => ({
       id: doc.id,
-      file_name: doc.document_name,
+      file_name: doc.file_name || doc.document_name,
       file_path: doc.file_path,
       category: doc.category,
       uploaded_at: doc.uploaded_at,
       file_size: doc.file_size,
-      file_type: doc.file_type,
+      file_type: doc.mime_type,
       subcategory: doc.subcategory,
       tags: doc.tags,
       is_confidential: doc.is_confidential,
@@ -312,59 +455,51 @@ export const filesAdapter = {
 
       console.log('User authenticated for upload:', user.id);
 
-      // Ensure storage bucket exists
-      const bucketResult = await ensureStorageBucketExists();
-      console.log('Storage bucket check result:', bucketResult);
+      // Create FormData for server upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('dealId', dealId);
+      formData.append('fileName', fileName);
+      formData.append('userId', user.id); // Add userId for server-side RLS compliance
+      formData.append('metadata', JSON.stringify(metadata));
+
+      // Upload via server endpoint to handle storage permissions
+      console.log('Uploading file via server...');
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${errorText}`);
+      }
+
+      const uploadResult = await response.json();
+      console.log('Server upload result:', uploadResult);
+
+      if (!uploadResult.success) {
+        throw new Error(`File upload failed: ${uploadResult.error}`);
+      }
+
+      console.log('File uploaded successfully via server:', uploadResult);
       
-      if (!bucketResult.success) {
-        throw new Error(`Storage setup failed: ${bucketResult.error}`);
-      }
-
-      // Upload to Supabase storage
-      console.log('Uploading file to storage...');
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('deal-documents')
-        .upload(fileName, file);
-
-      console.log('Upload result:', { uploadData, uploadError });
-
-      if (uploadError) {
-        throw new Error(`File upload failed: ${uploadError.message}`);
-      }
-
-      console.log('File uploaded successfully, saving metadata to database...');
-
-      // Save file metadata to deal_documents table
-      const { data, error } = await supabase
-        .from('deal_documents')
-        .insert({
-          deal_id: dealId,
-          document_name: file.name,
-          file_path: fileName,
-          file_size: file.size,
-          file_type: file.type,
-          category: metadata.category || 'general',
-          subcategory: metadata.subcategory,
-          uploaded_by: user.id,
-          tags: metadata.tags || [],
-          is_confidential: metadata.is_confidential || false,
-          metadata: {
-            description: metadata.description,
-            ...metadata
-          }
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Database insert error:', error);
-        // If database insert fails, try to clean up the uploaded file
-        await supabase.storage.from('deal-documents').remove([fileName]);
-        throw new Error(`Database save failed: ${error.message}`);
-      }
-      
-      console.log('File upload and database save completed successfully:', data);
-      return data;
+      // Server already handles database insertion, so just return the result
+      return {
+        id: uploadResult.fileId,
+        deal_id: dealId,
+        file_name: file.name,
+        file_path: uploadResult.filePath || fileName,
+        file_size: file.size,
+        mime_type: file.type,
+        category: metadata.category || 'general',
+        uploaded_by: user.id,
+        created_at: new Date().toISOString()
+      };
     } catch (error) {
       console.error('Upload error:', error);
       // Re-throw with more context
@@ -392,7 +527,7 @@ export const filesAdapter = {
       // Get file info first to get the file path for storage deletion
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name, deal_id, uploaded_by')
+        .select('file_path, file_name, deal_id, uploaded_by')
         .eq('id', fileId)
         .single();
 
@@ -410,9 +545,13 @@ export const filesAdapter = {
       // Delete from storage first
       if (fileInfo.file_path) {
         console.log('Attempting to delete from storage:', fileInfo.file_path);
+        
+        // URL encode the file path to handle special characters and spaces
+        const encodedFilePath = encodeFilePath(fileInfo.file_path);
+        
         const { error: storageError } = await supabase.storage
           .from('deal-documents')
-          .remove([fileInfo.file_path]);
+          .remove([encodedFilePath]);
 
         if (storageError) {
           console.warn('Storage deletion warning:', storageError);
@@ -435,7 +574,7 @@ export const filesAdapter = {
       }
 
       console.log('Successfully deleted from database');
-      return { success: true, fileName: fileInfo.document_name };
+      return { success: true, fileName: fileInfo.file_name };
     } catch (error) {
       console.error('File deletion failed:', error);
       throw error instanceof Error ? error : new Error('Delete failed');
@@ -447,7 +586,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name')
+        .select('file_path, file_name')
         .eq('id', fileId)
         .single();
 
@@ -455,10 +594,13 @@ export const filesAdapter = {
         throw new Error('File not found');
       }
 
+      // URL encode the file path to handle special characters and spaces
+      const encodedFilePath = encodeFilePath(fileInfo.file_path);
+
       // Create signed URL for private file access
       const { data, error } = await supabase.storage
         .from('deal-documents')
-        .createSignedUrl(fileInfo.file_path, 3600); // 1 hour expiry
+        .createSignedUrl(encodedFilePath, 3600); // 1 hour expiry
 
       if (error) {
         throw new Error(`Failed to generate download URL: ${error.message}`);
@@ -466,7 +608,7 @@ export const filesAdapter = {
 
       return {
         url: data.signedUrl,
-        fileName: fileInfo.document_name
+        fileName: fileInfo.file_name
       };
     } catch (error) {
       throw error instanceof Error ? error : new Error('Failed to get file URL');
@@ -480,7 +622,7 @@ export const filesAdapter = {
       // Get file info
       const { data: fileInfo, error: fetchError } = await supabase
         .from('deal_documents')
-        .select('file_path, document_name, file_type')
+        .select('file_name, mime_type')
         .eq('id', fileId)
         .single();
 
@@ -491,38 +633,22 @@ export const filesAdapter = {
 
       console.log('File info retrieved:', fileInfo);
       
-      // Check if storage bucket exists and file exists
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      console.log('Available buckets:', buckets, 'Buckets error:', bucketsError);
-      
-      // Try to list files in the specific path to see if file exists
-      const pathParts = fileInfo.file_path.split('/');
-      const folder = pathParts.slice(0, -1).join('/');
-      console.log('Checking if file exists in folder:', folder);
-      
-      const { data: files, error: listError } = await supabase.storage
-        .from('deal-documents')
-        .list(folder || '');
-      
-      console.log('Files in folder:', files, 'List error:', listError);
+      // Download file from server endpoint
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
 
-      // Download file as blob
-      console.log('Attempting to download file from path:', fileInfo.file_path);
-      const { data, error } = await supabase.storage
-        .from('deal-documents')
-        .download(fileInfo.file_path);
-
-      if (error) {
-        console.error('Download error details:', error);
-        throw new Error(`Failed to download file: ${error.message || JSON.stringify(error)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to download file: ${errorText}`);
       }
 
-      console.log('File downloaded successfully, blob size:', data?.size);
+      const blob = await response.blob();
+      console.log('File downloaded successfully, blob size:', blob.size);
 
       return {
-        blob: data,
-        fileName: fileInfo.document_name,
-        fileType: fileInfo.file_type
+        blob: blob,
+        fileName: fileInfo.file_name,
+        fileType: fileInfo.mime_type
       };
     } catch (error) {
       console.error('getFileBlob error:', error);
@@ -531,101 +657,6 @@ export const filesAdapter = {
   }
 };
 
-// Adapter for communications
-export const communicationsAdapter = {
-  async fetchDealCommunications(dealId: string) {
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .eq('deal_id', dealId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    
-    return data?.map(comm => ({
-      ...comm,
-      user_name: comm.profiles?.full_name || 'Unknown User',
-      user_email: comm.profiles?.email || ''
-    }));
-  },
-
-  async createCommunication(dealId: string, communicationData: Record<string, any>) {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) throw new Error(`Authentication failed: ${authError.message}`);
-    if (!user) throw new Error('User not authenticated');
-
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .insert({
-        deal_id: dealId,
-        direction: communicationData.direction,
-        channel: communicationData.channel,
-        subject: communicationData.subject,
-        body: communicationData.body,
-        from_email: communicationData.from_email,
-        to_emails: communicationData.to_emails,
-        cc_emails: communicationData.cc_emails,
-        phone_number: communicationData.phone_number,
-        recording_url: communicationData.recording_url,
-        scheduled_at: communicationData.scheduled_at,
-        occurred_at: communicationData.occurred_at,
-        duration_minutes: communicationData.duration_minutes,
-        user_id: user.id,
-        contact_id: communicationData.contact_id,
-        thread_id: communicationData.thread_id,
-        status: communicationData.status || 'active'
-      })
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      ...data,
-      user_name: data.profiles?.full_name || 'Unknown User',
-      user_email: data.profiles?.email || ''
-    };
-  },
-
-  async updateCommunication(communicationId: string, updates: Record<string, any>) {
-    const { data, error } = await supabase
-      .from('deal_communications')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', communicationId)
-      .select(`
-        *,
-        profiles:user_id(full_name, email)
-      `)
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      ...data,
-      user_name: data.profiles?.full_name || 'Unknown User',
-      user_email: data.profiles?.email || ''
-    };
-  },
-
-  async deleteCommunication(communicationId: string) {
-    const { error } = await supabase
-      .from('deal_communications')
-      .delete()
-      .eq('id', communicationId);
-
-    if (error) throw error;
-    return true;
-  }
-};
 
 // Adapter for ASINs
 export const asinsAdapter = {
@@ -686,7 +717,7 @@ export const tasksAdapter = {
         .from('deal_tasks')
         .select('*')
         .eq('deal_id', dealId)
-        .order('sort_order', { ascending: true });
+        .order('created_at', { ascending: true });
 
       if (error) {
         // If table doesn't exist, return empty array
@@ -709,16 +740,8 @@ export const tasksAdapter = {
       if (authError) throw new Error(`Authentication failed: ${authError.message}`);
       if (!user) throw new Error('User not authenticated');
 
-      // Get the highest sort_order for the status column
-      const { data: maxSortData } = await supabase
-        .from('deal_tasks')
-        .select('sort_order')
-        .eq('deal_id', dealId)
-        .eq('status', taskData.status || 'todo')
-        .order('sort_order', { ascending: false })
-        .limit(1);
-
-      const maxSort = maxSortData?.[0]?.sort_order || 0;
+      // Set a default order
+      // const maxSort = 0;
 
       const { data, error } = await supabase
         .from('deal_tasks')
@@ -731,7 +754,7 @@ export const tasksAdapter = {
           assigned_to: taskData.assigned_to,
           due_date: taskData.due_date,
           created_by: user.id,
-          sort_order: maxSort + 1
+          created_at: new Date().toISOString()
         })
         .select('*')
         .single();
@@ -774,39 +797,13 @@ export const tasksAdapter = {
     }
   },
 
-  async updateTaskStatus(taskId: string, newStatus: string, newSortOrder?: number) {
+  async updateTaskStatus(taskId: string, newStatus: string) {
     const updates: Record<string, any> = { status: newStatus };
-    
-    if (newSortOrder !== undefined) {
-      updates.sort_order = newSortOrder;
-    }
-
     return this.updateTask(taskId, updates);
   },
 
-  async reorderTasks(dealId: string, status: string, taskIds: string[]) {
-    // Update sort_order for all tasks in the column
-    const updates = taskIds.map((taskId, index) => ({
-      id: taskId,
-      sort_order: index
-    }));
-
-    const promises = updates.map(update =>
-      supabase
-        .from('deal_tasks')
-        .update({ sort_order: update.sort_order })
-        .eq('id', update.id)
-        .eq('deal_id', dealId)
-        .eq('status', status)
-    );
-
-    const results = await Promise.all(promises);
-    const errors = results.filter(result => result.error);
-    
-    if (errors.length > 0) {
-      throw new Error(`Failed to reorder tasks: ${errors[0].error?.message}`);
-    }
-
+  async reorderTasks(_dealId: string, _status: string, _taskIds: string[]) {
+    // For now, just return true as reordering is not implemented without sort_order
     return true;
   },
 
@@ -843,7 +840,43 @@ export const tasksAdapter = {
 export const dbAdapter = {
   deals: dealsAdapter,
   files: filesAdapter,
-  communications: communicationsAdapter,
   asins: asinsAdapter,
-  tasks: tasksAdapter
+  tasks: tasksAdapter,
+  
+  // Convenience method for file upload with category
+  async uploadFile(file: File, dealId: string, category?: string): Promise<{ id: string; fileName: string }> {
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    
+    const fileId = crypto.randomUUID();
+    
+    // For development - upload to local server
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('dealId', dealId);
+    formData.append('fileId', fileId);
+    formData.append('userId', user.id); // Add userId for RLS compliance
+    if (category) {
+      formData.append('category', category);
+    }
+
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+    const response = await fetch(`${apiUrl}/api/files/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Upload failed: ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      id: result.fileId || fileId,
+      fileName: file.name
+    };
+  }
 };

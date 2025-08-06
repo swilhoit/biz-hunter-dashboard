@@ -11,18 +11,22 @@ import {
   Package,
   Star,
   Clock,
-  Target
+  Target,
+  ShoppingCart,
+  Percent,
+  CheckCircle,
+  FileText,
+  Activity,
+  Users
 } from 'lucide-react';
+import BusinessValuation from '../../components/BusinessValuation';
+import { formatCurrency, formatPercentage } from '../../utils/dealMetrics';
 
 interface DealOverviewProps {
   deal: Deal;
 }
 
 function DealOverview({ deal }: DealOverviewProps) {
-  const formatCurrency = (amount?: number) => {
-    if (!amount) return 'N/A';
-    return `$${amount.toLocaleString()}`;
-  };
 
   const formatDate = (date?: string) => {
     if (!date) return 'N/A';
@@ -103,6 +107,9 @@ function DealOverview({ deal }: DealOverviewProps) {
         </div>
       </div>
 
+      {/* Business Valuation */}
+      <BusinessValuation deal={deal} />
+
       {/* Business Information */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -142,12 +149,40 @@ function DealOverview({ deal }: DealOverviewProps) {
               </div>
             </div>
 
+            {deal.industry && (
+              <div className="flex items-center">
+                <Building2 className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Industry</p>
+                  <p className="text-gray-900 dark:text-gray-100">{deal.industry}</p>
+                  {deal.sub_industry && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{deal.sub_industry}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(deal.city || deal.state) && (
+              <div className="flex items-center">
+                <Globe className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Location</p>
+                  <p className="text-gray-900 dark:text-gray-100">
+                    {[deal.city, deal.state, deal.country].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {deal.amazon_category && (
               <div className="flex items-center">
                 <Package className="w-5 h-5 text-gray-400 mr-3" />
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Amazon Category</p>
                   <p className="text-gray-900 dark:text-gray-100">{deal.amazon_category}</p>
+                  {deal.amazon_subcategory && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{deal.amazon_subcategory}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -158,6 +193,16 @@ function DealOverview({ deal }: DealOverviewProps) {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400">FBA Percentage</p>
                   <p className="text-gray-900 dark:text-gray-100">{deal.fba_percentage}%</p>
+                </div>
+              </div>
+            )}
+
+            {deal.employee_count && (
+              <div className="flex items-center">
+                <User className="w-5 h-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Employees</p>
+                  <p className="text-gray-900 dark:text-gray-100">{deal.employee_count}</p>
                 </div>
               </div>
             )}
@@ -258,6 +303,206 @@ function DealOverview({ deal }: DealOverviewProps) {
                 #{tag}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empire Flippers Metrics Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Key Performance Metrics</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Financial Metrics */}
+          {(deal.ttm_revenue || deal.avg_monthly_revenue || deal.profit_margin) && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Financial Performance</h4>
+              {deal.ttm_revenue && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">TTM Revenue:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(deal.ttm_revenue)}</span>
+                </div>
+              )}
+              {deal.ttm_profit && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">TTM Profit:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(deal.ttm_profit)}</span>
+                </div>
+              )}
+              {deal.avg_monthly_revenue && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Avg Monthly Revenue:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(deal.avg_monthly_revenue)}</span>
+                </div>
+              )}
+              {deal.profit_margin && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Profit Margin:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatPercentage(deal.profit_margin)}</span>
+                </div>
+              )}
+              {deal.cogs_percentage && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">COGS %:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatPercentage(deal.cogs_percentage)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Amazon Metrics */}
+          {(deal.sku_count || deal.acos || deal.tacos || deal.brand_registry !== undefined) && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Amazon Metrics</h4>
+              {deal.sku_count && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">SKU Count:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.sku_count}</span>
+                </div>
+              )}
+              {deal.parent_asin_count && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Parent ASINs:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.parent_asin_count}</span>
+                </div>
+              )}
+              {deal.brand_registry !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Brand Registry:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.brand_registry ? 'Yes' : 'No'}</span>
+                </div>
+              )}
+              {deal.acos && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">ACoS:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatPercentage(deal.acos)}</span>
+                </div>
+              )}
+              {deal.tacos && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">TACoS:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatPercentage(deal.tacos)}</span>
+                </div>
+              )}
+              {deal.avg_retail_price && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Avg Retail Price:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(deal.avg_retail_price)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Operations & Transfer */}
+          {(deal.hours_per_week || deal.owner_involvement || deal.transfer_period_days) && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Operations</h4>
+              {deal.hours_per_week && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Hours/Week:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.hours_per_week}</span>
+                </div>
+              )}
+              {deal.owner_involvement && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Owner Involvement:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.owner_involvement}</span>
+                </div>
+              )}
+              {deal.growth_trend && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Growth Trend:</span>
+                  <span className={`text-sm font-medium ${
+                    deal.growth_trend === 'increasing' ? 'text-green-600 dark:text-green-400' :
+                    deal.growth_trend === 'declining' ? 'text-red-600 dark:text-red-400' :
+                    'text-yellow-600 dark:text-yellow-400'
+                  }`}>
+                    {deal.growth_trend?.charAt(0).toUpperCase() + deal.growth_trend?.slice(1)}
+                  </span>
+                </div>
+              )}
+              {deal.transfer_period_days && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Transfer Period:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.transfer_period_days} days</span>
+                </div>
+              )}
+              {deal.training_included !== undefined && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Training Included:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{deal.training_included ? 'Yes' : 'No'}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Assets & Verification Section */}
+      {(deal.assets_included || deal.verified_revenue !== undefined) && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Assets & Verification</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Verification Status */}
+            {(deal.verified_revenue !== undefined || deal.verified_profit !== undefined) && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Verification Status</h4>
+                <div className="space-y-2">
+                  {deal.verified_revenue !== undefined && (
+                    <div className="flex items-center">
+                      <CheckCircle className={`w-4 h-4 mr-2 ${deal.verified_revenue ? 'text-green-500' : 'text-gray-400'}`} />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Revenue Verified</span>
+                    </div>
+                  )}
+                  {deal.verified_profit !== undefined && (
+                    <div className="flex items-center">
+                      <CheckCircle className={`w-4 h-4 mr-2 ${deal.verified_profit ? 'text-green-500' : 'text-gray-400'}`} />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Profit Verified</span>
+                    </div>
+                  )}
+                  {deal.verification_date && (
+                    <div className="mt-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Verified on: {formatDate(deal.verification_date)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Assets Included */}
+            {deal.assets_included && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Assets Included</h4>
+                <div className="space-y-2">
+                  {Object.entries(deal.assets_included).map(([key, value]) => {
+                    if (key === 'other' && Array.isArray(value) && value.length > 0) {
+                      return (
+                        <div key={key} className="space-y-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Other Assets:</span>
+                          {value.map((item, idx) => (
+                            <div key={idx} className="flex items-center ml-4">
+                              <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (typeof value === 'boolean' && value) {
+                      return (
+                        <div key={key} className="flex items-center">
+                          <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

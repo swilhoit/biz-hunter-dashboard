@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { X, Download, Loader2, AlertCircle, FileText, Table, Image } from 'lucide-react';
 import { filesAdapter } from '../lib/database-adapter';
-import PDFViewer from './viewers/PDFViewer';
 import CSVExcelViewer from './viewers/CSVExcelViewer';
 import DocViewer from './viewers/DocViewer';
 import ImageViewer from './viewers/ImageViewer';
+
+// Lazy load PDFViewer to prevent it from breaking the app
+const PDFViewer = lazy(() => import('./viewers/PDFViewer'));
 
 interface FileViewerModalProps {
   fileId: string;
@@ -100,7 +102,15 @@ export default function FileViewerModal({ fileId, fileName, isOpen, onClose }: F
     
     switch (extension) {
       case 'pdf':
-        return <PDFViewer blob={fileData.blob} />;
+        return (
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+          }>
+            <PDFViewer blob={fileData.blob} />
+          </Suspense>
+        );
       case 'csv':
       case 'xls':
       case 'xlsx':

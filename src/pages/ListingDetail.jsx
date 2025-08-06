@@ -283,35 +283,9 @@ function ListingDetail() {
                   </div>
                 </div>
 
-                {/* Amazon Metrics */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Amazon Metrics</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center">
-                      <Package className="w-8 h-8 mx-auto text-orange-500 mb-2" />
-                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {Array.isArray(listing.asin_list) ? listing.asin_list.length : 'Unknown'}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">ASINs</div>
-                    </div>
-                    
-                    <div className="text-center">
-                      <Users className="w-8 h-8 mx-auto text-blue-500 mb-2" />
-                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {listing.fba_percentage || 'Unknown'}%
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">FBA</div>
-                    </div>
-                    
-                    <div className="text-center">
-                      <Star className="w-8 h-8 mx-auto text-yellow-500 mb-2" />
-                      <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                        {listing.seller_account_health || 'Unknown'}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Account Health</div>
-                    </div>
-                  </div>
-                </div>
+                {/* Amazon Metrics - Hidden until we have real data */}
+                {/* Note: Amazon metrics will be shown once the listing is moved to the deal pipeline
+                    and we start gathering detailed Amazon-specific information */}
 
                 {/* Description */}
                 {listing.description && (
