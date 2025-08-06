@@ -18,7 +18,7 @@ import OffMarketSellerDetails from './pages/OffMarketSellerDetails';
 import Signin from './pages/Signin';
 import Signup from './pages/Signup';
 import ResetPassword from './pages/ResetPassword';
-import PageNotFound from './pages/utility/404';
+import PageNotFound from './pages/utility/PageNotFound';
 
 // For now, keeping minimal auth
 import ProtectedRoute from './components/ProtectedRoute';
