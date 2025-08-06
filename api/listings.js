@@ -125,10 +125,15 @@ export default async function handler(req, res) {
     params.push({ name: 'limit', value: parseInt(limit) });
     params.push({ name: 'offset', value: parseInt(offset) });
 
-    // Execute the query
+    // Execute the query - convert params to object format for BigQuery
+    const paramsObj = {};
+    params.forEach(param => {
+      paramsObj[param.name] = param.value;
+    });
+    
     const options = {
       query: query,
-      params: params,
+      params: paramsObj,
       location: 'US',
     };
 
