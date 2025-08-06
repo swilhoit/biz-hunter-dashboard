@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API</title>
+</head>
+<body>
+    <h1>Testing Business Listings API</h1>
+    <div id="status">Loading...</div>
+    <div id="results"></div>
+
+    <script>
+        // Test the API directly
+        fetch('https://biz-hunter-dashboard-gq60bs1ye-swilhoits-projects.vercel.app/api/bigquery/listings')
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Data received:', data);
+                document.getElementById('status').innerHTML = `Found ${data.listings ? data.listings.length : 0} listings`;
+                
+                if (data.listings && data.listings.length > 0) {
+                    let html = '<h2>First 5 Listings:</h2><ul>';
+                    data.listings.slice(0, 5).forEach(listing => {
+                        html += `<li>${listing.business_name} - $${listing.asking_price}</li>`;
+                    });
+                    html += '</ul>';
+                    document.getElementById('results').innerHTML = html;
+                } else if (data.error) {
+                    document.getElementById('results').innerHTML = `<p style="color: red;">Error: ${data.error}<br>Details: ${data.details}</p>`;
+                } else {
+                    document.getElementById('results').innerHTML = '<p>No listings found</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('status').innerHTML = 'Error loading data';
+                document.getElementById('results').innerHTML = `<p style="color: red;">${error.message}</p>`;
+            });
+    </script>
+</body>
+</html>

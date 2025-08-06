@@ -90,15 +90,21 @@ class BigQueryService {
         params.append('offset', (filters.offset || 0).toString());
       }
 
-      const response = await axios.get<ListingsResponse>(
-        `${this.baseUrl}/api/bigquery/listings?${params.toString()}`
-      );
+      const url = `${this.baseUrl}/api/bigquery/listings?${params.toString()}`;
+      console.log('Fetching from URL:', url);
       
-      return response.data.listings;
+      const response = await axios.get<ListingsResponse>(url);
+      
+      console.log('BigQuery response:', response.data);
+      return response.data.listings || [];
     } catch (error) {
       console.error('Failed to fetch listings from BigQuery:', error);
-      // Return empty array on error
-      return [];
+      if (axios.isAxiosError(error)) {
+        console.error('Response data:', error.response?.data);
+        console.error('Response status:', error.response?.status);
+      }
+      // Throw the error so we can see it in the UI
+      throw error;
     }
   }
 
