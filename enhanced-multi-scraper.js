@@ -817,21 +817,59 @@ class EnhancedMultiScraper {
     }
   }
 
+  // Helper method to check if a business is e-commerce
+  isEcommerceBusiness(title, description, industry) {
+    const searchText = `${title || ''} ${description || ''} ${industry || ''}`.toLowerCase();
+    
+    // E-commerce indicators
+    const ecommerceKeywords = [
+      'ecommerce', 'e-commerce', 'online', 'internet', 'amazon', 'fba',
+      'shopify', 'dropship', 'digital', 'web store', 'marketplace',
+      'etsy', 'ebay', 'subscription', 'saas', 'software', 'website', 'app'
+    ];
+    
+    // Non-ecommerce indicators (exclude if found)
+    const nonEcommerceKeywords = [
+      'restaurant', 'bar', 'cafe', 'coffee', 'pizza', 'bakery',
+      'salon', 'spa', 'barbershop', 'daycare', 'childcare',
+      'laundromat', 'dry clean', 'car wash', 'auto repair',
+      'gas station', 'convenience store', 'liquor',
+      'gym', 'fitness', 'yoga', 'hotel', 'motel',
+      'medical', 'dental', 'clinic', 'pharmacy',
+      'plumbing', 'hvac', 'electrical', 'construction',
+      'landscaping', 'lawn', 'pool service',
+      'real estate', 'property management',
+      'manufacturing', 'trucking', 'logistics',
+      'franchise', 'brick and mortar'
+    ];
+    
+    const hasEcommerce = ecommerceKeywords.some(kw => searchText.includes(kw));
+    const hasNonEcommerce = nonEcommerceKeywords.some(kw => searchText.includes(kw));
+    
+    return hasEcommerce && !hasNonEcommerce;
+  }
+
   // BizBuySell two-stage scraping
   async scrapeBizBuySellFeed(maxPages = 5) {
     this.log('INFO', '=== Stage 1: BizBuySell Feed Scraper ===');
     const listings = [];
     
-    for (let page = 0; page < maxPages; page++) {
-      try {
-        // Use the correct Amazon stores URL with pagination
-        const feedUrl = page === 0 
-          ? 'https://www.bizbuysell.com/amazon-stores-for-sale/'
-          : `https://www.bizbuysell.com/amazon-stores-for-sale/?s=${page * 24}`;
+    // Use multiple search URLs for better e-commerce coverage
+    const searchUrls = [
+      'https://www.bizbuysell.com/businesses-for-sale/?q=ecommerce',
+      'https://www.bizbuysell.com/businesses-for-sale/?q=amazon+fba',
+      'https://www.bizbuysell.com/businesses-for-sale/?q=online+business',
+      'https://www.bizbuysell.com/internet-businesses-for-sale/'
+    ];
+    
+    for (const baseUrl of searchUrls) {
+      for (let page = 0; page < Math.min(maxPages, 2); page++) {
+        try {
+          const feedUrl = page === 0 ? baseUrl : `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}s=${page * 24}`;
           
-        this.log('INFO', `Fetching BizBuySell page ${page + 1}`, { url: feedUrl });
-        const html = await this.fetchPage(feedUrl);
-        const $ = cheerio.load(html);
+          this.log('INFO', `Fetching BizBuySell page ${page + 1}`, { url: feedUrl });
+          const html = await this.fetchPage(feedUrl);
+          const $ = cheerio.load(html);
 
         // Check if we're on the right page
         const pageTitle = $('h1').text();
@@ -887,15 +925,23 @@ class EnhancedMultiScraper {
                               item.location?.name || 'Online';
               
               if (url && title) {
-                listings.push({
-                  url: url.startsWith('http') ? url : `https://www.bizbuysell.com${url}`,
-                  title,
-                  priceText,
-                  location,
-                  source: 'BizBuySell'
-                });
+                // Filter for e-commerce businesses only
+                const description = item.description || '';
+                const industry = item.category || '';
                 
-                this.logFoundListing('BizBuySell', title, url);
+                if (this.isEcommerceBusiness(title, description, industry)) {
+                  listings.push({
+                    url: url.startsWith('http') ? url : `https://www.bizbuysell.com${url}`,
+                    title,
+                    priceText,
+                    location,
+                    source: 'BizBuySell'
+                  });
+                  
+                  this.logFoundListing('BizBuySell', title, url);
+                } else {
+                  this.log('INFO', `Skipped non-ecommerce: ${title}`);
+                }
               }
             }
           });
@@ -941,24 +987,34 @@ class EnhancedMultiScraper {
           const priceText = $elem.find('.price').text().trim();
           
           if (link && title) {
-            const fullUrl = link.startsWith('http') ? link : `https://www.bizbuysell.com${link}`;
-            listings.push({
-              url: fullUrl,
-              title,
-              priceText,
-              source: 'BizBuySell'
-            });
+            // Extract description/industry from listing element
+            const description = $elem.find('.description, .summary').text().trim();
+            const industry = $elem.find('.category, .industry').text().trim();
             
-            // Log found listing for frontend display
-            this.logFoundListing('BizBuySell', title, fullUrl);
+            // Filter for e-commerce businesses only
+            if (this.isEcommerceBusiness(title, description, industry)) {
+              const fullUrl = link.startsWith('http') ? link : `https://www.bizbuysell.com${link}`;
+              listings.push({
+                url: fullUrl,
+                title,
+                priceText,
+                source: 'BizBuySell'
+              });
+              
+              // Log found listing for frontend display
+              this.logFoundListing('BizBuySell', title, fullUrl);
+            } else {
+              this.log('INFO', `Skipped non-ecommerce: ${title}`);
+            }
           }
         });
         } // Close the else block for fallback HTML parsing
 
-        this.log('INFO', `BizBuySell page ${page + 1} scraped, found ${listings.length} total listings`);
-      } catch (error) {
-        this.log('ERROR', `BizBuySell page ${page + 1} failed`, { error: error.message });
-        this.logScrapingError('BizBuySell', error.message, `Page ${page + 1}`);
+          this.log('INFO', `BizBuySell page ${page + 1} scraped, found ${listings.length} total listings`);
+        } catch (error) {
+          this.log('ERROR', `BizBuySell page ${page + 1} failed`, { error: error.message });
+          this.logScrapingError('BizBuySell', error.message, `Page ${page + 1}`);
+        }
       }
     }
 
