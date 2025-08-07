@@ -1,3 +1,5 @@
+import CacheService from './CacheService';
+
 export interface BusinessListing {
   id: string;
   business_name: string;
@@ -45,7 +47,19 @@ export interface ListingsFilter {
 class BigQueryService {
   private apiUrl = '/api/listings';
 
-  async getListings(filters: ListingsFilter = {}): Promise<{ listings: BusinessListing[]; total: number }> {
+  async getListings(filters: ListingsFilter = {}, useCache: boolean = true): Promise<{ listings: BusinessListing[]; total: number }> {
+    // Generate cache key
+    const cacheKey = CacheService.getListingsKey(filters);
+    
+    // Try to get from cache first
+    if (useCache) {
+      const cached = CacheService.get<{ listings: BusinessListing[]; total: number }>(cacheKey);
+      if (cached) {
+        console.log('Returning cached listings');
+        return cached;
+      }
+    }
+    
     try {
       const params = new URLSearchParams();
       
@@ -70,17 +84,35 @@ class BigQueryService {
       }
 
       const data = await response.json();
-      return {
+      const result = {
         listings: data.listings || [],
         total: data.total || 0
       };
+      
+      // Cache the result
+      if (useCache) {
+        CacheService.set(cacheKey, result, 2 * 60 * 1000); // Cache for 2 minutes
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error fetching listings:', error);
       throw error;
     }
   }
 
-  async getListingById(id: string): Promise<BusinessListing> {
+  async getListingById(id: string, useCache: boolean = true): Promise<BusinessListing> {
+    const cacheKey = `listing_${id}`;
+    
+    // Try cache first
+    if (useCache) {
+      const cached = CacheService.get<BusinessListing>(cacheKey);
+      if (cached) {
+        console.log('Returning cached listing detail');
+        return cached;
+      }
+    }
+    
     try {
       const response = await fetch(`${this.apiUrl}/${id}`);
       
@@ -88,7 +120,14 @@ class BigQueryService {
         throw new Error(`Failed to fetch listing: ${response.statusText}`);
       }
 
-      return await response.json();
+      const listing = await response.json();
+      
+      // Cache the result
+      if (useCache) {
+        CacheService.set(cacheKey, listing, 5 * 60 * 1000); // Cache for 5 minutes
+      }
+      
+      return listing;
     } catch (error) {
       console.error('Error fetching listing:', error);
       throw error;

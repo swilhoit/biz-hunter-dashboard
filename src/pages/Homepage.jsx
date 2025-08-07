@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
 import ListingsTable from '../partials/deals/ListingsTable';
-import { useBusinessListings } from '../hooks/useBusinessListings';
+import { useCachedListings } from '../hooks/useCachedListings';
 import { ArrowRight, TrendingUp, Search, DollarSign, Loader2 } from 'lucide-react';
 
 function Homepage() {
@@ -13,7 +13,8 @@ function Homepage() {
     listings: recentListings = [],
     totalCount,
     loading: isLoading,
-  } = useBusinessListings({ 
+    isStale
+  } = useCachedListings({ 
     limit: 10,
     sortBy: 'created_at',
     sortDirection: 'desc'
@@ -81,6 +82,7 @@ function Homepage() {
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold text-gray-900 dark:text-stone-100 mb-4">
                 <span className="text-orange-600 dark:text-orange-500">Fresh</span> Listings Just Added
+                {isStale && <span className="ml-2 text-sm font-normal text-orange-600">(updating...)</span>}
               </h2>
               <p className="text-lg text-gray-600 dark:text-stone-400">
                 Live feed of the newest e-commerce opportunities

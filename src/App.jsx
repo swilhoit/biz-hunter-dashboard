@@ -13,9 +13,15 @@ import Homepage from './pages/Homepage';
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
 import PageNotFound from './pages/utility/PageNotFound';
+import DataPreloader from './services/DataPreloader';
 
 function App() {
   const location = useLocation();
+
+  // Preload data on app initialization
+  useEffect(() => {
+    DataPreloader.preloadEssentialData();
+  }, []);
 
   useEffect(() => {
     document.querySelector('html').style.scrollBehavior = 'auto'

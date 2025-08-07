@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Header from '../partials/Header';
 import ListingsTable from '../partials/deals/ListingsTable';
 import ListingCard from '../partials/deals/ListingCard';
-import { useBusinessListings } from '../hooks/useBusinessListings';
+import { useCachedListings } from '../hooks/useCachedListings';
 import { useToast } from '../contexts/ToastContext';
 import { Search, Grid, List, RefreshCw, Loader2, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -35,8 +35,9 @@ function ListingsFeed() {
     error,
     hasMore,
     loadMore,
-    refetch 
-  } = useBusinessListings({ 
+    refetch,
+    isStale
+  } = useCachedListings({ 
     searchTerm, 
     filters: activeFilters,
     sortBy,
@@ -45,7 +46,7 @@ function ListingsFeed() {
 
   // Handle refresh
   const handleRefresh = () => {
-    refetch();
+    refetch(true); // Force refresh, bypass cache
     showSuccess('Listings refreshed');
   };
 
@@ -207,6 +208,7 @@ function ListingsFeed() {
             <div className="mb-4 sm:mb-0">
               <p className="text-gray-600 dark:text-gray-400">
                 {totalCount || listings.length} listings available
+                {isStale && <span className="ml-2 text-xs text-orange-600">(updating...)</span>}
               </p>
             </div>
             <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
