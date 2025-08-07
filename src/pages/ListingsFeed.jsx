@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 function ListingsFeed() {
   const navigate = useNavigate();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess } = useToast();
   const [viewMode, setViewMode] = useState('table');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
@@ -28,9 +28,13 @@ function ListingsFeed() {
 
   // Fetch BigQuery listings
   const { 
-    listings = [], 
-    loading: isLoading, 
-    error, 
+    listings = [],
+    totalCount,
+    loading: isLoading,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
     refetch 
   } = useBusinessListings({ 
     searchTerm, 
@@ -40,19 +44,15 @@ function ListingsFeed() {
   });
 
   // Handle refresh
-  const handleRefresh = async () => {
-    try {
-      await refetch();
-      showSuccess('Listings refreshed');
-    } catch (error) {
-      showError('Failed to refresh listings');
-    }
+  const handleRefresh = () => {
+    refetch();
+    showSuccess('Listings refreshed');
   };
 
   // Handle listing click
   const handleListingClick = (listingId) => {
     sessionStorage.setItem('listingsFeedScrollPosition', window.pageYOffset.toString());
-    navigate(`/listings/${listingId}`);
+    navigate(`/feed/${listingId}`);
   };
 
   // Handle sorting
@@ -70,7 +70,7 @@ function ListingsFeed() {
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-4">
       <button
         onClick={() => setShowFilters(!showFilters)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-stone-700 transition-colors"
       >
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4" />
@@ -78,7 +78,7 @@ function ListingsFeed() {
           {Object.values(activeFilters).some(f => 
             (typeof f === 'object' ? f.min || f.max : f)
           ) && (
-            <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+            <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400 px-2 py-1 rounded-full">
               Active
             </span>
           )}
@@ -186,7 +186,7 @@ function ListingsFeed() {
               <p className="text-red-600">Error loading listings: {error.message}</p>
               <button
                 onClick={handleRefresh}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="mt-4 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
               >
                 Try Again
               </button>
@@ -205,11 +205,8 @@ function ListingsFeed() {
           {/* Page header */}
           <div className="sm:flex sm:justify-between sm:items-center mb-8">
             <div className="mb-4 sm:mb-0">
-              <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-gray-100 font-bold">
-                Business Listings
-              </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                {listings.length} listings available
+                {totalCount || listings.length} listings available
               </p>
             </div>
             <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
@@ -262,7 +259,7 @@ function ListingsFeed() {
           {/* Loading state */}
           {isLoading && (
             <div className="flex justify-center items-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
             </div>
           )}
 
@@ -295,6 +292,26 @@ function ListingsFeed() {
           {!isLoading && listings.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500 dark:text-gray-400">No listings found</p>
+            </div>
+          )}
+
+          {/* Load More Button */}
+          {!isLoading && hasMore && listings.length > 0 && (
+            <div className="flex justify-center mt-8">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading more...
+                  </>
+                ) : (
+                  'Load More'
+                )}
+              </button>
             </div>
           )}
         </div>

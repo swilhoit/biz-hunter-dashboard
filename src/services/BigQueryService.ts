@@ -49,7 +49,7 @@ class BigQueryService {
     try {
       const params = new URLSearchParams();
       
-      if (filters.searchTerm) params.append('search', filters.searchTerm);
+      if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
       if (filters.priceRange?.min) params.append('minPrice', filters.priceRange.min);
       if (filters.priceRange?.max) params.append('maxPrice', filters.priceRange.max);
       if (filters.monthlyRevenue?.min) params.append('minRevenue', filters.monthlyRevenue.min);

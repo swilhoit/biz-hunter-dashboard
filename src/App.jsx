@@ -9,6 +9,7 @@ import {
 import './css/style.css';
 
 // Import only essential pages for business listings
+import Homepage from './pages/Homepage';
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
 import PageNotFound from './pages/utility/PageNotFound';
@@ -25,12 +26,16 @@ function App() {
   return (
     <>
       <Routes>
-        {/* Main route redirects to listings */}
-        <Route exact path="/" element={<Navigate to="/listings" replace />} />
+        {/* Homepage */}
+        <Route exact path="/" element={<Homepage />} />
         
-        {/* Core business listings routes - PUBLIC ACCESS */}
-        <Route path="/listings" element={<ListingsFeed />} />
-        <Route path="/listings/:id" element={<ListingDetail />} />
+        {/* Feed routes - PUBLIC ACCESS */}
+        <Route path="/feed" element={<ListingsFeed />} />
+        <Route path="/feed/:id" element={<ListingDetail />} />
+        
+        {/* Legacy redirect */}
+        <Route path="/listings" element={<Navigate to="/feed" replace />} />
+        <Route path="/listings/:id" element={<Navigate to="/feed/:id" replace />} />
         
         {/* 404 page */}
         <Route path="*" element={<PageNotFound />} />

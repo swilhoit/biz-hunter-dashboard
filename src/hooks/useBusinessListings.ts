@@ -3,6 +3,7 @@ import BigQueryService, { BusinessListing, ListingsFilter } from '../services/Bi
 
 export function useBusinessListings(filters?: ListingsFilter) {
   const [listings, setListings] = useState<BusinessListing[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export function useBusinessListings(filters?: ListingsFilter) {
       });
       
       const newListings = response.listings || [];
+      setTotalCount(response.total || 0);
       
       if (reset) {
         setListings(newListings);
@@ -70,6 +72,7 @@ export function useBusinessListings(filters?: ListingsFilter) {
 
   return {
     listings,
+    totalCount,
     loading,
     loadingMore,
     error,

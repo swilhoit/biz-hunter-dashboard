@@ -45,6 +45,8 @@ export default async function handler(req, res) {
       source,
       searchTerm,
       isAmazonFba,
+      sortBy = 'scraped_at',
+      sortDirection = 'desc',
       limit = '100',
       offset = '0'
     } = req.query;
@@ -181,12 +183,44 @@ export default async function handler(req, res) {
     }
 
     // Add ordering and pagination
-    query += ` ORDER BY scraped_at DESC`;
+    // Map frontend column names to database column names
+    const sortColumnMap = {
+      'asking_price': 'price',
+      'annual_revenue': 'revenue',
+      'created_at': 'scraped_at',
+      'monthly_revenue': 'revenue',
+      'monthly_profit': 'cash_flow'
+    };
+    
+    const sortColumn = sortColumnMap[sortBy] || sortBy;
+    const sortDir = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    
+    query += ` ORDER BY ${sortColumn} ${sortDir}`;
     query += ` LIMIT @limit OFFSET @offset`;
     params.push({ name: 'limit', value: parseInt(limit) });
     params.push({ name: 'offset', value: parseInt(offset) });
 
-    // Execute the query - convert params to object format for BigQuery
+    // First, get the total count without pagination
+    let countQuery = query.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM');
+    countQuery = countQuery.replace(/ORDER BY[\s\S]*$/, ''); // Remove ORDER BY and LIMIT/OFFSET
+    
+    // Execute count query
+    const countParams = params.filter(p => p.name !== 'limit' && p.name !== 'offset');
+    const countParamsObj = {};
+    countParams.forEach(param => {
+      countParamsObj[param.name] = param.value;
+    });
+    
+    const countOptions = {
+      query: countQuery,
+      params: countParamsObj,
+      location: 'US',
+    };
+    
+    const [countResult] = await bigquery.query(countOptions);
+    const totalCount = countResult[0]?.total || 0;
+    
+    // Execute the main query - convert params to object format for BigQuery
     const paramsObj = {};
     params.forEach(param => {
       paramsObj[param.name] = param.value;
@@ -228,7 +262,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       listings,
-      total: listings.length,
+      total: totalCount,
       offset: parseInt(offset),
       limit: parseInt(limit)
     });
