@@ -11,16 +11,7 @@ import './css/style.css';
 // Import only essential pages for business listings
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
-
-// Simple auth pages (will be simplified later)
-import Signin from './pages/Signin';
-import Signup from './pages/Signup';
-import ResetPassword from './pages/ResetPassword';
 import PageNotFound from './pages/utility/PageNotFound';
-
-// For now, keeping minimal auth
-import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './contexts/AuthContext';
 
 function App() {
   const location = useLocation();
@@ -41,11 +32,6 @@ function App() {
         <Route path="/listings" element={<ListingsFeed />} />
         <Route path="/listings/:id" element={<ListingDetail />} />
         
-        {/* Basic auth routes - will simplify later */}
-        <Route path="/signin" element={<Signin />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        
         {/* 404 page */}
         <Route path="*" element={<PageNotFound />} />
       </Routes>
@@ -53,10 +39,4 @@ function App() {
   );
 }
 
-export default function AppWrapper() {
-  return (
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  );
-}
+export default App;

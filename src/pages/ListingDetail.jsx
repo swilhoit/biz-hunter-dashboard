@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
 import { useBusinessListing } from '../hooks/useBusinessListings';
 import { useToast } from '../contexts/ToastContext';
@@ -23,7 +22,6 @@ import {
 function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   
   const { 
@@ -47,17 +45,12 @@ function ListingDetail() {
     return multiple ? `${multiple.toFixed(1)}x` : 'TBD';
   };
 
-  const handleAddToPipeline = async () => {
-    // Pipeline functionality temporarily disabled
-    showError('Pipeline functionality is currently disabled');
-  };
 
   if (isLoading) {
     return (
-      <div className="flex h-[100dvh] overflow-hidden">
-        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <div className="flex flex-col h-[100dvh] overflow-hidden">
+        <Header />
         <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
           <main className="grow">
             <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12">
@@ -77,10 +70,9 @@ function ListingDetail() {
 
   if (error) {
     return (
-      <div className="flex h-[100dvh] overflow-hidden">
-        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <div className="flex flex-col h-[100dvh] overflow-hidden">
+        <Header />
         <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
           <main className="grow">
             <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
               <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-6">
@@ -108,10 +100,9 @@ function ListingDetail() {
 
   if (!listing) {
     return (
-      <div className="flex h-[100dvh] overflow-hidden">
-        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <div className="flex flex-col h-[100dvh] overflow-hidden">
+        <Header />
         <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
           <main className="grow">
             <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
               <div className="text-center py-12">
@@ -136,11 +127,9 @@ function ListingDetail() {
   }
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden">
-      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
+    <div className="flex flex-col h-[100dvh] overflow-hidden">
+      <Header />
       <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-        <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
         <main className="grow">
           <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
@@ -184,14 +173,6 @@ function ListingDetail() {
                       View Original
                     </a>
                   )}
-                  <button
-                    onClick={handleAddToPipeline}
-                    disabled={false}
-                    className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add to Pipeline
-                  </button>
                 </div>
               </div>
             </div>

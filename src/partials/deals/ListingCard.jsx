@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Plus, Building2, Calendar, DollarSign, TrendingUp, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
-import { useAuth } from '../../hooks/useAuth';
 
 function ListingCard({ listing, onAddToPipeline, onDelete, onListingClick }) {
-  const { user } = useAuth();
+  // No auth needed
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 

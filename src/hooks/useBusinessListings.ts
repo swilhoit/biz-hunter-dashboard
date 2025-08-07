@@ -4,42 +4,85 @@ import BigQueryService, { BusinessListing, ListingsFilter } from '../services/Bi
 export function useBusinessListings(filters?: ListingsFilter) {
   const [listings, setListings] = useState<BusinessListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [currentLimit] = useState(100);
 
   useEffect(() => {
-    fetchListings();
+    fetchListings(true); // Reset when filters change
   }, [JSON.stringify(filters)]);
 
-  const fetchListings = async () => {
+  const fetchListings = async (reset = false) => {
     try {
-      setLoading(true);
+      const offset = reset ? 0 : currentOffset;
+      
+      if (reset) {
+        setLoading(true);
+        setListings([]);
+        setCurrentOffset(0);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+      
       setError(null);
-      const data = await BigQueryService.getListings(filters);
-      setListings(data);
+      
+      const response = await BigQueryService.getListings({
+        ...filters,
+        limit: currentLimit,
+        offset: offset
+      });
+      
+      const newListings = response.listings || [];
+      
+      if (reset) {
+        setListings(newListings);
+      } else {
+        setListings(prev => [...prev, ...newListings]);
+      }
+      
+      // Check if there are more items to load
+      setHasMore(newListings.length === currentLimit);
+      setCurrentOffset(offset + currentLimit);
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch listings');
-      setListings([]);
+      if (reset) {
+        setListings([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchListings(false);
     }
   };
 
   const refetch = () => {
-    fetchListings();
+    fetchListings(true);
   };
 
   return {
     listings,
     loading,
+    loadingMore,
     error,
+    hasMore,
+    loadMore,
     refetch
   };
 }
 
 export function useBusinessListing(id: string) {
-  const [listing, setListing] = useState<BusinessListing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<BusinessListing | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     fetchListing();
@@ -47,21 +90,22 @@ export function useBusinessListing(id: string) {
 
   const fetchListing = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
-      const data = await BigQueryService.getListingById(id);
-      setListing(data);
+      const listing = await BigQueryService.getListingById(id);
+      setData(listing);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch listing');
-      setListing(null);
+      const errorObj = err instanceof Error ? err : new Error('Failed to fetch listing');
+      setError(errorObj);
+      setData(null);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return {
-    listing,
-    loading,
+    data,
+    isLoading,
     error
   };
 }

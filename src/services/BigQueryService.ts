@@ -1,172 +1,100 @@
-// BigQuery Service for Business Listings
-import axios from 'axios';
-
 export interface BusinessListing {
   id: string;
   business_name: string;
   asking_price: number;
-  annual_revenue: number;
-  cash_flow: number;
-  location: string;
-  industry: string;
+  monthly_revenue: number;
+  monthly_profit: number;
+  ttm_revenue: number;
+  ttm_profit: number;
+  asking_multiple: number;
   description: string;
-  listing_url: string;
+  category: string;
+  subcategory: string;
   source: string;
-  date_listed: string;
-  seller_name?: string;
-  seller_email?: string;
-  multiple?: number;
-  inventory_value?: number;
-  is_amazon_fba?: boolean;
-  amazon_business_type?: string;
-  established_year?: string;
-  monthly_traffic?: string;
-  seller_financing?: string;
-  reason_for_selling?: string;
-  status: 'active' | 'pending' | 'sold';
+  listing_url: string;
+  image_url: string;
+  location: string;
+  year_established: number;
+  employees: string;
   created_at: string;
   updated_at: string;
+  status: string;
+  ecommerce_platform?: string;
+  monthly_sessions?: number;
+  conversion_rate?: number;
+  aov?: number;
+  inventory_value?: number;
+  supplier_count?: number;
+  sku_count?: number;
+  is_ecommerce?: boolean;
 }
 
 export interface ListingsFilter {
-  minPrice?: number;
-  maxPrice?: number;
-  minRevenue?: number;
-  maxRevenue?: number;
-  industry?: string;
-  location?: string;
-  source?: string;
   searchTerm?: string;
-  isAmazonFba?: boolean;
+  priceRange?: { min: string; max: string };
+  monthlyRevenue?: { min: string; max: string };
+  monthlyProfit?: { min: string; max: string };
+  source?: string;
+  category?: string;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }
 
-export interface ListingsResponse {
-  listings: BusinessListing[];
-  total: number;
-  offset: number;
-  limit: number;
-}
-
 class BigQueryService {
-  private baseUrl: string;
+  private apiUrl = '/api/listings';
 
-  constructor() {
-    // Detect if we're on Vercel or local development
-    if (typeof window !== 'undefined') {
-      // Client-side
-      const isVercel = window.location.hostname.includes('vercel.app') || 
-                      window.location.hostname !== 'localhost';
-      
-      if (isVercel) {
-        // Use relative URLs for Vercel (will use the same domain)
-        this.baseUrl = '';
-      } else {
-        // Local development
-        this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-      }
-    } else {
-      // Server-side (shouldn't happen in a Vite app, but just in case)
-      this.baseUrl = process.env.VITE_API_BASE_URL || '';
-    }
-  }
-
-  async getListings(filters?: ListingsFilter): Promise<BusinessListing[]> {
+  async getListings(filters: ListingsFilter = {}): Promise<{ listings: BusinessListing[]; total: number }> {
     try {
       const params = new URLSearchParams();
       
-      if (filters) {
-        if (filters.minPrice) params.append('minPrice', filters.minPrice.toString());
-        if (filters.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
-        if (filters.minRevenue) params.append('minRevenue', filters.minRevenue.toString());
-        if (filters.maxRevenue) params.append('maxRevenue', filters.maxRevenue.toString());
-        if (filters.industry) params.append('industry', filters.industry);
-        if (filters.location) params.append('location', filters.location);
-        if (filters.source) params.append('source', filters.source);
-        if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
-        if (filters.isAmazonFba !== undefined) params.append('isAmazonFba', filters.isAmazonFba.toString());
-        params.append('limit', (filters.limit || 100).toString());
-        params.append('offset', (filters.offset || 0).toString());
+      if (filters.searchTerm) params.append('search', filters.searchTerm);
+      if (filters.priceRange?.min) params.append('minPrice', filters.priceRange.min);
+      if (filters.priceRange?.max) params.append('maxPrice', filters.priceRange.max);
+      if (filters.monthlyRevenue?.min) params.append('minRevenue', filters.monthlyRevenue.min);
+      if (filters.monthlyRevenue?.max) params.append('maxRevenue', filters.monthlyRevenue.max);
+      if (filters.monthlyProfit?.min) params.append('minProfit', filters.monthlyProfit.min);
+      if (filters.monthlyProfit?.max) params.append('maxProfit', filters.monthlyProfit.max);
+      if (filters.source) params.append('source', filters.source);
+      if (filters.category) params.append('category', filters.category);
+      if (filters.sortBy) params.append('sortBy', filters.sortBy);
+      if (filters.sortDirection) params.append('sortDirection', filters.sortDirection);
+      if (filters.limit) params.append('limit', filters.limit.toString());
+      if (filters.offset) params.append('offset', filters.offset.toString());
+
+      const response = await fetch(`${this.apiUrl}?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch listings: ${response.statusText}`);
       }
 
-      const url = `${this.baseUrl}/api/bigquery/listings?${params.toString()}`;
-      console.log('Fetching from URL:', url);
-      
-      const response = await axios.get<ListingsResponse>(url);
-      
-      console.log('BigQuery response:', response.data);
-      return response.data.listings || [];
+      const data = await response.json();
+      return {
+        listings: data.listings || [],
+        total: data.total || 0
+      };
     } catch (error) {
-      console.error('Failed to fetch listings from BigQuery:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('Response data:', error.response?.data);
-        console.error('Response status:', error.response?.status);
-      }
-      // Throw the error so we can see it in the UI
+      console.error('Error fetching listings:', error);
       throw error;
     }
   }
 
-  async getListingById(id: string): Promise<BusinessListing | null> {
+  async getListingById(id: string): Promise<BusinessListing> {
     try {
-      const response = await axios.get<BusinessListing>(
-        `${this.baseUrl}/api/bigquery/listings/${id}`
-      );
-      return response.data;
+      const response = await fetch(`${this.apiUrl}/${id}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch listing: ${response.statusText}`);
+      }
+
+      return await response.json();
     } catch (error) {
-      console.error('Failed to fetch listing from BigQuery:', error);
-      return null;
+      console.error('Error fetching listing:', error);
+      throw error;
     }
   }
 
-  async getOffMarketDeals(): Promise<BusinessListing[]> {
-    // Off-market deals would be filtered by a specific source or flag
-    // For now, we'll return listings from specific sources that might be off-market
-    return this.getListings({
-      source: 'off-market',
-      limit: 100
-    });
-  }
-
-  async getStats(): Promise<any> {
-    try {
-      const response = await axios.get(`${this.baseUrl}/api/bigquery/stats`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch stats from BigQuery:', error);
-      return null;
-    }
-  }
-
-  // Get unique sources for filtering
-  async getSources(): Promise<string[]> {
-    try {
-      // For now, return known sources
-      return [
-        'empireflippers',
-        'flippa',
-        'quietlight',
-        'feinternational',
-        'websiteclosers',
-        'bizbuysell',
-        'bizquest',
-        'acquire',
-        'websiteproperties'
-      ];
-    } catch (error) {
-      console.error('Failed to fetch sources:', error);
-      return [];
-    }
-  }
-
-  // Execute raw BigQuery query (for advanced use cases)
-  async executeBigQuery(query: string): Promise<any> {
-    console.log('Executing BigQuery:', query);
-    // This would need a separate endpoint on the server
-    // For security reasons, we might not want to expose this directly
-    return { rows: [] };
-  }
 }
 
 export default new BigQueryService();

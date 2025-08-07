@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     
     const query = `
       SELECT 
-        id,
+        CAST(id AS STRING) as id,
         source_site,
         listing_url,
         title as business_name,
@@ -60,13 +60,13 @@ export default async function handler(req, res) {
         scraped_at as date_listed,
         updated_at
       FROM \`tetrahedron-366117.business_listings.businesses_all_sites_view\`
-      WHERE id = @id
+      WHERE CAST(id AS STRING) = @id
       LIMIT 1
     `;
-
+    
     const options = {
       query: query,
-      params: [{ name: 'id', value: id }],
+      params: { id: String(id) },
       location: 'US',
     };
 
@@ -88,18 +88,24 @@ export default async function handler(req, res) {
       description: row.description || '',
       listing_url: row.listing_url,
       source: row.source_site,
-      date_listed: row.date_listed,
+      date_listed: row.date_listed?.value || row.date_listed,
       multiple: parseFloat(row.multiple) || 0,
       inventory_value: parseFloat(row.inventory_value) || 0,
-      is_amazon_fba: row.is_amazon_fba,
+      is_amazon_fba: row.is_amazon_fba || false,
       amazon_business_type: row.amazon_business_type,
       established_year: row.established_year,
       monthly_traffic: row.monthly_traffic,
       seller_financing: row.seller_financing,
       reason_for_selling: row.reason_for_selling,
       status: 'active',
-      created_at: row.date_listed,
-      updated_at: row.updated_at || row.date_listed
+      created_at: row.date_listed?.value || row.date_listed,
+      updated_at: (row.updated_at?.value || row.updated_at) || (row.date_listed?.value || row.date_listed),
+      // Calculate monthly values if not present
+      monthly_revenue: row.monthly_revenue || (row.annual_revenue ? parseFloat(row.annual_revenue) / 12 : 0),
+      monthly_profit: row.monthly_profit || (row.cash_flow ? parseFloat(row.cash_flow) / 12 : 0),
+      annual_profit: row.cash_flow || 0,
+      valuation_multiple: parseFloat(row.multiple) || 0,
+      marketplace: row.source_site
     };
 
     res.status(200).json(listing);
