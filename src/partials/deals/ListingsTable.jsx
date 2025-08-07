@@ -1,13 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
+import { useViewportPrefetch } from '../../hooks/useViewportPrefetch';
+import DataPreloader from '../../services/DataPreloader';
 // Auth removed - simplified version
 
 function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick, sortBy, sortDirection, onSort }) {
   // No auth needed in simplified version
   const [deletingId, setDeletingId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  
+  // Viewport-based prefetching
+  const { observeListing, prefetchOnHover } = useViewportPrefetch({
+    listings,
+    bufferSize: 3, // Prefetch 3 listings ahead
+    rootMargin: '100px', // Start prefetching 100px before visible
+    enabled: true
+  });
+  
+  const rowRefs = useRef({});
   const formatCurrency = (amount) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -125,7 +137,18 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {listings.map((listing) => (
-              <tr key={listing.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr 
+                key={listing.id} 
+                className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                data-listing-id={listing.id}
+                ref={(el) => {
+                  if (el) {
+                    rowRefs.current[listing.id] = el;
+                    observeListing(el);
+                  }
+                }}
+                onMouseEnter={() => prefetchOnHover(listing.id)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <input
                     type="checkbox"

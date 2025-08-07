@@ -6,7 +6,7 @@ interface CacheItem<T> {
 
 class CacheService {
   private readonly CACHE_PREFIX = 'bh_cache_';
-  private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default
+  private readonly DEFAULT_TTL = 3 * 60 * 1000; // 3 minutes default (reduced for viewport-based loading)
   
   // Store data in cache
   set<T>(key: string, data: T, ttlMs?: number): void {

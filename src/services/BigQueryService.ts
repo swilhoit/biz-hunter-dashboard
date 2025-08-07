@@ -91,7 +91,7 @@ class BigQueryService {
       
       // Cache the result
       if (useCache) {
-        CacheService.set(cacheKey, result, 2 * 60 * 1000); // Cache for 2 minutes
+        CacheService.set(cacheKey, result, 60 * 1000); // Cache for 1 minute (reduced for viewport loading)
       }
       
       return result;
@@ -124,7 +124,7 @@ class BigQueryService {
       
       // Cache the result
       if (useCache) {
-        CacheService.set(cacheKey, listing, 5 * 60 * 1000); // Cache for 5 minutes
+        CacheService.set(cacheKey, listing, 10 * 60 * 1000); // Cache for 10 minutes (longer for details since prefetched)
       }
       
       return listing;

@@ -21,7 +21,8 @@ class DataPreloader {
       
       const preloadTasks = [];
       
-      // Preload homepage listings (recent listings)
+      // Only preload the initial visible content
+      // Homepage listings (just 10 items)
       preloadTasks.push(
         BigQueryService.getListings({
           limit: 10,
@@ -32,10 +33,10 @@ class DataPreloader {
         })
       );
       
-      // Preload main feed (default view)
+      // First page of main feed (just what's visible)
       preloadTasks.push(
         BigQueryService.getListings({
-          limit: 100,
+          limit: 50, // Reduced from 100
           offset: 0,
           sortBy: 'created_at',
           sortDirection: 'desc'
@@ -47,7 +48,7 @@ class DataPreloader {
       // Wait for all preloads to complete
       await Promise.all(preloadTasks);
       
-      console.log('Data preloading completed');
+      console.log('Initial data preloading completed');
     } catch (error) {
       console.warn('Preloading failed:', error);
     } finally {
