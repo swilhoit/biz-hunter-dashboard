@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Building2, Calendar, DollarSign, TrendingUp, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import { ExternalLink, Building2, Calendar, DollarSign, TrendingUp, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
 
-function ListingCard({ listing, onAddToPipeline, onDelete, onListingClick }) {
+function ListingCard({ listing, onDelete, onListingClick }) {
   // No auth needed
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -208,13 +208,6 @@ function ListingCard({ listing, onAddToPipeline, onDelete, onListingClick }) {
                            new Date(listing.created_at).toLocaleDateString()}</span>
         </div>
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => onAddToPipeline(listing.id)}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add to Pipeline
-          </button>
           {(listing.listing_url || listing.original_url) && (
             <a
               href={listing.listing_url || listing.original_url}
