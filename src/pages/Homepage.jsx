@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
-import ListingCard from '../partials/deals/ListingCard';
+import ListingsTable from '../partials/deals/ListingsTable';
 import { useBusinessListings } from '../hooks/useBusinessListings';
 import { ArrowRight, TrendingUp, Search, DollarSign, Loader2 } from 'lucide-react';
 
@@ -14,7 +14,7 @@ function Homepage() {
     totalCount,
     loading: isLoading,
   } = useBusinessListings({ 
-    limit: 6,
+    limit: 10,
     sortBy: 'created_at',
     sortDirection: 'desc'
   });
@@ -104,14 +104,14 @@ function Homepage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-                  {recentListings.slice(0, 6).map(listing => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      onClick={() => navigate(`/feed/${listing.id}`)}
+                <div className="mb-12">
+                  <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 overflow-hidden">
+                    <ListingsTable
+                      listings={recentListings}
+                      selectedListings={[]}
+                      onListingClick={(listingId) => navigate(`/feed/${listingId}`)}
                     />
-                  ))}
+                  </div>
                 </div>
 
                 <div className="text-center">
