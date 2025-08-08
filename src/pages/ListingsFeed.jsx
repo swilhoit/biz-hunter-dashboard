@@ -39,7 +39,11 @@ function ListingsFeed() {
     isStale
   } = useCachedListings({ 
     searchTerm, 
-    filters: activeFilters,
+    priceRange: activeFilters.priceRange,
+    monthlyRevenue: activeFilters.monthlyRevenue,
+    monthlyProfit: activeFilters.monthlyProfit,
+    source: activeFilters.source,
+    category: activeFilters.category,
     sortBy,
     sortDirection
   });
