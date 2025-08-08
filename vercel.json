@@ -24,8 +24,7 @@
     }
   ],
   "env": {
-    "BIGQUERY_PROJECT_ID": "@bigquery-project-id",
-    "GOOGLE_APPLICATION_CREDENTIALS": "@google-application-credentials"
+    "BIGQUERY_PROJECT_ID": "tetrahedron-366117"
   },
   "headers": [
     {
