@@ -103,7 +103,7 @@ function ListingsFeed() {
 
   // Simple filter UI
   const renderFilters = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-4">
+    <div className="bg-white dark:bg-stone-900 rounded-lg shadow-sm mb-4">
       <button
         onClick={() => setShowFilters(!showFilters)}
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-stone-700 transition-colors"
@@ -123,10 +123,10 @@ function ListingsFeed() {
       </button>
       
       {showFilters && (
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-t border-gray-200 dark:border-stone-700">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Keyword Search
           </label>
           <input
@@ -134,11 +134,11 @@ function ListingsFeed() {
             placeholder="Search by keyword..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-md"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Min Price
           </label>
           <input
@@ -149,11 +149,11 @@ function ListingsFeed() {
               ...prev,
               priceRange: { ...prev.priceRange, min: e.target.value }
             }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-md"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Max Price
           </label>
           <input
@@ -164,11 +164,11 @@ function ListingsFeed() {
               ...prev,
               priceRange: { ...prev.priceRange, max: e.target.value }
             }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-md"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Category
           </label>
           <select
@@ -177,7 +177,7 @@ function ListingsFeed() {
               ...prev,
               category: e.target.value
             }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-md"
           >
             <option value="">All Categories</option>
             <option value="E-Commerce">E-Commerce</option>
@@ -187,7 +187,7 @@ function ListingsFeed() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Source
           </label>
           <select
@@ -196,7 +196,7 @@ function ListingsFeed() {
               ...prev,
               source: e.target.value
             }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-md"
           >
             <option value="">All Sources</option>
             <option value="bizbuysell">BizBuySell</option>
@@ -216,7 +216,7 @@ function ListingsFeed() {
                 category: ''
               });
             }}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-stone-400 dark:hover:text-stone-100"
           >
             Clear All
           </button>
@@ -277,13 +277,13 @@ function ListingsFeed() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-2 rounded ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                  className={`p-2 rounded ${viewMode === 'table' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-stone-700 text-gray-600 dark:text-stone-400'}`}
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('cards')}
-                  className={`p-2 rounded ${viewMode === 'cards' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                  className={`p-2 rounded ${viewMode === 'cards' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-stone-700 text-gray-600 dark:text-stone-400'}`}
                 >
                   <Grid className="w-4 h-4" />
                 </button>
@@ -300,7 +300,7 @@ function ListingsFeed() {
                 placeholder="Search listings..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 rounded-lg"
               />
             </div>
           </div>
