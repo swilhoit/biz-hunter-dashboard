@@ -148,7 +148,8 @@
       "Bash(npx vercel:*)",
       "Bash(for:*)",
       "Bash(do)",
-      "Bash(done)"
+      "Bash(done)",
+      "WebFetch(domain:biz-hunter-dashboard-1rr6my9j9-swilhoits-projects.vercel.app)"
     ],
     "deny": []
   }
