@@ -1,30 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../partials/Header';
 import ListingsTable from '../partials/deals/ListingsTable';
 import ListingCard from '../partials/deals/ListingCard';
 import { useCachedListings } from '../hooks/useCachedListings';
 import { useToast } from '../contexts/ToastContext';
 import { Search, Grid, List, RefreshCw, Loader2, ChevronDown, ChevronUp, Filter } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 function ListingsFeed() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showSuccess } = useToast();
   const [viewMode, setViewMode] = useState('table');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('created_at');
-  const [sortDirection, setSortDirection] = useState('desc');
+  
+  // Initialize state from URL params
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [sortBy, setSortBy] = useState(searchParams.get('sortBy') || 'created_at');
+  const [sortDirection, setSortDirection] = useState(searchParams.get('sortDirection') || 'desc');
   const [selectedListings, setSelectedListings] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Simplified filters for BigQuery listings
+  // Simplified filters for BigQuery listings - initialize from URL
   const [activeFilters, setActiveFilters] = useState({
-    priceRange: { min: '', max: '' },
-    monthlyRevenue: { min: '', max: '' },
-    monthlyProfit: { min: '', max: '' },
-    source: '',
-    category: ''
+    priceRange: { 
+      min: searchParams.get('minPrice') || '', 
+      max: searchParams.get('maxPrice') || '' 
+    },
+    monthlyRevenue: { 
+      min: searchParams.get('minRevenue') || '', 
+      max: searchParams.get('maxRevenue') || '' 
+    },
+    monthlyProfit: { 
+      min: searchParams.get('minProfit') || '', 
+      max: searchParams.get('maxProfit') || '' 
+    },
+    source: searchParams.get('source') || '',
+    category: searchParams.get('category') || ''
   });
+
+  // Update URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (searchTerm) params.set('search', searchTerm);
+    if (sortBy !== 'created_at') params.set('sortBy', sortBy);
+    if (sortDirection !== 'desc') params.set('sortDirection', sortDirection);
+    if (activeFilters.priceRange.min) params.set('minPrice', activeFilters.priceRange.min);
+    if (activeFilters.priceRange.max) params.set('maxPrice', activeFilters.priceRange.max);
+    if (activeFilters.monthlyRevenue.min) params.set('minRevenue', activeFilters.monthlyRevenue.min);
+    if (activeFilters.monthlyRevenue.max) params.set('maxRevenue', activeFilters.monthlyRevenue.max);
+    if (activeFilters.monthlyProfit.min) params.set('minProfit', activeFilters.monthlyProfit.min);
+    if (activeFilters.monthlyProfit.max) params.set('maxProfit', activeFilters.monthlyProfit.max);
+    if (activeFilters.source) params.set('source', activeFilters.source);
+    if (activeFilters.category) params.set('category', activeFilters.category);
+    
+    setSearchParams(params, { replace: true });
+  }, [searchTerm, sortBy, sortDirection, activeFilters, setSearchParams]);
 
   // Fetch BigQuery listings
   const { 
@@ -80,9 +111,9 @@ function ListingsFeed() {
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4" />
           <span className="font-medium">Filters</span>
-          {Object.values(activeFilters).some(f => 
+          {(searchTerm || Object.values(activeFilters).some(f => 
             (typeof f === 'object' ? f.min || f.max : f)
-          ) && (
+          )) && (
             <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400 px-2 py-1 rounded-full">
               Active
             </span>
@@ -93,7 +124,19 @@ function ListingsFeed() {
       
       {showFilters && (
         <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Keyword Search
+          </label>
+          <input
+            type="text"
+            placeholder="Search by keyword..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md"
+          />
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Min Price
@@ -163,16 +206,19 @@ function ListingsFeed() {
         </div>
         <div className="flex items-end">
           <button
-            onClick={() => setActiveFilters({
-              priceRange: { min: '', max: '' },
-              monthlyRevenue: { min: '', max: '' },
-              monthlyProfit: { min: '', max: '' },
-              source: '',
-              category: ''
-            })}
+            onClick={() => {
+              setSearchTerm('');
+              setActiveFilters({
+                priceRange: { min: '', max: '' },
+                monthlyRevenue: { min: '', max: '' },
+                monthlyProfit: { min: '', max: '' },
+                source: '',
+                category: ''
+              });
+            }}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
           >
-            Clear Filters
+            Clear All
           </button>
         </div>
       </div>
