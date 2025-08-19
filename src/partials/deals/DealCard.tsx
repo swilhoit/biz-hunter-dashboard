@@ -359,10 +359,10 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
             )}
           </div>
         )}
-        {deal.date_listed && (
+        {deal.created_at && (
           <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
             <Calendar className="w-3 h-3 mr-1" />
-            <span>Listed {new Date(deal.date_listed).toLocaleDateString()}</span>
+            <span>Added {new Date(deal.created_at).toLocaleDateString()}</span>
           </div>
         )}
       </div>

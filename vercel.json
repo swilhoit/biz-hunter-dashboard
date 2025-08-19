@@ -1,0 +1,44 @@
+{
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "public": true,
+  "functions": {
+    "api/listings/index.js": {
+      "maxDuration": 30
+    },
+    "api/listings/[id].js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/).)*",
+      "destination": "/index.html"
+    }
+  ],
+  "env": {
+    "BIGQUERY_PROJECT_ID": "tetrahedron-366117"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type"
+        }
+      ]
+    }
+  ]
+}

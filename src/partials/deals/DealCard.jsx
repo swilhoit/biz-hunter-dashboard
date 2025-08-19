@@ -23,14 +23,12 @@ function DealCard({ deal, isDragging = false }) {
   };
 
   const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 5: return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 4: return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 3: return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 2: return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 1: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-    }
+    if (priority >= 9) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    if (priority >= 7) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
+    if (priority >= 5) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    if (priority >= 3) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+    if (priority >= 1) return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
 
   const formatCurrency = (amount) => {
@@ -91,7 +89,7 @@ function DealCard({ deal, isDragging = false }) {
         </div>
         {deal.priority && (
           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(deal.priority)}`}>
-            P{deal.priority}
+            {deal.priority}
           </span>
         )}
       </div>

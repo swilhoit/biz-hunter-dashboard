@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Plus, Star, Building2, Calendar, DollarSign, TrendingUp, Package, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import { ExternalLink, Building2, Calendar, DollarSign, TrendingUp, ImageIcon, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
-import { useAuth } from '../../hooks/useAuth';
 
-function ListingCard({ listing, onAddToPipeline, onDelete }) {
-  const { user } = useAuth();
+function ListingCard({ listing, onDelete, onListingClick }) {
+  // No auth needed
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -60,12 +59,21 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center">
-            <Link 
-              to={`/listings/${listing.id}`}
-              className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate"
-            >
-              {listing.business_name || listing.name}
-            </Link>
+            {onListingClick ? (
+              <button
+                onClick={() => onListingClick(listing.id)}
+                className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate text-left"
+              >
+                {listing.business_name || listing.name}
+              </button>
+            ) : (
+              <Link 
+                to={`/listings/${listing.id}`}
+                className="text-lg font-semibold text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate"
+              >
+                {listing.business_name || listing.name}
+              </Link>
+            )}
             {listing.isNew && (
               <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
                 New
@@ -175,20 +183,6 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
         </div>
       </div>
 
-      {/* Amazon Metrics */}
-      <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4">
-        <div className="flex items-center">
-          <Package className="w-4 h-4 mr-1" />
-          <span>{Array.isArray(listing.asin_list) ? listing.asin_list.length : 'Unknown'} ASINs</span>
-        </div>
-        <div className="flex items-center">
-          <span className="text-orange-600 dark:text-orange-400">{listing.fba_percentage || 'Unknown'}% FBA</span>
-        </div>
-        <div className="flex items-center">
-          <Star className="w-4 h-4 text-yellow-400 mr-1" />
-          <span>{listing.seller_account_health || 'Unknown'}</span>
-        </div>
-      </div>
 
       {/* Tags */}
       {listing.tags && listing.tags.length > 0 && (
@@ -214,13 +208,6 @@ function ListingCard({ listing, onAddToPipeline, onDelete }) {
                            new Date(listing.created_at).toLocaleDateString()}</span>
         </div>
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => onAddToPipeline(listing.id)}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700 text-sm"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add to Pipeline
-          </button>
           {(listing.listing_url || listing.original_url) && (
             <a
               href={listing.listing_url || listing.original_url}

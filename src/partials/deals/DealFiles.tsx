@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2 } from 'lucide-react';
-import { filesAdapter } from '../../lib/database-adapter';
+import { FileText, Download, Eye, Upload, Folder, Calendar, User, Trash2, Brain, Loader2, DollarSign, TrendingUp } from 'lucide-react';
+import { filesAdapter, dealsAdapter } from '../../lib/database-adapter';
 import FileViewerModal from '../../components/FileViewerModal';
-import StorageTest from '../../components/StorageTest';
+import { AIAnalysisService, DocumentAnalysisService } from '../../services/AIAnalysisService';
+import { DocumentIntelligenceService } from '../../services/DocumentIntelligenceService';
+import { FinancialDocumentService } from '../../services/FinancialDocumentService';
+import FinancialExtractionModal from '../../components/FinancialExtractionModal';
+import { useToast } from '../../contexts/ToastContext';
 
 interface DealFilesProps {
   dealId: string;
@@ -19,72 +23,144 @@ function DealFiles({ dealId }: DealFilesProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<string>('');
+  const [autoFillResults, setAutoFillResults] = useState<any>(null);
+  const [showAutoFillSummary, setShowAutoFillSummary] = useState(false);
+  const [showFinancialModal, setShowFinancialModal] = useState(false);
+  const [pendingExtraction, setPendingExtraction] = useState<any>(null);
+  const [extractingFileName, setExtractingFileName] = useState<string>('');
+  const [showExtractionSummary, setShowExtractionSummary] = useState(false);
+  const [extractionSummary, setExtractionSummary] = useState<any>(null);
+  const [extractingFileId, setExtractingFileId] = useState<string | null>(null);
+  const [extractionProgress, setExtractionProgress] = useState<string>('');
+  const { showToast } = useToast();
 
   // Load files on component mount
   useEffect(() => {
     loadFiles();
   }, [dealId]);
 
+  // Helper function to apply analysis results to deal form
+  const applyAnalysisToForm = async (analysis: any) => {
+    try {
+      // Get current deal data
+      const currentDeal = await dealsAdapter.fetchDealById(dealId);
+      if (!currentDeal) return null;
+
+      const updates: any = {};
+      let fieldsUpdated: string[] = [];
+
+      // Basic Information - only update if empty or minimal data
+      if (analysis.businessName && (!currentDeal.business_name || currentDeal.business_name.length < 3)) {
+        updates.business_name = analysis.businessName;
+        fieldsUpdated.push('Business Name');
+      }
+      if (analysis.description && (!currentDeal.description || currentDeal.description.length < 10)) {
+        updates.description = analysis.description;
+        fieldsUpdated.push('Description');
+      }
+      
+      // Financial Information - only update if zero or empty
+      if (analysis.askingPrice && (!currentDeal.asking_price || currentDeal.asking_price === 0)) {
+        updates.asking_price = analysis.askingPrice;
+        fieldsUpdated.push('Asking Price');
+      }
+      if (analysis.annualRevenue && (!currentDeal.annual_revenue || currentDeal.annual_revenue === 0)) {
+        updates.annual_revenue = analysis.annualRevenue;
+        fieldsUpdated.push('Annual Revenue');
+      }
+      if (analysis.annualProfit && (!currentDeal.annual_profit || currentDeal.annual_profit === 0)) {
+        updates.annual_profit = analysis.annualProfit;
+        fieldsUpdated.push('Annual Profit');
+      }
+      if (analysis.monthlyRevenue && (!currentDeal.monthly_revenue || currentDeal.monthly_revenue === 0)) {
+        updates.monthly_revenue = analysis.monthlyRevenue;
+        fieldsUpdated.push('Monthly Revenue');
+      }
+      if (analysis.monthlyProfit && (!currentDeal.monthly_profit || currentDeal.monthly_profit === 0)) {
+        updates.monthly_profit = analysis.monthlyProfit;
+        fieldsUpdated.push('Monthly Profit');
+      }
+      if (analysis.valuationMultiple && (!currentDeal.valuation_multiple || currentDeal.valuation_multiple === 0)) {
+        updates.valuation_multiple = analysis.valuationMultiple;
+        fieldsUpdated.push('Valuation Multiple');
+      }
+
+      // Business Details
+      if (analysis.businessAge && (!currentDeal.business_age || currentDeal.business_age === 0)) {
+        updates.business_age = analysis.businessAge;
+        fieldsUpdated.push('Business Age');
+      }
+      if (analysis.industry && (!currentDeal.industry || currentDeal.industry === 'Unknown')) {
+        updates.industry = analysis.industry;
+        fieldsUpdated.push('Industry');
+      }
+      if (analysis.location && (!currentDeal.seller_location)) {
+        updates.seller_location = analysis.location;
+        fieldsUpdated.push('Location');
+      }
+
+      // Amazon-specific data
+      if (analysis.amazonCategory && (!currentDeal.amazon_category)) {
+        updates.amazon_category = analysis.amazonCategory;
+        fieldsUpdated.push('Amazon Category');
+      }
+      if (analysis.amazonStoreUrl && (!currentDeal.amazon_store_url)) {
+        updates.amazon_store_url = analysis.amazonStoreUrl;
+        fieldsUpdated.push('Amazon Store URL');
+      }
+      if (analysis.fbaPercentage && (!currentDeal.fba_percentage || currentDeal.fba_percentage === 0)) {
+        updates.fba_percentage = analysis.fbaPercentage;
+        fieldsUpdated.push('FBA Percentage');
+      }
+
+      // Contact information
+      if (analysis.sellerName && (!currentDeal.seller_name || currentDeal.seller_name === 'Unknown')) {
+        updates.seller_name = analysis.sellerName;
+        fieldsUpdated.push('Seller Name');
+      }
+      if (analysis.sellerEmail && (!currentDeal.seller_email)) {
+        updates.seller_email = analysis.sellerEmail;
+        fieldsUpdated.push('Seller Email');
+      }
+      if (analysis.brokerName && (!currentDeal.broker_name)) {
+        updates.broker_name = analysis.brokerName;
+        fieldsUpdated.push('Broker Name');
+      }
+
+      // Apply updates if any fields were found
+      if (Object.keys(updates).length > 0) {
+        await dealsAdapter.updateDeal(dealId, updates);
+        return {
+          fieldsUpdated,
+          updates,
+          totalFields: Object.keys(updates).length
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error applying analysis to form:', error);
+      return null;
+    }
+  };
+
   const loadFiles = async () => {
     try {
       setIsLoading(true);
+      console.log('Loading files for deal:', dealId);
       const dealFiles = await filesAdapter.fetchDealFiles(dealId);
-      setFiles(dealFiles);
+      console.log('Loaded files:', dealFiles);
+      setFiles(dealFiles || []);
     } catch (error) {
       console.error('Error loading files:', error);
+      setFiles([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Mock file data - fallback for when no real files exist
-  const mockFiles = [
-    {
-      id: '1',
-      name: 'Financial_Statements_2023.pdf',
-      category: 'financial_statements',
-      size: '2.4 MB',
-      uploaded_date: '2024-02-01',
-      uploaded_by: 'John Smith',
-      is_confidential: true,
-    },
-    {
-      id: '2',
-      name: 'Tax_Returns_2022_2023.pdf',
-      category: 'tax_returns',
-      size: '1.8 MB',
-      uploaded_date: '2024-02-01',
-      uploaded_by: 'John Smith',
-      is_confidential: true,
-    },
-    {
-      id: '3',
-      name: 'Product_Catalog_Updated.xlsx',
-      category: 'product_info',
-      size: '856 KB',
-      uploaded_date: '2024-02-03',
-      uploaded_by: 'Sarah Johnson',
-      is_confidential: false,
-    },
-    {
-      id: '4',
-      name: 'Amazon_Business_Report_Jan2024.pdf',
-      category: 'analytics',
-      size: '3.2 MB',
-      uploaded_date: '2024-02-05',
-      uploaded_by: 'Sarah Johnson',
-      is_confidential: false,
-    },
-    {
-      id: '5',
-      name: 'Due_Diligence_Checklist.docx',
-      category: 'due_diligence',
-      size: '124 KB',
-      uploaded_date: '2024-02-10',
-      uploaded_by: 'Current User',
-      is_confidential: false,
-    },
-  ];
 
   const fileCategories = [
     { id: 'financial_statements', name: 'Financial Statements', icon: '💰' },
@@ -146,11 +222,13 @@ function DealFiles({ dealId }: DealFilesProps) {
     setIsUploading(true);
     setUploadError(null);
     setUploadProgress(0);
+    setAutoFillResults(null);
 
     try {
       const fileArray = Array.from(fileList);
       const totalFiles = fileArray.length;
       
+      // Step 1: Upload files
       for (let i = 0; i < totalFiles; i++) {
         const file = fileArray[i];
         
@@ -162,22 +240,136 @@ function DealFiles({ dealId }: DealFilesProps) {
 
         await filesAdapter.uploadFile(dealId, file, metadata);
         
-        const progress = Math.round(((i + 1) / totalFiles) * 100);
+        const progress = Math.round(((i + 1) / totalFiles) * 50); // First 50% for upload
         setUploadProgress(progress);
       }
       
-      // Success - reload files
+      // Step 2: Analyze uploaded files for auto-fill
+      setIsAnalyzing(true);
+      setAnalysisProgress('Starting document analysis...');
+      setUploadProgress(60);
+      
+      let allAutoFillResults: any[] = [];
+      let totalFieldsUpdated = 0;
+      let allUpdatedFields: string[] = [];
+      
+      for (let i = 0; i < totalFiles; i++) {
+        const file = fileArray[i];
+        
+        try {
+          setAnalysisProgress(`Analyzing ${file.name}...`);
+          
+          // Check if file type is supported for analysis
+          const supportedTypes = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt', '.csv', '.png', '.jpg', '.jpeg'];
+          const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+          
+          if (supportedTypes.includes(fileExtension)) {
+            const analysis = await DocumentAnalysisService.analyzeDocument(
+              file,
+              (progress: string) => {
+                setAnalysisProgress(`${file.name}: ${progress}`);
+              }
+            );
+            
+            if (analysis) {
+              // Apply analysis to deal form
+              const autoFillResult = await applyAnalysisToForm(analysis);
+              
+              if (autoFillResult) {
+                allAutoFillResults.push({
+                  fileName: file.name,
+                  ...autoFillResult
+                });
+                totalFieldsUpdated += autoFillResult.totalFields;
+                allUpdatedFields.push(...autoFillResult.fieldsUpdated);
+              }
+            }
+          } else {
+            console.log(`Skipping analysis for unsupported file type: ${file.name}`);
+          }
+          
+          const progress = 60 + Math.round(((i + 1) / totalFiles) * 35); // 60-95% for analysis
+          setUploadProgress(progress);
+          
+        } catch (analysisError) {
+          console.error(`Analysis error for ${file.name}:`, analysisError);
+          
+          // Provide user-friendly error feedback
+          const errorType = analysisError.message?.includes('vision') || analysisError.message?.includes('MIME type') 
+            ? 'AI_VISION_ERROR'
+            : analysisError.message?.includes('PDF')
+            ? 'PDF_PROCESSING_ERROR' 
+            : 'ANALYSIS_ERROR';
+            
+          switch (errorType) {
+            case 'AI_VISION_ERROR':
+              console.log(`⚠️ AI analysis unavailable for ${file.name} (vision API issue) - document saved successfully`);
+              break;
+            case 'PDF_PROCESSING_ERROR':
+              console.log(`⚠️ PDF text extraction failed for ${file.name} - document saved successfully, analysis skipped`);
+              break;
+            default:
+              console.log(`⚠️ AI analysis failed for ${file.name} - document saved successfully, analysis skipped`);
+          }
+          
+          // Still count this as a processed file, just with no auto-fill results
+          // This ensures the document is saved even though analysis failed
+        }
+      }
+      
+      // Step 3: Show results and cleanup
+      setUploadProgress(100);
+      
+      // Always refresh files first
+      await loadFiles();
+      
+      // Show results summary
+      if (allAutoFillResults.length > 0) {
+        setAutoFillResults({
+          files: allAutoFillResults,
+          totalFieldsUpdated,
+          uniqueFields: [...new Set(allUpdatedFields)]
+        });
+        setShowAutoFillSummary(true);
+        
+        showToast(
+          `Success! Uploaded ${totalFiles} file(s) and auto-filled ${totalFieldsUpdated} field(s)`,
+          'success'
+        );
+      } else {
+        const analysisFailedCount = totalFiles - allAutoFillResults.length;
+        if (analysisFailedCount > 0) {
+          showToast(
+            `Uploaded ${totalFiles} file(s) successfully! (AI analysis failed for ${analysisFailedCount} file(s) but documents were saved)`,
+            'success'
+          );
+        } else {
+          showToast(`Uploaded ${totalFiles} file(s) successfully`, 'success');
+        }
+      }
+      
+      // Cleanup UI state
       setTimeout(() => {
         setUploadProgress(null);
         setIsUploading(false);
-        loadFiles(); // Refresh file list
-      }, 1000);
+        setIsAnalyzing(false);
+        setAnalysisProgress('');
+        
+        // Dispatch event to refresh deal data in parent component
+        window.dispatchEvent(new CustomEvent('deal-updated', { detail: { dealId } }));
+      }, 1500);
       
     } catch (error: any) {
       console.error('Upload error:', error);
       setUploadError(error.message);
       setUploadProgress(null);
       setIsUploading(false);
+      setIsAnalyzing(false);
+      setAnalysisProgress('');
+      showToast(`Upload failed: ${error.message}`, 'error');
+      
+      // Still try to refresh files in case some uploaded successfully
+      loadFiles();
     }
   };
 
@@ -224,38 +416,128 @@ function DealFiles({ dealId }: DealFilesProps) {
 
   const handleDownloadFile = async (fileId: string, fileName: string) => {
     try {
-      const { url } = await filesAdapter.getFileUrl(fileId);
+      // Use server endpoint for download
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+      const response = await fetch(`${API_BASE_URL}/api/files/download/${fileId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+      
+      // Get the blob from response
+      const blob = await response.blob();
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
     } catch (error: any) {
       console.error('Download error:', error);
-      alert(`Failed to download file: ${error.message}`);
+      showToast(`Failed to download file: ${error.message}`, 'error');
     }
   };
 
-  const displayFiles = files.length > 0 ? files : mockFiles;
+  const handleAnalyzeAllDocuments = async () => {
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress('Starting document intelligence extraction...');
+      
+      // Create Document Intelligence Service
+      const docIntelligence = new DocumentIntelligenceService();
+      
+      // Process each document with intelligence extraction
+      const totalFiles = files.length;
+      let processedCount = 0;
+      
+      for (const file of files) {
+        processedCount++;
+        setAnalysisProgress(`Processing document ${processedCount}/${totalFiles}: ${file.file_name}...`);
+        
+        try {
+          await docIntelligence.processDocument(
+            file.id,
+            dealId,
+            (stage: string) => setAnalysisProgress(`[${processedCount}/${totalFiles}] ${stage}`)
+          );
+        } catch (error) {
+          console.error(`Failed to process ${file.file_name}:`, error);
+          // Continue with other documents
+        }
+      }
+      
+      // Now run comprehensive analysis using cached extractions
+      setAnalysisProgress('Running comprehensive AI analysis...');
+      
+      // Get deal data from database
+      const { dealsAdapter } = await import('../../lib/database-adapter');
+      const dealData = await dealsAdapter.fetchDealById(dealId);
+      
+      if (!dealData) {
+        throw new Error('Deal not found');
+      }
+
+      // Create AIAnalysisService instance
+      const aiService = new AIAnalysisService();
+      
+      // Run the analysis with progress callback
+      const analysis = await aiService.generateDealAnalysis(
+        dealData,
+        (stage: string) => setAnalysisProgress(stage)
+      );
+
+      // Navigate to the Analysis tab with the results
+      showToast('Document intelligence extraction and analysis complete!', 'success');
+      
+      // Trigger a navigation to the Analysis tab
+      window.dispatchEvent(new CustomEvent('navigate-to-analysis', { 
+        detail: { dealId, analysis } 
+      }));
+      
+    } catch (error: any) {
+      console.error('Analysis error:', error);
+      showToast(`Analysis failed: ${error.message}`, 'error');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalysisProgress('');
+    }
+  };
+
+  const displayFiles = files;
 
   return (
     <div className="space-y-6">
-      {/* Storage Diagnostics - Temporary */}
-      <StorageTest />
       
       {/* Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Document Repository</h3>
-          <button 
-            onClick={() => document.querySelector('input[type="file"]')?.click()}
-            disabled={isUploading}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {isUploading ? 'Uploading...' : 'Upload Files'}
-          </button>
+          <div className="flex space-x-2">
+            {files.length > 0 && (
+              <button 
+                onClick={handleAnalyzeAllDocuments}
+                disabled={isAnalyzing || isUploading}
+                className="btn bg-purple-600 text-white hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <Brain className="w-4 h-4 mr-2" />
+                {isAnalyzing ? 'Analyzing...' : 'AI Analysis'}
+              </button>
+            )}
+            <button 
+              onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
+              disabled={isUploading}
+              className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {isUploading ? 'Uploading...' : 'Upload Files'}
+            </button>
+          </div>
         </div>
         
         <div 
@@ -275,7 +557,7 @@ function DealFiles({ dealId }: DealFilesProps) {
             onChange={(e) => e.target.files && handleFiles(e.target.files)}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             disabled={isUploading}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg"
           />
           
           <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -283,7 +565,7 @@ function DealFiles({ dealId }: DealFilesProps) {
             {isUploading ? 'Uploading files...' : 'Drag and drop files here, or click to browse'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-500">
-            Supports PDF, Excel, Word, and image files (Max 50MB)
+            Supports PDF, Word (.docx), Excel (.xlsx/.xls), CSV, Text (.txt), and Images (PNG/JPG) • Max 50MB
           </p>
           
           {uploadProgress !== null && (
@@ -307,6 +589,19 @@ function DealFiles({ dealId }: DealFilesProps) {
             </div>
           )}
         </div>
+
+        {/* AI Analysis Progress */}
+        {isAnalyzing && (
+          <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <div className="flex items-center">
+              <Loader2 className="w-5 h-5 mr-3 text-purple-600 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-purple-900 dark:text-purple-200">AI Document Analysis in Progress</p>
+                <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">{analysisProgress}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* All Files */}
@@ -374,6 +669,14 @@ function DealFiles({ dealId }: DealFilesProps) {
                             }
                           </span>
                         </div>
+                        {extractingFileId === file.id && extractionProgress && (
+                          <div className="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                            <span className="inline-flex items-center">
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              {extractionProgress}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -392,6 +695,98 @@ function DealFiles({ dealId }: DealFilesProps) {
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={async () => {
+                          const docIntelligence = new DocumentIntelligenceService();
+                          try {
+                            setExtractingFileId(file.id);
+                            setExtractionProgress('Starting extraction...');
+                            
+                            const extraction = await docIntelligence.processDocument(
+                              file.id, 
+                              dealId,
+                              (stage: string) => setExtractionProgress(stage)
+                            );
+                            
+                            // Prepare summary data
+                            const summary = {
+                              fileName: file.file_name,
+                              documentType: extraction.document_type,
+                              confidence: extraction.confidence_score,
+                              summary: extraction.summary,
+                              keyEntities: extraction.key_entities,
+                              structuredData: extraction.structured_data,
+                              insights: await docIntelligence.queryDealInsights(dealId, {
+                                searchText: file.file_name
+                              })
+                            };
+                            
+                            setExtractionSummary(summary);
+                            setShowExtractionSummary(true);
+                            showToast(`Successfully extracted insights from ${file.file_name}`, 'success');
+                          } catch (error: any) {
+                            showToast(`Failed to extract from ${file.file_name}: ${error.message}`, 'error');
+                          } finally {
+                            setExtractingFileId(null);
+                            setExtractionProgress('');
+                          }
+                        }}
+                        disabled={extractingFileId === file.id}
+                        className="p-2 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors disabled:opacity-50"
+                        title="Extract Intelligence"
+                      >
+                        {extractingFileId === file.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Brain className="w-4 h-4" />
+                        )}
+                      </button>
+                      {(file.category === 'financial_statements' || 
+                        file.category === 'tax_returns' || 
+                        file.category === 'bank_statements' ||
+                        file.file_name?.toLowerCase().includes('financ') ||
+                        file.file_name?.toLowerCase().includes('p&l') ||
+                        file.file_name?.toLowerCase().includes('profit') ||
+                        file.file_name?.toLowerCase().includes('income') ||
+                        file.file_name?.toLowerCase().includes('statement') ||
+                        file.file_name?.toLowerCase().includes('revenue') ||
+                        file.file_name?.toLowerCase().includes('balance') ||
+                        file.file_name?.toLowerCase().includes('cash') ||
+                        file.file_name?.toLowerCase().includes('expense') ||
+                        file.file_name?.toLowerCase().endsWith('.xlsx') ||
+                        file.file_name?.toLowerCase().endsWith('.xls')) && (
+                        <button
+                          onClick={async () => {
+                            const financialService = new FinancialDocumentService();
+                            try {
+                              setAnalysisProgress(`Processing financial document: ${file.file_name}...`);
+                              setIsAnalyzing(true);
+                              setExtractingFileName(file.file_name || 'Financial Document');
+                              
+                              const extraction = await financialService.extractFinancialData(
+                                file.id,
+                                dealId,
+                                (stage: string) => setAnalysisProgress(stage)
+                              );
+                              
+                              // Show modal for review
+                              console.log('📊 Setting extraction for modal:', extraction);
+                              setPendingExtraction(extraction);
+                              setShowFinancialModal(true);
+                              
+                            } catch (error: any) {
+                              showToast(`Failed to extract financials: ${error.message}`, 'error');
+                            } finally {
+                              setIsAnalyzing(false);
+                              setAnalysisProgress('');
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                          title="Extract Financial Data"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => handleDeleteFile(file.id, file.file_name || file.name || 'Unknown File')}
                         disabled={deletingFileId === file.id}
@@ -450,6 +845,93 @@ function DealFiles({ dealId }: DealFilesProps) {
         </div>
       </div>
       
+      {/* Auto-Fill Summary Modal */}
+      {showAutoFillSummary && autoFillResults && autoFillResults.files && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <Brain className="w-6 h-6 mr-3 text-green-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Auto-Fill Complete!
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowAutoFillSummary(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <p className="text-green-800 dark:text-green-200">
+                  Successfully analyzed {autoFillResults.files?.length || 0} document(s) and auto-filled {autoFillResults.totalFieldsUpdated || 0} field(s)
+                </p>
+              </div>
+              
+              <div className="space-y-4">
+                {autoFillResults.uniqueFields && autoFillResults.uniqueFields.length > 0 && (
+                  <>
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100">Updated Fields:</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {autoFillResults.uniqueFields.map((field: string, index: number) => (
+                        <div key={index} className="flex items-center p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                          <DollarSign className="w-4 h-4 mr-2 text-green-600" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{field}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                
+                {autoFillResults.files && autoFillResults.files.length > 0 && (
+                  <>
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100 mt-6">Files Analyzed:</h4>
+                    <div className="space-y-2">
+                      {autoFillResults.files.map((file: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                          <div className="flex items-center">
+                            <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{file.fileName || 'Unknown file'}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <TrendingUp className="w-4 h-4 mr-1 text-green-600" />
+                            <span className="text-sm text-green-600">{file.totalFields || 0} fields</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAutoFillSummary(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAutoFillSummary(false);
+                    // Navigate to deal overview to see updated fields
+                    window.dispatchEvent(new CustomEvent('navigate-to-overview', { detail: { dealId } }));
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  View Updated Deal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* File Viewer Modal */}
       {selectedFileId && (
         <FileViewerModal
@@ -462,6 +944,361 @@ function DealFiles({ dealId }: DealFilesProps) {
             setSelectedFileName('');
           }}
         />
+      )}
+      
+      {/* Financial Extraction Modal */}
+      {pendingExtraction && (
+        <FinancialExtractionModal
+          isOpen={showFinancialModal}
+          onClose={() => {
+            setShowFinancialModal(false);
+            setPendingExtraction(null);
+          }}
+          extraction={pendingExtraction}
+          fileName={extractingFileName}
+          onConfirm={async (updatedExtraction) => {
+            console.log('✅ Modal confirmed, saving extraction:', updatedExtraction);
+            try {
+              const financialService = new FinancialDocumentService();
+              setAnalysisProgress('Saving financial data...');
+              setIsAnalyzing(true);
+              
+              const saved = await financialService.saveFinancialExtraction(
+                updatedExtraction,
+                (stage: string) => setAnalysisProgress(stage)
+              );
+              
+              showToast(`Financial data saved successfully!`, 'success');
+              
+              // Navigate to finance tab
+              window.dispatchEvent(new CustomEvent('navigate-to-finance', { 
+                detail: { dealId, extraction: saved } 
+              }));
+              
+              setShowFinancialModal(false);
+              setPendingExtraction(null);
+              
+            } catch (error: any) {
+              showToast(`Failed to save financial data: ${error.message}`, 'error');
+            } finally {
+              setIsAnalyzing(false);
+              setAnalysisProgress('');
+            }
+          }}
+          onReject={() => {
+            setShowFinancialModal(false);
+            setPendingExtraction(null);
+            showToast('Financial extraction cancelled', 'info');
+          }}
+        />
+      )}
+      
+      {/* Extraction Summary Modal */}
+      {showExtractionSummary && extractionSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <Brain className="w-6 h-6 mr-3 text-purple-600" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    Document Intelligence Extraction Complete
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowExtractionSummary(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Document Info */}
+              <div className="mb-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{extractionSummary.fileName}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Type: {extractionSummary.documentType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Confidence: {Math.round((extractionSummary.confidence || 0) * 100)}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Summary */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Summary</h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {extractionSummary.summary}
+                </p>
+              </div>
+              
+              {/* Key Entities */}
+              {extractionSummary.keyEntities && (
+                <div className="mb-6">
+                  <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Key Entities Extracted</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {extractionSummary.keyEntities.companies?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Companies</h5>
+                        <div className="flex flex-wrap gap-1">
+                          {extractionSummary.keyEntities.companies.map((company: string, idx: number) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded">
+                              {company}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {extractionSummary.keyEntities.people?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">People</h5>
+                        <div className="flex flex-wrap gap-1">
+                          {extractionSummary.keyEntities.people.map((person: string, idx: number) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded">
+                              {person}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {extractionSummary.keyEntities.amounts?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Key Amounts</h5>
+                        <div className="flex flex-wrap gap-1">
+                          {extractionSummary.keyEntities.amounts.map((amount: number, idx: number) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded">
+                              ${amount.toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {extractionSummary.keyEntities.products?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Products</h5>
+                        <div className="flex flex-wrap gap-1">
+                          {extractionSummary.keyEntities.products.map((product: string, idx: number) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded">
+                              {product}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Structured Data */}
+              {extractionSummary.structuredData && Object.keys(extractionSummary.structuredData).length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Extracted Data</h4>
+                  <div className="space-y-3">
+                    {extractionSummary.structuredData.financials && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Financial Metrics</h5>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {extractionSummary.structuredData.financials.revenue && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Revenue:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                ${extractionSummary.structuredData.financials.revenue.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.financials.profit && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Profit:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                ${extractionSummary.structuredData.financials.profit.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.financials.askingPrice && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Asking Price:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                ${extractionSummary.structuredData.financials.askingPrice.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.financials.multiple && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Multiple:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                {extractionSummary.structuredData.financials.multiple}x
+                              </span>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.financials.growthRate && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Growth Rate:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                {extractionSummary.structuredData.financials.growthRate}%
+                              </span>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.financials.netMargin && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400">Net Margin:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                                {extractionSummary.structuredData.financials.netMargin}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {extractionSummary.structuredData.businessStory && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Business Story</h5>
+                        <div className="space-y-2 text-sm">
+                          {extractionSummary.structuredData.businessStory.foundingStory && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400 font-medium">Founding Story:</span>
+                              <p className="text-gray-700 dark:text-gray-300 mt-1">{extractionSummary.structuredData.businessStory.foundingStory}</p>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.businessStory.milestones?.length > 0 && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400 font-medium">Key Milestones:</span>
+                              <ul className="mt-1 ml-4 list-disc">
+                                {extractionSummary.structuredData.businessStory.milestones.map((milestone: string, idx: number) => (
+                                  <li key={idx} className="text-gray-700 dark:text-gray-300">{milestone}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {extractionSummary.structuredData.marketPosition && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Market Position</h5>
+                        <div className="space-y-2 text-sm">
+                          {extractionSummary.structuredData.marketPosition.competitiveAdvantages?.length > 0 && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400 font-medium">Competitive Advantages:</span>
+                              <ul className="mt-1 ml-4 list-disc">
+                                {extractionSummary.structuredData.marketPosition.competitiveAdvantages.map((advantage: string, idx: number) => (
+                                  <li key={idx} className="text-gray-700 dark:text-gray-300">{advantage}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {extractionSummary.structuredData.marketPosition.customerBase && (
+                            <div>
+                              <span className="text-gray-600 dark:text-gray-400 font-medium">Customer Base:</span>
+                              <p className="text-gray-700 dark:text-gray-300 mt-1">{extractionSummary.structuredData.marketPosition.customerBase}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {extractionSummary.structuredData.opportunities && (
+                      <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded">
+                        <h5 className="text-sm font-medium text-green-700 dark:text-green-300 mb-2">Opportunities</h5>
+                        <div className="space-y-1 text-sm">
+                          {extractionSummary.structuredData.opportunities.growth?.map((opp: string, idx: number) => (
+                            <div key={idx} className="flex items-start">
+                              <span className="text-green-600 mr-2">•</span>
+                              <span className="text-gray-700 dark:text-gray-300">{opp}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {extractionSummary.structuredData.risks && (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded">
+                        <h5 className="text-sm font-medium text-red-700 dark:text-red-300 mb-2">Risks</h5>
+                        <div className="space-y-1 text-sm">
+                          {[
+                            ...(extractionSummary.structuredData.risks.business || []),
+                            ...(extractionSummary.structuredData.risks.market || [])
+                          ].map((risk: string, idx: number) => (
+                            <div key={idx} className="flex items-start">
+                              <span className="text-red-600 mr-2">•</span>
+                              <span className="text-gray-700 dark:text-gray-300">{risk}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {extractionSummary.structuredData.contacts?.length > 0 && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contacts</h5>
+                        <div className="space-y-1 text-sm">
+                          {extractionSummary.structuredData.contacts.map((contact: any, idx: number) => (
+                            <div key={idx}>
+                              <span className="font-medium">{contact.name}</span>
+                              {contact.role && <span className="text-gray-600 dark:text-gray-400"> - {contact.role}</span>}
+                              {contact.email && <span className="text-gray-500 dark:text-gray-500"> ({contact.email})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Insights */}
+              {extractionSummary.insights?.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Key Insights</h4>
+                  <div className="space-y-2">
+                    {extractionSummary.insights.map((insight: any, idx: number) => (
+                      <div key={idx} className="flex items-start p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 mr-3 flex-shrink-0 ${
+                          insight.insight_type === 'financial_metric' ? 'bg-green-500' :
+                          insight.insight_type === 'risk_factor' ? 'bg-red-500' :
+                          insight.insight_type === 'opportunity' ? 'bg-blue-500' :
+                          'bg-gray-500'
+                        }`} />
+                        <div className="flex-1">
+                          <h5 className="text-sm font-medium text-gray-900 dark:text-gray-100">{insight.title}</h5>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{insight.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowExtractionSummary(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExtractionSummary(false);
+                    // Navigate to analysis tab to see all insights
+                    window.dispatchEvent(new CustomEvent('navigate-to-analysis', { detail: { dealId } }));
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+                >
+                  View All Insights
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

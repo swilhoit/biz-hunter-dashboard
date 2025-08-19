@@ -17,6 +17,7 @@ node_modules
 dist
 dist-ssr
 *.local
+bun.lockb
 
 # Editor directories and files
 .vscode/*
@@ -28,3 +29,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+get-refresh-token.html
+google-ads-visual-guide.html
+bigquery-credentials.json
+.vercel
+bigquery-credentials-oneline.txt

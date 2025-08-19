@@ -266,8 +266,9 @@ function ASINTable({ category, timeframe }) {
                     <div className="relative inline-flex mr-3">
                       <ASINImage
                         className="w-12 h-12 rounded-lg object-cover"
-                        src={getProductPlaceholderImage(asin.category, asin.asin)} 
-                        alt={asin.title}
+                        src={asin.main_image_url || asin.image_url}
+                        asin={asin.asin}
+                        alt={asin.title || asin.product_name || 'Product Image'}
                         fallbackText={asin.asin.substring(0, 6)}
                         loading="lazy"
                       />
