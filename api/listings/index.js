@@ -7,14 +7,14 @@ try {
     JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS) : undefined;
   
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117',
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth',
     credentials: credentials
   });
 } catch (error) {
   console.error('Failed to initialize BigQuery:', error);
   // Fallback to default credentials (for local development)
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117'
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth'
   });
 }
 
@@ -51,30 +51,30 @@ export default async function handler(req, res) {
       offset = '0'
     } = req.query;
 
-    // Build the query - CAST id to STRING to avoid JavaScript precision issues
+    // Build the query - map actual columns to expected format
     let query = `
       SELECT 
-        CAST(id AS STRING) as id,
-        source_site,
-        listing_url,
+        listing_id as id,
+        source as source_site,
+        source_url as listing_url,
         title as business_name,
-        price as asking_price,
-        revenue as annual_revenue,
-        cash_flow,
-        multiple,
-        location,
-        industry,
+        asking_price_numeric as asking_price,
+        revenue_numeric as annual_revenue,
+        cash_flow_numeric as cash_flow,
+        price_to_revenue_multiple as multiple,
+        COALESCE(city, state, country, location_raw) as location,
+        COALESCE(category, business_type) as industry,
         description,
-        amazon_business_type,
-        is_amazon_fba,
-        inventory_value,
+        business_model as amazon_business_type,
+        FALSE as is_amazon_fba,
+        0 as inventory_value,
         established_year,
-        monthly_traffic,
-        seller_financing,
-        reason_for_selling,
+        0 as monthly_traffic,
+        FALSE as seller_financing,
+        '' as reason_for_selling,
         scraped_at as date_listed,
-        updated_at
-      FROM \`tetrahedron-366117.business_listings.businesses_all_sites_view\`
+        last_updated as updated_at
+      FROM \`biz-hunter-oauth.business_listings.businesses_all_sites_view\`
       WHERE 1=1
       -- Filter for e-commerce businesses only
       AND (
@@ -90,19 +90,19 @@ export default async function handler(req, res) {
         OR LOWER(title) LIKE '%software%'
         OR LOWER(title) LIKE '%app%'
         OR LOWER(title) LIKE '%subscription%'
-        OR LOWER(industry) LIKE '%online%'
-        OR LOWER(industry) LIKE '%ecommerce%'
-        OR LOWER(industry) LIKE '%e-commerce%'
-        OR LOWER(industry) LIKE '%amazon%'
-        OR LOWER(industry) LIKE '%fba%'
-        OR LOWER(industry) LIKE '%digital%'
+        OR LOWER(category) LIKE '%online%'
+        OR LOWER(category) LIKE '%ecommerce%'
+        OR LOWER(category) LIKE '%e-commerce%'
+        OR LOWER(category) LIKE '%amazon%'
+        OR LOWER(category) LIKE '%fba%'
+        OR LOWER(category) LIKE '%digital%'
         OR LOWER(description) LIKE '%online%'
         OR LOWER(description) LIKE '%ecommerce%'
         OR LOWER(description) LIKE '%e-commerce%'
         OR LOWER(description) LIKE '%amazon%'
         OR LOWER(description) LIKE '%fba%'
         OR LOWER(description) LIKE '%shopify%'
-        OR source_site IN ('empireflippers', 'flippa', 'quietlight', 'feinternational')
+        OR source IN ('empireflippers', 'flippa', 'quietlight', 'feinternational')
       )
       -- Exclude non-ecommerce businesses
       AND NOT (
@@ -143,41 +143,42 @@ export default async function handler(req, res) {
 
     // Add filters
     if (minPrice) {
-      query += ` AND price >= @minPrice`;
+      query += ` AND asking_price_numeric >= @minPrice`;
       params.push({ name: 'minPrice', value: parseFloat(minPrice) });
     }
     if (maxPrice) {
-      query += ` AND price <= @maxPrice`;
+      query += ` AND asking_price_numeric <= @maxPrice`;
       params.push({ name: 'maxPrice', value: parseFloat(maxPrice) });
     }
     if (minRevenue) {
-      query += ` AND revenue >= @minRevenue`;
+      query += ` AND revenue_numeric >= @minRevenue`;
       params.push({ name: 'minRevenue', value: parseFloat(minRevenue) });
     }
     if (maxRevenue) {
-      query += ` AND revenue <= @maxRevenue`;
+      query += ` AND revenue_numeric <= @maxRevenue`;
       params.push({ name: 'maxRevenue', value: parseFloat(maxRevenue) });
     }
     if (industry) {
-      query += ` AND LOWER(industry) LIKE @industry`;
+      query += ` AND (LOWER(category) LIKE @industry OR LOWER(business_type) LIKE @industry)`;
       params.push({ name: 'industry', value: `%${industry.toLowerCase()}%` });
     }
     if (location) {
-      query += ` AND LOWER(location) LIKE @location`;
+      query += ` AND (LOWER(city) LIKE @location OR LOWER(state) LIKE @location OR LOWER(country) LIKE @location OR LOWER(location_raw) LIKE @location)`;
       params.push({ name: 'location', value: `%${location.toLowerCase()}%` });
     }
     if (source) {
-      query += ` AND source_site = @source`;
+      query += ` AND source = @source`;
       params.push({ name: 'source', value: source });
     }
     if (isAmazonFba === 'true') {
-      query += ` AND is_amazon_fba = true`;
+      query += ` AND (LOWER(business_model) LIKE '%fba%' OR LOWER(title) LIKE '%fba%')`;
     }
     if (searchTerm) {
       query += ` AND (
         LOWER(title) LIKE @searchTerm 
         OR LOWER(description) LIKE @searchTerm
-        OR LOWER(industry) LIKE @searchTerm
+        OR LOWER(category) LIKE @searchTerm
+        OR LOWER(business_type) LIKE @searchTerm
       )`;
       params.push({ name: 'searchTerm', value: `%${searchTerm.toLowerCase()}%` });
     }
@@ -185,11 +186,12 @@ export default async function handler(req, res) {
     // Add ordering and pagination
     // Map frontend column names to database column names
     const sortColumnMap = {
-      'asking_price': 'price',
-      'annual_revenue': 'revenue',
+      'asking_price': 'asking_price_numeric',
+      'annual_revenue': 'revenue_numeric',
       'created_at': 'scraped_at',
-      'monthly_revenue': 'revenue',
-      'monthly_profit': 'cash_flow'
+      'monthly_revenue': 'revenue_numeric',
+      'monthly_profit': 'cash_flow_numeric',
+      'scraped_at': 'scraped_at'
     };
     
     const sortColumn = sortColumnMap[sortBy] || sortBy;

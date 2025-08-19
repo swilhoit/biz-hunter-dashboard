@@ -7,14 +7,14 @@ try {
     JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS) : undefined;
   
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117',
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth',
     credentials: credentials
   });
 } catch (error) {
   console.error('Failed to initialize BigQuery:', error);
   // Fallback to default credentials (for local development)
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'tetrahedron-366117'
+    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth'
   });
 }
 
@@ -39,28 +39,28 @@ export default async function handler(req, res) {
     
     const query = `
       SELECT 
-        CAST(id AS STRING) as id,
-        source_site,
-        listing_url,
+        listing_id as id,
+        source as source_site,
+        source_url as listing_url,
         title as business_name,
-        price as asking_price,
-        revenue as annual_revenue,
-        cash_flow,
-        multiple,
-        location,
-        industry,
+        asking_price_numeric as asking_price,
+        revenue_numeric as annual_revenue,
+        cash_flow_numeric as cash_flow,
+        price_to_revenue_multiple as multiple,
+        COALESCE(city, state, country, location_raw) as location,
+        COALESCE(category, business_type) as industry,
         description,
-        amazon_business_type,
-        is_amazon_fba,
-        inventory_value,
+        business_model as amazon_business_type,
+        FALSE as is_amazon_fba,
+        0 as inventory_value,
         established_year,
-        monthly_traffic,
-        seller_financing,
-        reason_for_selling,
+        0 as monthly_traffic,
+        FALSE as seller_financing,
+        '' as reason_for_selling,
         scraped_at as date_listed,
-        updated_at
-      FROM \`tetrahedron-366117.business_listings.businesses_all_sites_view\`
-      WHERE CAST(id AS STRING) = @id
+        last_updated as updated_at
+      FROM \`biz-hunter-oauth.business_listings.businesses_all_sites_view\`
+      WHERE listing_id = @id
       LIMIT 1
     `;
     
