@@ -1,20 +1,23 @@
 import { BigQuery } from '@google-cloud/bigquery';
 
 // Initialize BigQuery client
+const projectId = process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth';
+console.log('Using BigQuery project:', projectId);
+
 let bigquery;
 try {
   const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS ? 
     JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS) : undefined;
   
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth',
+    projectId: projectId,
     credentials: credentials
   });
 } catch (error) {
   console.error('Failed to initialize BigQuery:', error);
   // Fallback to default credentials (for local development)
   bigquery = new BigQuery({
-    projectId: process.env.BIGQUERY_PROJECT_ID || 'biz-hunter-oauth'
+    projectId: projectId
   });
 }
 
