@@ -20,7 +20,7 @@
     }
   ],
   "env": {
-    "BIGQUERY_PROJECT_ID": "tetrahedron-366117"
+    "BIGQUERY_PROJECT_ID": "biz-hunter-oauth"
   },
   "headers": [
     {
