@@ -1,0 +1,55 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check file size (max 10MB)
+    function isValidFileSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Helper function to check allowed file types
+    function isValidFileType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/vnd.ms-excel') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+             request.resource.contentType.matches('text/csv') ||
+             request.resource.contentType.matches('text/plain');
+    }
+    
+    // Deal files - documents, images, analyses
+    match /deals/{dealId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFileSize() && isValidFileType();
+      allow update: if false; // Files should not be updated
+      allow delete: if isAuthenticated();
+    }
+    
+    // User files - profile pictures, exports
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                      request.auth.uid == userId && 
+                      isValidFileSize() && 
+                      isValidFileType();
+      allow update: if isAuthenticated() && 
+                      request.auth.uid == userId && 
+                      isValidFileSize() && 
+                      isValidFileType();
+      allow delete: if isAuthenticated() && 
+                      request.auth.uid == userId;
+    }
+    
+    // Public assets (if needed)
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if false; // Only admin via Firebase Console
+    }
+  }
+}

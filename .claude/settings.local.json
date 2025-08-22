@@ -149,7 +149,14 @@
       "Bash(for:*)",
       "Bash(do)",
       "Bash(done)",
-      "WebFetch(domain:biz-hunter-dashboard-1rr6my9j9-swilhoits-projects.vercel.app)"
+      "WebFetch(domain:biz-hunter-dashboard-1rr6my9j9-swilhoits-projects.vercel.app)",
+      "WebFetch(domain:biz-hunter-dashboard.vercel.app)",
+      "WebFetch(domain:biz-hunter-dashboard-80vziptlw-swilhoits-projects.vercel.app)",
+      "WebFetch(domain:bizhunter.ai)",
+      "Bash(firebase login:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase firestore:indexes:*)"
     ],
     "deny": []
   }
