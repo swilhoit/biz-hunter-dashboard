@@ -104,7 +104,6 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 <button
                   onClick={() => onSort && onSort('asking_price')}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-stone-200 transition-colors">
-                >
                   Price & Multiple
                   {onSort && renderSortIcon('asking_price')}
                 </button>
@@ -113,7 +112,6 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 <button
                   onClick={() => onSort && onSort('annual_revenue')}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-stone-200 transition-colors">
-                >
                   Revenue & Profit
                   {onSort && renderSortIcon('annual_revenue')}
                 </button>
@@ -122,7 +120,6 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
                 <button
                   onClick={() => onSort && onSort('created_at')}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-stone-200 transition-colors">
-                >
                   Listed
                   {onSort && renderSortIcon('created_at')}
                 </button>
