@@ -1,7 +1,5 @@
 // Centralized PDF components with proper initialization
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 
 // Initialize PDF.js worker
 if (typeof window !== 'undefined') {

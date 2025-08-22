@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
 import { useBusinessListing } from '../hooks/useBusinessListings';
@@ -18,6 +18,8 @@ import {
   Globe,
   Loader2 
 } from 'lucide-react';
+import { dealsAdapter } from '../lib/database-adapter';
+import { auth } from '../lib/firebase';
 
 function ListingDetail() {
   const { id } = useParams();
@@ -32,6 +34,78 @@ function ListingDetail() {
   
   // const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
+  const [isAddingToPipeline, setIsAddingToPipeline] = useState(false);
+  
+  const handleAddToPipeline = async () => {
+    if (!auth.currentUser) {
+      showError('Please sign in to add deals to your pipeline');
+      navigate('/signin');
+      return;
+    }
+    
+    setIsAddingToPipeline(true);
+    try {
+      // Convert listing to deal format
+      const dealData = {
+        userId: auth.currentUser.uid,
+        business_name: listing.business_name || listing.name,
+        status: 'prospecting',
+        source: 'marketplace',
+        
+        // Financial Information
+        asking_price: listing.asking_price,
+        annual_revenue: listing.annual_revenue,
+        annual_profit: listing.annual_profit,
+        monthly_revenue: listing.monthly_revenue,
+        monthly_profit: listing.monthly_profit,
+        valuation_multiple: listing.valuation_multiple || listing.multiple,
+        profit_margin: listing.profit_margin,
+        
+        // Business Details
+        business_age_years: listing.business_age_years,
+        employee_count: listing.employee_count,
+        inventory_value: listing.inventory_value,
+        date_listed: listing.date_listed || listing.created_at,
+        listing_url: listing.listing_url || listing.original_url,
+        website_url: listing.website_url,
+        description: listing.description,
+        
+        // Location
+        city: listing.city,
+        state: listing.state,
+        country: listing.country,
+        
+        // Industry
+        industry: listing.industry,
+        sub_industry: listing.sub_industry,
+        
+        // Amazon/E-commerce Specific
+        amazon_store_name: listing.amazon_store_name,
+        amazon_category: listing.amazon_category,
+        fba_percentage: listing.fba_percentage,
+        sku_count: listing.sku_count,
+        asin_list: listing.asin_list,
+        
+        // Original listing reference
+        original_listing_id: listing.id,
+        marketplace: listing.marketplace || listing.source,
+      };
+      
+      const result = await dealsAdapter.createDeal(dealData);
+      
+      if (result.error) {
+        throw result.error;
+      }
+      
+      showSuccess('Listing added to your deal pipeline!');
+      navigate(`/pipeline`);
+    } catch (error) {
+      console.error('Error adding to pipeline:', error);
+      showError('Failed to add listing to pipeline');
+    } finally {
+      setIsAddingToPipeline(false);
+    }
+  };
   
 
   const formatCurrency = (amount) => {
@@ -162,6 +236,23 @@ function ListingDetail() {
                 </div>
                 
                 <div className="flex items-center space-x-3">
+                  <button
+                    onClick={handleAddToPipeline}
+                    disabled={isAddingToPipeline}
+                    className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isAddingToPipeline ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add to Pipeline
+                      </>
+                    )}
+                  </button>
                   {(listing.listing_url || listing.original_url) && (
                     <a
                       href={listing.listing_url || listing.original_url}

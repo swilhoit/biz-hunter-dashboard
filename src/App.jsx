@@ -13,6 +13,7 @@ import Homepage from './pages/Homepage';
 import ListingsFeed from './pages/ListingsFeed';
 import ListingDetail from './pages/ListingDetail';
 import DealPipeline from './pages/DealPipeline';
+import DealDetail from './pages/DealDetail';
 import PageNotFound from './pages/utility/PageNotFound';
 import DataPreloader from './services/DataPreloader';
 
@@ -58,6 +59,11 @@ function App() {
         <Route path="/deals" element={
           <ProtectedRoute>
             <DealPipeline />
+          </ProtectedRoute>
+        } />
+        <Route path="/deals/:id" element={
+          <ProtectedRoute>
+            <DealDetail />
           </ProtectedRoute>
         } />
         

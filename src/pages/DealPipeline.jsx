@@ -2,77 +2,13 @@ import React, { useState } from 'react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 
-import Sidebar from '../partials/Sidebar';
 import Header from '../partials/Header';
 import PipelineColumn from '../partials/deals/PipelineColumn';
 import DealCard from '../partials/deals/DealCard';
 import PipelineStats from '../partials/deals/PipelineStats';
 
-// Mock data for development
-const mockDeals = [
-  {
-    id: '1',
-    business_name: 'Premium Pet Supplies Co',
-    status: 'prospecting',
-    asking_price: 2500000,
-    annual_revenue: 4800000,
-    annual_profit: 960000,
-    valuation_multiple: 2.6,
-    amazon_category: 'Pet Supplies',
-    priority: 5,
-    date_listed: '2024-01-15',
-    seller_name: 'John Smith',
-    asin_list: new Array(45).fill(null).map((_, i) => `ASIN${i+1}`), // Mock array of 45 ASINs
-    fba_percentage: 95,
-  },
-  {
-    id: '2',
-    business_name: 'Eco Kitchen Gadgets',
-    status: 'initial_contact',
-    asking_price: 1800000,
-    annual_revenue: 3200000,
-    annual_profit: 640000,
-    valuation_multiple: 2.8,
-    amazon_category: 'Home & Kitchen',
-    priority: 4,
-    date_listed: '2024-01-20',
-    broker_name: 'Sarah Johnson',
-    broker_company: 'Empire Flippers',
-    asin_list: new Array(28).fill(null).map((_, i) => `ASIN${i+1}`), // Mock array of 28 ASINs
-    fba_percentage: 100,
-  },
-  {
-    id: '3',
-    business_name: 'Smart Fitness Brand',
-    status: 'due_diligence',
-    asking_price: 3500000,
-    annual_revenue: 5600000,
-    annual_profit: 1400000,
-    valuation_multiple: 2.5,
-    amazon_category: 'Sports & Outdoors',
-    priority: 5,
-    date_listed: '2023-12-10',
-    seller_name: 'Mike Chen',
-    asin_list: new Array(62).fill(null).map((_, i) => `ASIN${i+1}`), // Mock array of 62 ASINs
-    fba_percentage: 85,
-  },
-  {
-    id: '4',
-    business_name: 'Baby Essentials Direct',
-    status: 'loi_submitted',
-    asking_price: 4200000,
-    annual_revenue: 7200000,
-    annual_profit: 1800000,
-    valuation_multiple: 2.3,
-    amazon_category: 'Baby',
-    priority: 5,
-    date_listed: '2023-11-28',
-    broker_name: 'Tom Wilson',
-    broker_company: 'FE International',
-    asin_list: new Array(38).fill(null).map((_, i) => `ASIN${i+1}`), // Mock array of 38 ASINs
-    fba_percentage: 90,
-  },
-];
+// Initialize with empty deals array - no mock data
+const initialDeals = [];
 
 const dealStages = [
   { status: 'prospecting', title: 'Prospecting', color: 'bg-gray-500' },
@@ -86,8 +22,7 @@ const dealStages = [
 ];
 
 function DealPipeline() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [deals, setDeals] = useState(mockDeals);
+  const [deals, setDeals] = useState(initialDeals);
   const [activeId, setActiveId] = useState(null);
 
 
@@ -126,10 +61,8 @@ function DealPipeline() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
-      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
       <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-        <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <Header />
 
         <main className="grow">
           <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
