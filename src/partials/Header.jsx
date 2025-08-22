@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Crosshair, User, LogOut } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
-import { supabase } from '../lib/supabase';
+import { onAuthChange, signOutUser } from '../lib/firebase';
 
 function Header({
   variant = 'default',
@@ -11,21 +11,16 @@ function Header({
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const unsubscribe = onAuthChange((user) => {
+      setUser(user);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutUser();
     navigate('/');
   };
 

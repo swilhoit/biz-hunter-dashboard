@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { resetPassword } from '../lib/firebase';
 
 function ResetPassword() {
   const [email, setEmail] = useState('');
@@ -13,19 +13,15 @@ function ResetPassword() {
     setLoading(true);
     setError(null);
 
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`,
-      });
+    const { error: resetError } = await resetPassword(email);
 
-      if (error) throw error;
-
+    if (resetError) {
+      setError(resetError.message);
+    } else {
       setSuccess(true);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
     }
+    
+    setLoading(false);
   };
 
   return (

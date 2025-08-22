@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { signUp } from '../lib/firebase';
 
 function Signup() {
   const navigate = useNavigate();
@@ -17,28 +17,16 @@ function Signup() {
     setLoading(true);
     setError(null);
 
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            company: company
-          }
-        }
-      });
+    const { user, error: signUpError } = await signUp(email, password, fullName, company);
 
-      if (error) throw error;
-
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+    } else {
       setSuccess(true);
       setTimeout(() => {
-        navigate('/signin');
-      }, 3000);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+        navigate('/deals');
+      }, 2000);
     }
   };
 
