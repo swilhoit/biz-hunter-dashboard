@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
-  "installCommand": "npm install",
+  "installCommand": "npm install --force --legacy-peer-deps",
   "public": true,
   "functions": {
     "api/listings/index.js": {

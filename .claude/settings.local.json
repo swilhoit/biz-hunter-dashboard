@@ -156,7 +156,10 @@
       "Bash(firebase login:*)",
       "Bash(firebase projects:list:*)",
       "Bash(firebase deploy:*)",
-      "Bash(firebase firestore:indexes:*)"
+      "Bash(firebase firestore:indexes:*)",
+      "Bash(firebase apps:sdkconfig:*)",
+      "Bash(firebase apps:create:*)",
+      "Bash(./setup-vercel-env.sh:*)"
     ],
     "deny": []
   }
