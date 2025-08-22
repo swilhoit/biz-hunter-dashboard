@@ -159,7 +159,8 @@
       "Bash(firebase firestore:indexes:*)",
       "Bash(firebase apps:sdkconfig:*)",
       "Bash(firebase apps:create:*)",
-      "Bash(./setup-vercel-env.sh:*)"
+      "Bash(./setup-vercel-env.sh:*)",
+      "WebFetch(domain:biz-hunter-dashboard-kxcmjdg0d-swilhoits-projects.vercel.app)"
     ],
     "deny": []
   }

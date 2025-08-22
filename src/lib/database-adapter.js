@@ -227,14 +227,23 @@ export const dealsAdapter = {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
 
+      // Filter out undefined values (Firestore doesn't allow them)
+      const cleanDealData = Object.entries(dealData).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {});
+
       const dealsRef = collection(db, 'deals');
       const newDeal = {
-        ...dealData,
+        ...cleanDealData,
         userId: user.uid,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
       };
       
+      console.log('Creating deal with data:', newDeal);
       const docRef = await addDoc(dealsRef, newDeal);
       return { 
         data: { id: docRef.id, ...newDeal }, 
