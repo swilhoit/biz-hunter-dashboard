@@ -16,13 +16,7 @@ interface RuntimeConfig {
 
 // Function to get runtime config from window object or environment
 export function getRuntimeConfig(): RuntimeConfig {
-  // In production, we'll inject these values
-  if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__) {
-    return (window as any).__RUNTIME_CONFIG__;
-  }
-
-  // Fallback to build-time environment variables
-  return {
+  const buildTimeConfig = {
     VITE_OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
     VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
     VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -31,6 +25,23 @@ export function getRuntimeConfig(): RuntimeConfig {
     VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
   };
+
+  // In production, we'll inject these values
+  if (typeof window !== 'undefined' && (window as any).__RUNTIME_CONFIG__) {
+    // Merge build-time and runtime configs, with runtime taking precedence
+    const runtimeConfig = (window as any).__RUNTIME_CONFIG__;
+    const mergedConfig: RuntimeConfig = { ...buildTimeConfig };
+
+    for (const key in runtimeConfig) {
+      if (runtimeConfig[key] !== undefined && runtimeConfig[key] !== '') {
+        mergedConfig[key] = runtimeConfig[key];
+      }
+    }
+    return mergedConfig;
+  }
+
+  // Fallback to just build-time environment variables
+  return buildTimeConfig;
 }
 
 // Helper function to get a specific config value with multiple fallbacks
