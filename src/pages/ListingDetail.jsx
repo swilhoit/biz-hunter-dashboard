@@ -99,7 +99,7 @@ function ListingDetail() {
       }
       
       showSuccess('Listing added to your deal pipeline!');
-      navigate(`/pipeline`);
+      navigate(`/deals`);
     } catch (error) {
       console.error('Error adding to pipeline:', error);
       showError('Failed to add listing to pipeline');

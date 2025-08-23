@@ -81,7 +81,7 @@ function DealDetail() {
     try {
       // In a real app, you'd implement the delete function in database-adapter
       showSuccess('Deal deleted successfully');
-      navigate('/pipeline');
+      navigate('/deals');
     } catch (error) {
       console.error('Error deleting deal:', error);
       showError('Failed to delete deal');
@@ -170,7 +170,7 @@ function DealDetail() {
                   The deal you're looking for doesn't exist or has been removed.
                 </p>
                 <button 
-                  onClick={() => navigate('/pipeline')}
+                  onClick={() => navigate('/deals')}
                   className="btn bg-indigo-600 text-white hover:bg-indigo-700"
                 >
                   Back to Pipeline
@@ -195,7 +195,7 @@ function DealDetail() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <button
-                    onClick={() => navigate('/pipeline')}
+                    onClick={() => navigate('/deals')}
                     className="mr-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg hover:bg-gray-100 dark:hover:bg-stone-700"
                   >
                     <ArrowLeft className="w-5 h-5" />

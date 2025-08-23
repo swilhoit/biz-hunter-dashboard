@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { useAuth } from '../contexts/AuthContext';
 
 import Header from '../partials/Header';
 import PipelineColumn from '../partials/deals/PipelineColumn';
 import DealCard from '../partials/deals/DealCard';
 import PipelineStats from '../partials/deals/PipelineStats';
+import { databaseAdapter } from '../lib/database-adapter';
 
 // Initialize with empty deals array - no mock data
 const initialDeals = [];
@@ -24,6 +26,36 @@ const dealStages = [
 function DealPipeline() {
   const [deals, setDeals] = useState(initialDeals);
   const [activeId, setActiveId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { currentUser } = useAuth();
+
+  // Load user's deals on component mount
+  useEffect(() => {
+    const loadDeals = async () => {
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const result = await databaseAdapter.getUserDeals(currentUser.uid);
+        
+        if (result.error) {
+          setError(result.error.message || 'Failed to load deals');
+        } else {
+          setDeals(result.data || []);
+        }
+      } catch (err) {
+        setError(err.message || 'Failed to load deals');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDeals();
+  }, [currentUser]);
 
 
   const handleDragStart = (event) => {
@@ -82,31 +114,57 @@ function DealPipeline() {
               </div>
             </div>
 
-            {/* Pipeline Stats */}
-            <PipelineStats deals={deals} />
-
-            {/* Pipeline Board */}
-            <DndContext
-              collisionDetection={closestCorners}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="flex gap-4 overflow-x-auto pb-4">
-                <SortableContext items={dealStages.map(stage => stage.status)} strategy={horizontalListSortingStrategy}>
-                  {dealStages.map(stage => (
-                    <PipelineColumn
-                      key={stage.status}
-                      stage={stage}
-                      deals={deals.filter(deal => deal.status === stage.status)}
-                    />
-                  ))}
-                </SortableContext>
+            {/* Error State */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm">{error}</p>
+                  </div>
+                </div>
               </div>
+            )}
 
-              <DragOverlay>
-                {activeDeal ? <DealCard deal={activeDeal} isDragging /> : null}
-              </DragOverlay>
-            </DndContext>
+            {/* Loading State */}
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                <span className="ml-3 text-gray-600">Loading deals...</span>
+              </div>
+            ) : (
+              <>
+                {/* Pipeline Stats */}
+                <PipelineStats deals={deals} />
+
+                {/* Pipeline Board */}
+                <DndContext
+                  collisionDetection={closestCorners}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="flex gap-4 overflow-x-auto pb-4">
+                    <SortableContext items={dealStages.map(stage => stage.status)} strategy={horizontalListSortingStrategy}>
+                      {dealStages.map(stage => (
+                        <PipelineColumn
+                          key={stage.status}
+                          stage={stage}
+                          deals={deals.filter(deal => deal.status === stage.status)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+
+                  <DragOverlay>
+                    {activeDeal ? <DealCard deal={activeDeal} isDragging /> : null}
+                  </DragOverlay>
+                </DndContext>
+              </>
+            )}
           </div>
         </main>
       </div>

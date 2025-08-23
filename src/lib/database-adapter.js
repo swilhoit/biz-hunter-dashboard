@@ -268,6 +268,7 @@ export const dealsAdapter = {
       const newDeal = {
         ...cleanDealData,
         userId: user.uid,
+        status: cleanDealData.status || 'prospecting', // Default to prospecting if no status
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
       };
@@ -304,4 +305,11 @@ export const dealsAdapter = {
       return { data: null, error };
     }
   }
+};
+
+// Combined export for convenience
+export const databaseAdapter = {
+  ...tasksAdapter,
+  ...filesAdapter,
+  ...dealsAdapter
 };
