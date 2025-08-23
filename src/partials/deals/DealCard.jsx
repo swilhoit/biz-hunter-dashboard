@@ -2,8 +2,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useNavigate } from 'react-router-dom';
-import { Building2, DollarSign, TrendingUp, Package, Calendar, User, UserCheck, GripVertical, ImageIcon } from 'lucide-react';
-import { getFallbackImage } from '../../utils/imageUtils';
+import { Building2, DollarSign, TrendingUp, Calendar, User, UserCheck, GripVertical } from 'lucide-react';
 
 function DealCard({ deal, isDragging = false }) {
   const navigate = useNavigate();
@@ -94,23 +93,6 @@ function DealCard({ deal, isDragging = false }) {
         )}
       </div>
 
-      {/* Product Image */}
-      <div className="mb-3">
-        {deal.image_url ? (
-          <img
-            src={deal.image_url}
-            alt={deal.business_name}
-            className="w-full h-32 object-cover rounded-lg"
-            onError={(e) => {
-              e.target.src = getFallbackImage();
-            }}
-          />
-        ) : (
-          <div className="w-full h-32 bg-gray-100 dark:bg-gray-600 rounded-lg flex items-center justify-center">
-            <ImageIcon className="w-8 h-8 text-gray-400" />
-          </div>
-        )}
-      </div>
 
       {/* Financial Metrics */}
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -151,17 +133,11 @@ function DealCard({ deal, isDragging = false }) {
       </div>
 
       {/* Amazon Metrics */}
-      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
-        <div className="flex items-center">
-          <Package className="w-3 h-3 mr-1" />
-          <span>{Array.isArray(deal.asin_list) ? deal.asin_list.length : 0} ASINs</span>
+      {deal.fba_percentage && (
+        <div className="flex items-center justify-center text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <span className="text-orange-600 dark:text-orange-400">{deal.fba_percentage}% FBA</span>
         </div>
-        {deal.fba_percentage && (
-          <div className="flex items-center">
-            <span className="text-orange-600 dark:text-orange-400">{deal.fba_percentage}% FBA</span>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Contact Info */}
       <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
