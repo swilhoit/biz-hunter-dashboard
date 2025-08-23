@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
 import { useBusinessListing } from '../hooks/useBusinessListings';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, 
   ExternalLink, 
@@ -19,7 +20,6 @@ import {
   Loader2 
 } from 'lucide-react';
 import { dealsAdapter } from '../lib/database-adapter';
-import { auth } from '../lib/firebase';
 
 function ListingDetail() {
   const { id } = useParams();
@@ -34,10 +34,11 @@ function ListingDetail() {
   
   // const addToPipelineMutation = useAddToPipeline();
   const { showSuccess, showError } = useToast();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [isAddingToPipeline, setIsAddingToPipeline] = useState(false);
   
   const handleAddToPipeline = async () => {
-    if (!auth.currentUser) {
+    if (!isAuthenticated || !user) {
       showError('Please sign in to add deals to your pipeline');
       navigate('/signin');
       return;
@@ -47,7 +48,7 @@ function ListingDetail() {
     try {
       // Convert listing to deal format
       const dealData = {
-        userId: auth.currentUser.uid,
+        userId: user.uid,
         business_name: listing.business_name || listing.name,
         status: 'prospecting',
         source: 'marketplace',
@@ -120,7 +121,7 @@ function ListingDetail() {
   };
 
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex flex-col h-[100dvh] overflow-hidden">
         <Header />
@@ -238,7 +239,7 @@ function ListingDetail() {
                 <div className="flex items-center space-x-3">
                   <button
                     onClick={handleAddToPipeline}
-                    disabled={isAddingToPipeline}
+                    disabled={isAddingToPipeline || authLoading}
                     className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {isAddingToPipeline ? (

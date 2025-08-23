@@ -224,8 +224,14 @@ export const dealsAdapter = {
 
   async createDeal(dealData) {
     try {
+      // Get current user with better error handling
       const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
+      if (!user) {
+        console.error('No authenticated user found');
+        throw new Error('User not authenticated - please sign in first');
+      }
+
+      console.log('Creating deal for authenticated user:', user.uid);
 
       // Clean and validate data more thoroughly
       const cleanDealData = {};
