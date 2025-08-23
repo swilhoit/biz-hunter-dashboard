@@ -28,26 +28,33 @@ function DealPipeline() {
   const [activeId, setActiveId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
 
   // Load user's deals on component mount
   useEffect(() => {
     const loadDeals = async () => {
-      if (!currentUser) {
+      console.log('DealPipeline: loadDeals called, user:', user);
+      if (!user) {
+        console.log('DealPipeline: No user found, skipping load');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        const result = await databaseAdapter.getUserDeals(currentUser.uid);
+        console.log('DealPipeline: Loading deals for user:', user.uid);
+        const result = await databaseAdapter.getUserDeals(user.uid);
+        console.log('DealPipeline: getUserDeals result:', result);
         
         if (result.error) {
+          console.error('DealPipeline: Error loading deals:', result.error);
           setError(result.error.message || 'Failed to load deals');
         } else {
+          console.log('DealPipeline: Loaded deals:', result.data);
           setDeals(result.data || []);
         }
       } catch (err) {
+        console.error('DealPipeline: Exception loading deals:', err);
         setError(err.message || 'Failed to load deals');
       } finally {
         setLoading(false);
@@ -55,7 +62,7 @@ function DealPipeline() {
     };
 
     loadDeals();
-  }, [currentUser]);
+  }, [user]);
 
 
   const handleDragStart = (event) => {
