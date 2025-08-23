@@ -69,7 +69,7 @@ function DealPipeline() {
     setActiveId(event.active.id);
   };
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = async (event) => {
     const { active, over } = event;
     
     if (!over) return;
@@ -83,7 +83,8 @@ function DealPipeline() {
 
     // If dropped on a column, update the deal's status
     const targetStage = dealStages.find(stage => stage.status === overId);
-    if (targetStage) {
+    if (targetStage && targetStage.status !== activeDeal.status) {
+      // Optimistically update local state first
       setDeals(prevDeals =>
         prevDeals.map(deal =>
           deal.id === activeId
@@ -91,6 +92,37 @@ function DealPipeline() {
             : deal
         )
       );
+
+      // Persist the change to Firestore
+      try {
+        const result = await databaseAdapter.updateDeal(activeId, { 
+          status: targetStage.status 
+        });
+        
+        if (result.error) {
+          console.error('Failed to update deal status:', result.error);
+          // Revert optimistic update on error
+          setDeals(prevDeals =>
+            prevDeals.map(deal =>
+              deal.id === activeId
+                ? { ...deal, status: activeDeal.status }
+                : deal
+            )
+          );
+        } else {
+          console.log('Deal status updated successfully:', activeId, targetStage.status);
+        }
+      } catch (error) {
+        console.error('Error updating deal status:', error);
+        // Revert optimistic update on error
+        setDeals(prevDeals =>
+          prevDeals.map(deal =>
+            deal.id === activeId
+              ? { ...deal, status: activeDeal.status }
+              : deal
+          )
+        );
+      }
     }
 
     setActiveId(null);
