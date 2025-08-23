@@ -227,13 +227,36 @@ export const dealsAdapter = {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
 
-      // Filter out undefined values (Firestore doesn't allow them)
-      const cleanDealData = Object.entries(dealData).reduce((acc, [key, value]) => {
-        if (value !== undefined) {
-          acc[key] = value;
+      // Clean and validate data more thoroughly
+      const cleanDealData = {};
+      
+      // Only allow specific fields with proper validation
+      const allowedFields = [
+        'business_name', 'status', 'source', 'asking_price', 'annual_revenue', 
+        'annual_profit', 'monthly_revenue', 'monthly_profit', 'valuation_multiple',
+        'profit_margin', 'business_age_years', 'employee_count', 'inventory_value',
+        'date_listed', 'listing_url', 'website_url', 'description', 'city', 'state',
+        'country', 'industry', 'sub_industry', 'amazon_store_name', 'amazon_category',
+        'fba_percentage', 'sku_count', 'asin_list', 'original_listing_id', 'marketplace'
+      ];
+
+      allowedFields.forEach(field => {
+        const value = dealData[field];
+        if (value !== undefined && value !== null) {
+          // Convert numbers properly
+          if (typeof value === 'string' && !isNaN(value) && value !== '') {
+            cleanDealData[field] = parseFloat(value);
+          } else if (typeof value === 'number' && isFinite(value)) {
+            cleanDealData[field] = value;
+          } else if (typeof value === 'string' && value.trim() !== '') {
+            cleanDealData[field] = value.trim();
+          } else if (typeof value === 'boolean') {
+            cleanDealData[field] = value;
+          } else if (Array.isArray(value)) {
+            cleanDealData[field] = value;
+          }
         }
-        return acc;
-      }, {});
+      });
 
       const dealsRef = collection(db, 'deals');
       const newDeal = {
@@ -243,7 +266,8 @@ export const dealsAdapter = {
         updated_at: serverTimestamp()
       };
       
-      console.log('Creating deal with data:', newDeal);
+      console.log('Creating deal with cleaned data:', JSON.stringify(newDeal, null, 2));
+      
       const docRef = await addDoc(dealsRef, newDeal);
       return { 
         data: { id: docRef.id, ...newDeal }, 
@@ -251,6 +275,9 @@ export const dealsAdapter = {
       };
     } catch (error) {
       console.error('Error creating deal:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error);
       return { data: null, error };
     }
   },
