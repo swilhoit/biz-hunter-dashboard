@@ -17,13 +17,13 @@ interface RuntimeConfig {
 // Function to get runtime config from window object or environment
 export function getRuntimeConfig(): RuntimeConfig {
   const buildTimeConfig = {
-    VITE_OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
-    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
-    VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
+    VITE_OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY?.trim(),
+    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
+    VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim(),
+    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim(),
+    VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim(),
+    VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim(),
+    VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID?.trim(),
   };
 
   // In production, we'll inject these values
@@ -34,7 +34,8 @@ export function getRuntimeConfig(): RuntimeConfig {
 
     for (const key in runtimeConfig) {
       if (runtimeConfig[key] !== undefined && runtimeConfig[key] !== '') {
-        mergedConfig[key] = runtimeConfig[key];
+        const value = runtimeConfig[key];
+        mergedConfig[key] = typeof value === 'string' ? value.trim() : value;
       }
     }
     return mergedConfig;
