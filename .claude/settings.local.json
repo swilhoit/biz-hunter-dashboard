@@ -160,7 +160,12 @@
       "Bash(firebase apps:sdkconfig:*)",
       "Bash(firebase apps:create:*)",
       "Bash(./setup-vercel-env.sh:*)",
-      "WebFetch(domain:biz-hunter-dashboard-kxcmjdg0d-swilhoits-projects.vercel.app)"
+      "WebFetch(domain:biz-hunter-dashboard-kxcmjdg0d-swilhoits-projects.vercel.app)",
+      "WebFetch(domain:biz-hunter-dashboard-mxd7eu5tk-swilhoits-projects.vercel.app)",
+      "WebFetch(domain:biz-hunter-dashboard-67ddmbzw8-swilhoits-projects.vercel.app)",
+      "Bash(firebase firestore:rules:*)",
+      "WebFetch(domain:biz-hunter-dashboard-4m8p6lbk3-swilhoits-projects.vercel.app)",
+      "WebFetch(domain:biz-hunter-dashboard-ty7v6jpqp-swilhoits-projects.vercel.app)"
     ],
     "deny": []
   }

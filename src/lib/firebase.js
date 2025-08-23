@@ -30,16 +30,27 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'firebase/storage';
+import { getRuntimeConfig } from '../config/runtime-config';
 
-// Firebase configuration
+// Get Firebase config from runtime/environment variables
+const runtimeConfig = getRuntimeConfig();
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: runtimeConfig.VITE_FIREBASE_API_KEY,
+  authDomain: runtimeConfig.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: runtimeConfig.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: runtimeConfig.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: runtimeConfig.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: runtimeConfig.VITE_FIREBASE_APP_ID,
 };
+
+// Basic validation to ensure config is loaded
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error("Firebase config is missing or incomplete. Check your environment variables or runtime configuration.");
+  // You might want to throw an error here or handle it gracefully
+  // For now, we'll log an error and let the app proceed, which will likely fail at the initializeApp step.
+}
+
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

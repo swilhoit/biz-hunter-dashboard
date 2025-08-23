@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Connection Test</title>
+</head>
+<body>
+    <div id="status">Loading...</div>
+    <div id="results"></div>
+    <button id="testBtn" onclick="testFirestore()" disabled>Test Firestore Write</button>
+    
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js';
+        import { getFirestore, collection, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyAlX42_G14QzUUhiAjqmMQpyqQo6NU8MGw",
+            authDomain: "bizhunter-945a4.firebaseapp.com",
+            projectId: "bizhunter-945a4",
+            storageBucket: "bizhunter-945a4.firebasestorage.app",
+            messagingSenderId: "938315544017",
+            appId: "1:938315544017:web:22ded62a409dddfba69cf0"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        const testBtn = document.getElementById('testBtn');
+        
+        statusEl.textContent = 'Firebase initialized...';
+        
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                statusEl.textContent = `Authenticated as: ${user.uid}`;
+                testBtn.disabled = false;
+                
+                window.testFirestore = async () => {
+                    try {
+                        statusEl.textContent = 'Testing Firestore write...';
+                        
+                        const testDoc = doc(collection(db, 'deals'));
+                        await setDoc(testDoc, {
+                            testData: 'Firebase connection test',
+                            userId: user.uid,
+                            createdAt: serverTimestamp()
+                        });
+                        
+                        statusEl.textContent = 'SUCCESS: Firestore write completed!';
+                        resultsEl.innerHTML = `<div style="color: green;">✅ Test document created with ID: ${testDoc.id}</div>`;
+                        
+                    } catch (error) {
+                        statusEl.textContent = 'FAILED: Firestore write failed';
+                        resultsEl.innerHTML = `<div style="color: red;">❌ Error: ${error.message}</div><pre>${error.stack}</pre>`;
+                        console.error('Firestore test error:', error);
+                    }
+                };
+                
+            } else {
+                statusEl.textContent = 'Authenticating...';
+                signInAnonymously(auth).catch((error) => {
+                    statusEl.textContent = `Auth failed: ${error.message}`;
+                });
+            }
+        });
+    </script>
+</body>
+</html>
