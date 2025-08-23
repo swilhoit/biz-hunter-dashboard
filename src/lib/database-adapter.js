@@ -272,8 +272,6 @@ export const dealsAdapter = {
         updated_at: serverTimestamp()
       };
       
-      console.log('Creating deal with cleaned data:', JSON.stringify(newDeal, null, 2));
-      
       const docRef = await addDoc(dealsRef, newDeal);
       return { 
         data: { id: docRef.id, ...newDeal }, 
