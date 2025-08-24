@@ -3,8 +3,9 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useNavigate } from 'react-router-dom';
 import { Deal } from '../../types/deal';
-import { Building2, DollarSign, TrendingUp, Package, Calendar, User, UserCheck, GripVertical, Edit3, Trash2, Save, X, ImageIcon } from 'lucide-react';
+import { Building2, DollarSign, TrendingUp, Package, Calendar, User, UserCheck, GripVertical, Edit3, Trash2, Save, X, ImageIcon, Settings } from 'lucide-react';
 import { getFallbackImage } from '../../utils/imageUtils';
+import DealEditModal from '../../components/DealEditModal';
 
 interface DealCardProps {
   deal: Deal;
@@ -18,6 +19,7 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editedDeal, setEditedDeal] = useState(deal);
+  const [showFullEditModal, setShowFullEditModal] = useState(false);
   
   const {
     attributes,
@@ -88,7 +90,36 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
           annual_profit: editedDeal.annual_profit,
           valuation_multiple: editedDeal.valuation_multiple,
           priority: editedDeal.priority,
-          notes: editedDeal.notes
+          notes: editedDeal.notes,
+          // Additional fields
+          monthly_revenue: editedDeal.monthly_revenue,
+          monthly_profit: editedDeal.monthly_profit,
+          profit_margin: editedDeal.profit_margin,
+          employee_count: editedDeal.employee_count,
+          inventory_value: editedDeal.inventory_value,
+          // Seller info
+          seller_name: editedDeal.seller_name,
+          seller_email: editedDeal.seller_email,
+          seller_phone: editedDeal.seller_phone,
+          // Broker info
+          broker_name: editedDeal.broker_name,
+          broker_email: editedDeal.broker_email,
+          broker_phone: editedDeal.broker_phone,
+          broker_company: editedDeal.broker_company,
+          // Location
+          city: editedDeal.city,
+          state: editedDeal.state,
+          country: editedDeal.country,
+          // URLs
+          listing_url: editedDeal.listing_url,
+          website_url: editedDeal.website_url,
+          // Amazon/E-commerce
+          amazon_store_name: editedDeal.amazon_store_name,
+          fba_percentage: editedDeal.fba_percentage,
+          sku_count: editedDeal.sku_count,
+          // Important dates
+          expected_close_date: editedDeal.expected_close_date,
+          due_diligence_start_date: editedDeal.due_diligence_start_date
         });
         setIsEditing(false);
       } catch (error) {
@@ -154,14 +185,26 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
         ) : (
           <>
             {onEdit && (
-              <button
-                onClick={handleEdit}
-                className="action-button p-1 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 rounded text-blue-600 border border-blue-300"
-                title="Edit deal"
-                style={{ zIndex: 50 }}
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={handleEdit}
+                  className="action-button p-1 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900 rounded text-blue-600 border border-blue-300"
+                  title="Quick edit"
+                  style={{ zIndex: 50 }}
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFullEditModal(true);
+                  }}
+                  className="action-button p-1 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900 rounded text-purple-600"
+                  title="Full edit"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </>
             )}
             {onDelete && (
               <button
@@ -331,41 +374,105 @@ function DealCard({ deal, isDragging = false, onEdit, onDelete }: DealCardProps)
 
       {/* Amazon Metrics */}
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
-        <div className="flex items-center">
-          <Package className="w-3 h-3 mr-1" />
-          <span>{Array.isArray(deal.asin_list) ? deal.asin_list.length : 0} ASINs</span>
-        </div>
-        {deal.fba_percentage && (
-          <div className="flex items-center">
-            <span className="text-orange-600 dark:text-orange-400">{deal.fba_percentage}% FBA</span>
+        {isEditing ? (
+          <div className="flex gap-2 w-full">
+            <input
+              type="number"
+              value={editedDeal.sku_count || ''}
+              onChange={(e) => handleFieldChange('sku_count', parseInt(e.target.value) || undefined)}
+              className="flex-1 text-xs bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-2 py-1"
+              placeholder="SKU count"
+            />
+            <input
+              type="number"
+              value={editedDeal.fba_percentage || ''}
+              onChange={(e) => handleFieldChange('fba_percentage', parseFloat(e.target.value) || undefined)}
+              className="flex-1 text-xs bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-2 py-1"
+              placeholder="FBA %"
+            />
           </div>
+        ) : (
+          <>
+            <div className="flex items-center">
+              <Package className="w-3 h-3 mr-1" />
+              <span>{deal.sku_count || (Array.isArray(deal.asin_list) ? deal.asin_list.length : 0)} SKUs</span>
+            </div>
+            {deal.fba_percentage && (
+              <div className="flex items-center">
+                <span className="text-orange-600 dark:text-orange-400">{deal.fba_percentage}% FBA</span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Contact Info */}
       <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
-        {deal.seller_name && (
-          <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
-            <User className="w-3 h-3 mr-1" />
-            <span className="truncate">{deal.seller_name}</span>
+        {isEditing ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editedDeal.seller_name || ''}
+              onChange={(e) => handleFieldChange('seller_name', e.target.value)}
+              className="w-full text-xs bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-2 py-1"
+              placeholder="Seller name"
+            />
+            <input
+              type="text"
+              value={editedDeal.broker_name || ''}
+              onChange={(e) => handleFieldChange('broker_name', e.target.value)}
+              className="w-full text-xs bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-2 py-1"
+              placeholder="Broker name"
+            />
+            <input
+              type="text"
+              value={editedDeal.broker_company || ''}
+              onChange={(e) => handleFieldChange('broker_company', e.target.value)}
+              className="w-full text-xs bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-2 py-1"
+              placeholder="Broker company"
+            />
           </div>
-        )}
-        {deal.broker_name && (
-          <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
-            <UserCheck className="w-3 h-3 mr-1" />
-            <span className="truncate">{deal.broker_name}</span>
-            {deal.broker_company && (
-              <span className="ml-1 text-gray-500">({deal.broker_company})</span>
+        ) : (
+          <>
+            {deal.seller_name && (
+              <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
+                <User className="w-3 h-3 mr-1" />
+                <span className="truncate">{deal.seller_name}</span>
+              </div>
             )}
-          </div>
-        )}
-        {deal.created_at && (
-          <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-            <Calendar className="w-3 h-3 mr-1" />
-            <span>Added {new Date(deal.created_at).toLocaleDateString()}</span>
-          </div>
+            {deal.broker_name && (
+              <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 mb-1">
+                <UserCheck className="w-3 h-3 mr-1" />
+                <span className="truncate">{deal.broker_name}</span>
+                {deal.broker_company && (
+                  <span className="ml-1 text-gray-500">({deal.broker_company})</span>
+                )}
+              </div>
+            )}
+            {deal.created_at && (
+              <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                <Calendar className="w-3 h-3 mr-1" />
+                <span>Added {new Date(deal.created_at).toLocaleDateString()}</span>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Full Edit Modal */}
+      {showFullEditModal && (
+        <DealEditModal
+          deal={deal}
+          isOpen={showFullEditModal}
+          onClose={() => setShowFullEditModal(false)}
+          onSave={async (updates) => {
+            if (onEdit) {
+              await onEdit(deal.id, updates);
+              setShowFullEditModal(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

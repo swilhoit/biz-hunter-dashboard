@@ -229,13 +229,6 @@ function DealDetail() {
                       View Listing
                     </a>
                   )}
-                  <button
-                    onClick={handleDelete}
-                    className="btn bg-red-600 text-white hover:bg-red-700"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Deal
-                  </button>
                 </div>
               </div>
             </div>
@@ -471,6 +464,19 @@ function DealDetail() {
                 />
               </div>
             )}
+            
+            {/* Delete Deal Section - Bottom of Page */}
+            <div className="mt-12 pt-8 border-t border-gray-200 dark:border-stone-700">
+              <div className="flex justify-center">
+                <button
+                  onClick={handleDelete}
+                  className="btn bg-red-600 text-white hover:bg-red-700"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Deal
+                </button>
+              </div>
+            </div>
           </div>
         </main>
       </div>

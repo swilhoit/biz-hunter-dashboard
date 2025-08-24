@@ -304,6 +304,30 @@ export const dealsAdapter = {
       console.error('Error fetching user deals:', error);
       return { data: null, error };
     }
+  },
+
+  async deleteDeal(dealId) {
+    try {
+      // First delete all related data (tasks, files, etc.)
+      // Delete tasks for this deal
+      const tasksQuery = query(
+        collection(db, 'tasks'),
+        where('dealId', '==', dealId)
+      );
+      const taskSnapshot = await getDocs(tasksQuery);
+      const deleteTaskPromises = taskSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      await Promise.all(deleteTaskPromises);
+
+      // Delete the deal itself
+      await deleteDoc(doc(db, 'deals', dealId));
+      
+      return { error: null };
+    } catch (error) {
+      console.error('Error deleting deal:', error);
+      return { error };
+    }
   }
 };
 

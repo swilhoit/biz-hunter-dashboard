@@ -128,6 +128,58 @@ function DealPipeline() {
     setActiveId(null);
   };
 
+  const handleEditDeal = async (dealId, updates) => {
+    try {
+      // Optimistically update the UI
+      setDeals(prevDeals =>
+        prevDeals.map(deal =>
+          deal.id === dealId
+            ? { ...deal, ...updates }
+            : deal
+        )
+      );
+
+      // Persist to database
+      const result = await databaseAdapter.updateDeal(dealId, updates);
+      
+      if (result.error) {
+        console.error('Failed to update deal:', result.error);
+        // Reload deals to get correct state
+        const refreshResult = await databaseAdapter.getUserDeals(user.uid);
+        if (!refreshResult.error) {
+          setDeals(refreshResult.data || []);
+        }
+        throw new Error(result.error.message || 'Failed to update deal');
+      }
+    } catch (error) {
+      console.error('Error updating deal:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteDeal = async (dealId) => {
+    try {
+      // Optimistically remove from UI
+      setDeals(prevDeals => prevDeals.filter(deal => deal.id !== dealId));
+
+      // Delete from database
+      const result = await databaseAdapter.deleteDeal(dealId);
+      
+      if (result.error) {
+        console.error('Failed to delete deal:', result.error);
+        // Reload deals to get correct state
+        const refreshResult = await databaseAdapter.getUserDeals(user.uid);
+        if (!refreshResult.error) {
+          setDeals(refreshResult.data || []);
+        }
+        throw new Error(result.error.message || 'Failed to delete deal');
+      }
+    } catch (error) {
+      console.error('Error deleting deal:', error);
+      throw error;
+    }
+  };
+
   const activeDeal = activeId ? deals.find(deal => deal.id === activeId) : null;
 
   return (
@@ -193,6 +245,8 @@ function DealPipeline() {
                           key={stage.status}
                           stage={stage}
                           deals={deals.filter(deal => deal.status === stage.status)}
+                          onEditDeal={handleEditDeal}
+                          onDeleteDeal={handleDeleteDeal}
                         />
                       ))}
                     </SortableContext>
