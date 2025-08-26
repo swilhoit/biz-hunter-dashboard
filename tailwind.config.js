@@ -121,6 +121,8 @@ export default {
       maxWidth: {
         '8xl': '88rem',
         '9xl': '96rem',
+        '10xl': '104rem',
+        'full': '100%',
       },
       zIndex: {
         60: '60',

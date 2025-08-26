@@ -139,7 +139,7 @@ function DealDetail() {
         <Header />
         <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
           <main className="grow">
-            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
+            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
               <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-12">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 mx-auto text-indigo-500 animate-spin mb-4" />
@@ -161,7 +161,7 @@ function DealDetail() {
         <Header />
         <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
           <main className="grow">
-            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
+            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
               <div className="text-center py-12">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                   Deal not found
@@ -188,7 +188,7 @@ function DealDetail() {
       <Header />
       <div className="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
         <main className="grow">
-          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-6xl mx-auto">
+          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
             
             {/* Header */}
             <div className="mb-8">

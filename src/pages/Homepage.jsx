@@ -32,7 +32,7 @@ function Homepage() {
       <main className="grow">
         {/* Hero Section */}
         <section className="relative bg-gradient-to-b from-orange-50 to-white dark:from-stone-900 dark:to-stone-800 py-20">
-          <div className="px-4 sm:px-6 lg:px-8 max-w-9xl mx-auto">
+          <div className="px-4 sm:px-6 lg:px-8 w-full mx-auto">
             <div className="text-center max-w-3xl mx-auto">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-stone-100 mb-6">
                 Find Your Next
@@ -58,7 +58,7 @@ function Homepage() {
 
         {/* Stats Section */}
         <section className="py-12 bg-white dark:bg-stone-900 border-b border-gray-200 dark:border-stone-700">
-          <div className="px-4 sm:px-6 lg:px-8 max-w-9xl mx-auto">
+          <div className="px-4 sm:px-6 lg:px-8 w-full mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {stats.map((stat, index) => {
                 const Icon = stat.icon;
@@ -78,7 +78,7 @@ function Homepage() {
 
         {/* Recent Listings Section */}
         <section className="py-16 bg-stone-50 dark:bg-stone-800">
-          <div className="px-4 sm:px-6 lg:px-8 max-w-9xl mx-auto">
+          <div className="px-4 sm:px-6 lg:px-8 w-full mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold text-gray-900 dark:text-stone-100 mb-4">
                 <span className="text-orange-600 dark:text-orange-500">Fresh</span> Listings Just Added

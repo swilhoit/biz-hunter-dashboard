@@ -232,7 +232,7 @@ function ListingsFeed() {
       <div className="flex flex-col min-h-screen overflow-hidden">
         <Header />
         <main className="grow">
-          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+          <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
             <div className="text-center py-12">
               <p className="text-red-600">Error loading listings: {error.message}</p>
               <button
@@ -252,7 +252,7 @@ function ListingsFeed() {
     <div className="flex flex-col min-h-screen overflow-hidden">
       <Header />
       <main className="grow">
-        <div className="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+        <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
           {/* Page header */}
           <div className="sm:flex sm:justify-between sm:items-center mb-8">
             <div className="mb-4 sm:mb-0">
