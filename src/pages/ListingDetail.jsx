@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
+import Footer from '../partials/Footer';
 import { useBusinessListing } from '../hooks/useBusinessListings';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -211,16 +212,16 @@ function ListingDetail() {
             
             {/* Header */}
             <div className="mb-8">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center w-full">
                   <button
                     onClick={() => navigate('/feed')}
-                    className="mr-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg hover:bg-gray-100 dark:hover:bg-stone-700"
+                    className="mr-3 sm:mr-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-stone-300 rounded-lg hover:bg-gray-100 dark:hover:bg-stone-700 flex-shrink-0"
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
-                  <div>
-                    <h1 className="text-2xl md:text-3xl text-gray-800 dark:text-stone-100 font-bold">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-xl sm:text-2xl md:text-3xl text-gray-800 dark:text-stone-100 font-bold break-words">
                       {listing.business_name || listing.name}
                     </h1>
                     <div className="flex items-center mt-2 space-x-4">
@@ -236,7 +237,7 @@ function ListingDetail() {
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
                   <button
                     onClick={handleAddToPipeline}
                     disabled={isAddingToPipeline || authLoading}
@@ -270,15 +271,15 @@ function ListingDetail() {
             </div>
 
             {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               
               {/* Main Content */}
-              <div className="lg:col-span-2 space-y-8">
+              <div className="lg:col-span-2 space-y-6 lg:space-y-8">
                 
                 {/* Key Metrics */}
-                <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-stone-100 mb-6">Key Metrics</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-4 sm:p-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-stone-100 mb-4 sm:mb-6">Key Metrics</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4">
                       <div className="flex items-center text-green-700 dark:text-green-300 mb-2">
                         <DollarSign className="w-5 h-5 mr-2" />
@@ -302,9 +303,9 @@ function ListingDetail() {
                 </div>
 
                 {/* Financial Overview */}
-                <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-stone-100 mb-6">Financial Overview</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-4 sm:p-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-stone-100 mb-4 sm:mb-6">Financial Overview</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 dark:text-stone-400 mb-3">Annual Performance</h3>
                       <div className="space-y-3">
@@ -451,6 +452,7 @@ function ListingDetail() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

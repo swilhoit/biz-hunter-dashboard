@@ -1,0 +1,14 @@
+[
+  {
+    "origin": ["https://www.bizhunter.ai", "https://bizhunter.ai", "http://localhost:3000", "http://localhost:5173"],
+    "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin",
+      "Access-Control-Allow-Headers",
+      "Access-Control-Allow-Methods",
+      "x-goog-resumable"
+    ]
+  }
+]

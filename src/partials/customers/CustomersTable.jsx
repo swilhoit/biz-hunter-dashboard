@@ -177,8 +177,73 @@ function CustomersTable({
       </header>
       <div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Mobile: Card View */}
+        <div className="md:hidden space-y-3 px-5 pb-5">
+          {list.map(customer => (
+            <div key={customer.id} className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center">
+                  <label className="inline-flex mr-3">
+                    <span className="sr-only">Select</span>
+                    <input 
+                      className="form-checkbox" 
+                      type="checkbox" 
+                      id={customer.id}
+                      checked={isCheck.includes(customer.id)}
+                      onChange={handleClick}
+                    />
+                  </label>
+                  <div className="flex items-center">
+                    <img className="w-10 h-10 rounded-full mr-3" src={customer.image} alt={customer.name} />
+                    <div>
+                      <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{customer.name}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">{customer.email}</div>
+                    </div>
+                  </div>
+                </div>
+                <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  {customer.fav ? 
+                    <svg className="w-4 h-4 fill-current text-amber-500" viewBox="0 0 16 16">
+                      <path d="M10 5.934L8 0 6 5.934H0l4.89 3.954L2.968 16 8 12.223 13.032 16 11.11 9.888 16 5.934z" />
+                    </svg> :
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 16 16">
+                      <path d="M10 5.934L8 0 6 5.934H0l4.89 3.954L2.968 16 8 12.223 13.032 16 11.11 9.888 16 5.934zM8 11.223l-3.842 2.844 1.462-4.706L1.736 6.934h4.748L8 2.223l1.516 4.711h4.748L10.38 9.361l1.462 4.706L8 11.223z" />
+                    </svg>
+                  }
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Location:</span>
+                  <div className="font-medium text-gray-800 dark:text-gray-100">{customer.location}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Orders:</span>
+                  <div className="font-medium text-gray-800 dark:text-gray-100">{customer.orders}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Last Order:</span>
+                  <div className="font-medium text-gray-800 dark:text-gray-100">{customer.lastOrder}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Total Spent:</span>
+                  <div className="font-medium text-green-600 dark:text-green-400">{customer.spent}</div>
+                </div>
+              </div>
+              
+              {customer.refunds !== '-' && (
+                <div className="mt-2 text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">Refunds:</span>
+                  <span className="ml-1 font-medium text-red-600 dark:text-red-400">{customer.refunds}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="table-auto w-full dark:text-gray-300">
             {/* Table header */}
             <thead className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/20 border-t border-b border-gray-100 dark:border-gray-700/60">

@@ -165,7 +165,14 @@
       "WebFetch(domain:biz-hunter-dashboard-67ddmbzw8-swilhoits-projects.vercel.app)",
       "Bash(firebase firestore:rules:*)",
       "WebFetch(domain:biz-hunter-dashboard-4m8p6lbk3-swilhoits-projects.vercel.app)",
-      "WebFetch(domain:biz-hunter-dashboard-ty7v6jpqp-swilhoits-projects.vercel.app)"
+      "WebFetch(domain:biz-hunter-dashboard-ty7v6jpqp-swilhoits-projects.vercel.app)",
+      "Bash(./set-cors.sh:*)",
+      "Bash(gsutil ls:*)",
+      "Bash(firebase init:*)",
+      "Bash(firebase projects:get:*)",
+      "Bash(gsutil mb:*)",
+      "Bash(gsutil cors get:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }
