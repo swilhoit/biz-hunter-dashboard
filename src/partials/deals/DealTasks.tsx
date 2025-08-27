@@ -222,11 +222,11 @@ function DealTasks({ dealId }: DealTasksProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div className="min-w-0 flex-1">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Tasks</h3>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
               <span className="flex items-center">
                 <div className="w-3 h-3 bg-slate-400 rounded-full mr-2"></div>
                 To Do: {taskCounts.todo}
@@ -241,7 +241,7 @@ function DealTasks({ dealId }: DealTasksProps) {
               </span>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {/* View Toggle */}
             <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
               <button
@@ -278,7 +278,7 @@ function DealTasks({ dealId }: DealTasksProps) {
 
       {/* Kanban Board View */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           {COLUMNS.map(column => (
             <div
               key={column.id}
@@ -381,7 +381,70 @@ function DealTasks({ dealId }: DealTasksProps) {
       {/* Table View */}
       {viewMode === 'table' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile: Card layout for tasks */}
+          <div className="md:hidden space-y-3 p-4">
+            {tasks.map(task => (
+              <div key={task.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {task.title}
+                    </h4>
+                    {task.description && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {task.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2 ml-3">
+                    <div className={`w-2 h-2 rounded-full ${getPriorityColor(task.priority)}`}></div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                      task.status === 'todo' ? 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200' :
+                      task.status === 'doing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    }`}>
+                      {task.status === 'todo' ? 'To Do' : task.status === 'doing' ? 'Doing' : 'Done'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center space-x-3">
+                    {task.assignee && (
+                      <div className="flex items-center">
+                        <User className="w-3 h-3 mr-1" />
+                        <span className="truncate max-w-20">{task.assignee.full_name}</span>
+                      </div>
+                    )}
+                    {task.due_date && (
+                      <div className={`flex items-center ${isOverdue(task.due_date) ? 'text-red-600' : ''}`}>
+                        <Calendar className="w-3 h-3 mr-1" />
+                        <span>{formatDate(task.due_date)}</span>
+                        {isOverdue(task.due_date) && <AlertCircle className="w-3 h-3 ml-1" />}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setEditingTask(task)}
+                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Desktop: Table layout */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>

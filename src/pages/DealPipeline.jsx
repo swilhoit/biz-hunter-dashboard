@@ -4,6 +4,7 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useAuth } from '../contexts/AuthContext';
 
 import Header from '../partials/Header';
+import Footer from '../partials/Footer';
 import PipelineColumn from '../partials/deals/PipelineColumn';
 import DealCard from '../partials/deals/DealCard';
 import PipelineStats from '../partials/deals/PipelineStats';
@@ -260,6 +261,7 @@ function DealPipeline() {
             )}
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

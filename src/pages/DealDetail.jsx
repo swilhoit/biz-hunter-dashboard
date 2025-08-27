@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
+import Footer from '../partials/Footer';
 import { useToast } from '../contexts/ToastContext';
 import { 
   ArrowLeft, 
@@ -479,6 +480,7 @@ function DealDetail() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

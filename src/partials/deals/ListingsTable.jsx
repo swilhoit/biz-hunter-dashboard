@@ -4,12 +4,14 @@ import { ExternalLink, Plus, Building2, Calendar, DollarSign, ImageIcon, Trash2,
 import { getFallbackImage } from '../../utils/imageUtils';
 import { useViewportPrefetch } from '../../hooks/useViewportPrefetch';
 import DataPreloader from '../../services/DataPreloader';
+import ListingCard from './ListingCard';
 // Auth removed - simplified version
 
-function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick, sortBy, sortDirection, onSort }) {
+function ListingsTable({ listings, selectedListings = [], onSelectionChange, onAddToPipeline, onDelete, onListingClick, sortBy, sortDirection, onSort, viewMode = 'responsive' }) {
   // No auth needed in simplified version
   const [deletingId, setDeletingId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Viewport-based prefetching
   const { observeListing, prefetchOnHover } = useViewportPrefetch({
@@ -20,6 +22,18 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
   });
   
   const rowRefs = useRef({});
+
+  // Check screen size for mobile responsiveness
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   const formatCurrency = (amount) => {
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -79,6 +93,53 @@ function ListingsTable({ listings, selectedListings = [], onSelectionChange, onA
       ? <ChevronUp className="w-4 h-4 text-orange-600 dark:text-orange-500" />
       : <ChevronDown className="w-4 h-4 text-orange-600 dark:text-orange-500" />;
   };
+
+  // If mobile or viewMode is cards, show card layout
+  if ((isMobile && viewMode === 'responsive') || viewMode === 'cards') {
+    return (
+      <div className="space-y-4">
+        {listings.map((listing) => (
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            onClick={() => onListingClick ? onListingClick(listing.id) : null}
+            onAddToPipeline={onAddToPipeline}
+            showActions={true}
+          />
+        ))}
+        
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-stone-900 rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-stone-100 mb-4">
+                Confirm Delete
+              </h3>
+              <p className="text-gray-600 dark:text-stone-400 mb-6">
+                Are you sure you want to delete this listing? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-200"
+                  disabled={deletingId === showDeleteConfirm}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(showDeleteConfirm)}
+                  className="btn bg-red-600 text-white hover:bg-red-700"
+                  disabled={deletingId === showDeleteConfirm}
+                >
+                  {deletingId === showDeleteConfirm ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-stone-900 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 overflow-hidden">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../partials/Header';
+import Footer from '../partials/Footer';
 import ListingsTable from '../partials/deals/ListingsTable';
 import { useCachedListings } from '../hooks/useCachedListings';
 import { ArrowRight, TrendingUp, Search, DollarSign, Loader2 } from 'lucide-react';
@@ -33,8 +34,8 @@ function Homepage() {
         {/* Hero Section */}
         <section className="relative bg-gradient-to-b from-orange-50 to-white dark:from-stone-900 dark:to-stone-800 py-20">
           <div className="px-4 sm:px-6 lg:px-8 w-full mx-auto">
-            <div className="text-center max-w-3xl mx-auto">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-stone-100 mb-6">
+            <div className="text-center w-full max-w-3xl mx-auto px-4 sm:px-0">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-stone-100 mb-6 leading-tight">
                 Find Your Next
                 <span className="text-orange-600 dark:text-orange-500"> E-Commerce </span>
                 Acquisition
@@ -79,8 +80,8 @@ function Homepage() {
         {/* Recent Listings Section */}
         <section className="py-16 bg-stone-50 dark:bg-stone-800">
           <div className="px-4 sm:px-6 lg:px-8 w-full mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-stone-100 mb-4">
+            <div className="text-center mb-12 w-full">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-stone-100 mb-4 px-4 sm:px-0">
                 <span className="text-orange-600 dark:text-orange-500">Fresh</span> Listings Just Added
                 {isStale && <span className="ml-2 text-sm font-normal text-orange-600">(updating...)</span>}
               </h2>
@@ -150,6 +151,7 @@ function Homepage() {
           </div>
         </section>
       </main>
+      <Footer />
     </div>
   );
 }

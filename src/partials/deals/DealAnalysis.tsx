@@ -4,14 +4,12 @@ import {
   TrendingUp, 
   Target, 
   AlertTriangle, 
-  Search, 
   BarChart3, 
   Lightbulb,
   Loader2,
   RefreshCw,
   Award,
   Users,
-  Calendar,
   DollarSign
 } from 'lucide-react';
 import AIAnalysisService from '../../services/AIAnalysisService';
@@ -20,16 +18,16 @@ interface DealAnalysisProps {
   deal: {
     id: string;
     business_name: string;
-    amazon_category: string;
-    amazon_subcategory?: string;
+    category?: string;
+    industry?: string;
     asking_price: number;
     annual_revenue: number;
     annual_profit: number;
     monthly_revenue?: number;
     monthly_profit?: number;
-    amazon_store_url?: string;
-    fba_percentage?: number;
     business_age?: number;
+    location?: string;
+    description?: string;
     [key: string]: unknown;
   };
 }
@@ -52,16 +50,13 @@ interface AnalysisReport {
     criticalRisks?: string[];
     redFlags?: string[];
   };
-  keywordAnalysis: {
-    primaryKeywords: Array<{
-      keyword: string;
-      searchVolume: string;
-      difficulty: string;
-      relevance: number;
-    }>;
-    longTailOpportunities: string[];
-    seasonalTrends: string[];
-    keywordStrategy: string;
+  marketAnalysis: {
+    targetMarket: string;
+    marketSize: string;
+    growthRate: string;
+    keyTrends: string[];
+    opportunities: string[];
+    threats: string[];
   };
   opportunityScore: {
     overall: number;
@@ -142,11 +137,6 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Generating AI analysis...</p>
           <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">{loadingStage || 'This may take a few moments'}</p>
-          {loadingStage.includes('document') && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-              Analyzing uploaded documents for deeper insights...
-            </p>
-          )}
         </div>
       </div>
     );
@@ -219,14 +209,6 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           </div>
         </div>
         <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{analysis.summary}</p>
-        {analysis.summary.includes('document') && (
-          <div className="mt-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
-            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Analysis enhanced with uploaded documents
-          </div>
-        )}
       </div>
 
       {/* Opportunity Score */}
@@ -388,45 +370,38 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         )}
       </div>
 
-      {/* Keyword Analysis */}
+      {/* Market Analysis */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center mb-6">
-          <Search className="h-5 w-5 text-blue-600 mr-2" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Keyword Research</h3>
+          <BarChart3 className="h-5 w-5 text-blue-600 mr-2" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Market Analysis</h3>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Primary Keywords</h4>
-            <div className="space-y-2">
-              {analysis.keywordAnalysis.primaryKeywords.slice(0, 5).map((keyword, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{keyword.keyword}</span>
-                  <div className="flex items-center space-x-2 text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">Vol: {keyword.searchVolume}</span>
-                    <span className="text-gray-600 dark:text-gray-400">Diff: {keyword.difficulty}</span>
-                  </div>
-                </div>
-              ))}
+            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Market Overview</h4>
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Target Market</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{analysis.marketAnalysis.targetMarket}</div>
+              </div>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Market Size</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{analysis.marketAnalysis.marketSize}</div>
+              </div>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Growth Rate</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{analysis.marketAnalysis.growthRate}</div>
+              </div>
             </div>
           </div>
           
           <div>
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Long-tail Opportunities</h4>
-            <ul className="space-y-1">
-              {analysis.keywordAnalysis.longTailOpportunities.slice(0, 5).map((opportunity, index) => (
+            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Key Market Trends</h4>
+            <ul className="space-y-2">
+              {analysis.marketAnalysis.keyTrends.map((trend, index) => (
                 <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start">
-                  <BarChart3 className="h-3 w-3 mt-1 mr-2 flex-shrink-0" />
-                  {opportunity}
-                </li>
-              ))}
-            </ul>
-            
-            <h5 className="font-medium text-gray-900 dark:text-gray-100 mt-4 mb-2">Seasonal Trends</h5>
-            <ul className="space-y-1">
-              {analysis.keywordAnalysis.seasonalTrends.slice(0, 3).map((trend, index) => (
-                <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start">
-                  <Calendar className="h-3 w-3 mt-1 mr-2 flex-shrink-0" />
+                  <TrendingUp className="h-3 w-3 mt-1 mr-2 flex-shrink-0" />
                   {trend}
                 </li>
               ))}
@@ -434,9 +409,23 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           </div>
         </div>
         
-        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-          <h5 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Keyword Strategy</h5>
-          <p className="text-sm text-gray-700 dark:text-gray-300">{analysis.keywordAnalysis.keywordStrategy}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <h5 className="font-medium text-green-800 dark:text-green-200 mb-2">Market Opportunities</h5>
+            <ul className="space-y-1">
+              {analysis.marketAnalysis.opportunities.map((opportunity, index) => (
+                <li key={index} className="text-sm text-green-700 dark:text-green-300">• {opportunity}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <h5 className="font-medium text-red-800 dark:text-red-200 mb-2">Market Threats</h5>
+            <ul className="space-y-1">
+              {analysis.marketAnalysis.threats.map((threat, index) => (
+                <li key={index} className="text-sm text-red-700 dark:text-red-300">• {threat}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 

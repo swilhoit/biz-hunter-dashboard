@@ -42,7 +42,13 @@ export const tasksAdapter = {
     }
   },
 
-  async createTask(taskData) {
+  // Add alias for component compatibility
+  async fetchDealTasks(dealId) {
+    const result = await this.getTasksForDeal(dealId);
+    return result.data || [];
+  },
+
+  async createTask(dealId, taskData) {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
@@ -50,9 +56,11 @@ export const tasksAdapter = {
       const tasksRef = collection(db, 'tasks');
       const newTask = {
         ...taskData,
+        dealId,
         created_by: user.uid,
         created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
+        updated_at: serverTimestamp(),
+        sort_order: taskData.sort_order || 0
       };
       
       const docRef = await addDoc(tasksRef, newTask);
@@ -75,6 +83,10 @@ export const tasksAdapter = {
       console.error('Error updating task:', error);
       return { error };
     }
+  },
+
+  async updateTaskStatus(taskId, status) {
+    return this.updateTask(taskId, { status });
   },
 
   async deleteTask(taskId) {
@@ -107,6 +119,12 @@ export const filesAdapter = {
       console.error('Error fetching files:', error);
       return { data: null, error };
     }
+  },
+
+  // Add alias for component compatibility
+  async fetchDealFiles(dealId) {
+    const result = await this.getFilesForDeal(dealId);
+    return result.data || [];
   },
 
   async uploadFile(dealId, file, metadata = {}) {

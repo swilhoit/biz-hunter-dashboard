@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../partials/Header';
+import Footer from '../partials/Footer';
 import ListingsTable from '../partials/deals/ListingsTable';
 import ListingCard from '../partials/deals/ListingCard';
 import { useCachedListings } from '../hooks/useCachedListings';
@@ -124,8 +125,8 @@ function ListingsFeed() {
       
       {showFilters && (
         <div className="p-4 border-t border-gray-200 dark:border-stone-700">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="md:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-stone-300 mb-1">
             Keyword Search
           </label>
@@ -254,14 +255,17 @@ function ListingsFeed() {
       <main className="grow">
         <div className="px-4 sm:px-6 lg:px-8 py-8 w-full mx-auto">
           {/* Page header */}
-          <div className="sm:flex sm:justify-between sm:items-center mb-8">
-            <div className="mb-4 sm:mb-0">
-              <p className="text-gray-600 dark:text-gray-400">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+            <div className="w-full sm:w-auto">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-stone-100 mb-1">
+                Business Listings
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">
                 {totalCount || listings.length} listings available
                 {isStale && <span className="ml-2 text-xs text-orange-600">(updating...)</span>}
               </p>
             </div>
-            <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
               <button
                 onClick={handleRefresh}
                 disabled={isLoading}
@@ -274,16 +278,18 @@ function ListingsFeed() {
                 )}
                 <span className="hidden xs:block ml-2">Refresh</span>
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-2 rounded ${viewMode === 'table' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-stone-700 text-gray-600 dark:text-stone-400'}`}
+                  className={`p-2 text-sm font-medium transition-colors ${viewMode === 'table' ? 'bg-orange-600 text-white' : 'bg-white dark:bg-stone-700 text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-600'}`}
+                  title="Table View"
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('cards')}
-                  className={`p-2 rounded ${viewMode === 'cards' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-stone-700 text-gray-600 dark:text-stone-400'}`}
+                  className={`p-2 text-sm font-medium transition-colors ${viewMode === 'cards' ? 'bg-orange-600 text-white' : 'bg-white dark:bg-stone-700 text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-600'}`}
+                  title="Card View"
                 >
                   <Grid className="w-4 h-4" />
                 </button>
@@ -368,6 +374,7 @@ function ListingsFeed() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
