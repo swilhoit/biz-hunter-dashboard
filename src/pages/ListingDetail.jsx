@@ -240,7 +240,7 @@ function ListingDetail() {
                   <button
                     onClick={handleAddToPipeline}
                     disabled={isAddingToPipeline || authLoading}
-                    className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isAddingToPipeline ? (
                       <>
@@ -259,7 +259,7 @@ function ListingDetail() {
                       href={listing.listing_url || listing.original_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-200"
+                      className="btn bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-200 whitespace-nowrap"
                     >
                       <ExternalLink className="w-4 h-4 mr-2" />
                       View Original
