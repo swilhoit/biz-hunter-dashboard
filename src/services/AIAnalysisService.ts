@@ -108,10 +108,8 @@ class AIAnalysisService {
   private apiUrl: string;
 
   constructor() {
-    // Use Vercel serverless function in production, local API in development
-    this.apiUrl = process.env.NODE_ENV === 'production' 
-      ? '/api/openai' 
-      : 'http://localhost:3000/api/openai';
+    // Always use relative path - Vite will proxy in development
+    this.apiUrl = '/api/openai';
   }
 
   private async callOpenAI(

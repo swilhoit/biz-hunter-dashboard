@@ -21,7 +21,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173
+    port: 5173,
+    proxy: {
+      '/api/openai': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   preview: {
     host: '0.0.0.0',
