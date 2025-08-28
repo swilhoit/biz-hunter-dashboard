@@ -20,12 +20,14 @@ import {
   Trash2,
   FileText,
   CheckCircle,
-  Clock
+  Clock,
+  Brain
 } from 'lucide-react';
 import { dealsAdapter } from '../lib/database-adapter';
 import { auth } from '../lib/firebase';
 import DealTasks from '../partials/deals/DealTasks';
 import DealFiles from '../partials/deals/DealFiles';
+import DealAnalysis from '../partials/deals/DealAnalysis';
 
 function DealDetail() {
   const { id } = useParams();
@@ -237,21 +239,31 @@ function DealDetail() {
             {/* Tabs */}
             <div className="border-b border-gray-200 dark:border-stone-700 mb-8">
               <nav className="-mb-px flex space-x-8">
-                {['overview', 'tasks', 'documents', 'notes'].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`
-                      py-2 px-1 border-b-2 font-medium text-sm capitalize
-                      ${activeTab === tab
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-stone-400 dark:hover:text-stone-200'
-                      }
-                    `}
-                  >
-                    {tab}
-                  </button>
-                ))}
+                {[
+                  { id: 'overview', label: 'Overview', icon: Building2 },
+                  { id: 'analysis', label: 'AI Analysis', icon: Brain },
+                  { id: 'tasks', label: 'Tasks', icon: CheckCircle },
+                  { id: 'documents', label: 'Documents', icon: FileText },
+                  { id: 'notes', label: 'Notes', icon: Edit }
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`
+                        py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-2
+                        ${activeTab === tab.id
+                          ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-stone-400 dark:hover:text-stone-200'
+                        }
+                      `}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
               </nav>
             </div>
             
@@ -441,6 +453,10 @@ function DealDetail() {
                   </div>
                 </div>
               </div>
+            )}
+            
+            {activeTab === 'analysis' && deal && (
+              <DealAnalysis deal={deal} />
             )}
             
             {activeTab === 'tasks' && (
