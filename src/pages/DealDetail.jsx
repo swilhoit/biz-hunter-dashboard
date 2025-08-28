@@ -580,12 +580,14 @@ function DealDetail() {
                 onAIExtract={async (request) => {
                   try {
                     const extractor = new BusinessDataExtractor();
-                    const result = await extractor.extractFromDocuments(request);
+                    // Use the new extract method that handles both website and documents
+                    const result = await extractor.extract(request);
                     if (result.success) {
                       const updateResult = await dealsAdapter.updateDeal(id, result.extracted_fields);
                       if (updateResult.error) throw updateResult.error;
                       setDeal({...deal, ...result.extracted_fields});
-                      showSuccess(`Extracted ${Object.keys(result.extracted_fields).length} fields with AI`);
+                      const source = request.website_url ? 'website' : 'documents';
+                      showSuccess(`Extracted ${Object.keys(result.extracted_fields).length} fields from ${source}`);
                       if (result.warnings && result.warnings.length > 0) {
                         console.warn('AI extraction warnings:', result.warnings);
                       }

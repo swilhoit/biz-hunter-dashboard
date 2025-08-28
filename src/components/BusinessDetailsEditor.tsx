@@ -3,7 +3,7 @@ import {
   Building2, Globe, Users, DollarSign, TrendingUp, 
   Shield, Brain, Plus, X, Save, Loader2, ChevronDown, ChevronUp,
   Facebook, Instagram, Linkedin, Twitter, Youtube, Hash,
-  MapPin, Package, Briefcase, Star, AlertCircle, Sparkles
+  MapPin, Package, Briefcase, Star, AlertCircle, Sparkles, FileText
 } from 'lucide-react';
 import { ExtendedDeal, AIExtractionRequest } from '../types/deal-extended';
 // @ts-ignore - JavaScript module
@@ -22,6 +22,9 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
   const [isExtracting, setIsExtracting] = useState(false);
   const [formData, setFormData] = useState<Partial<ExtendedDeal>>(deal);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['identity']));
+  const [showExtractDialog, setShowExtractDialog] = useState(false);
+  const [extractSource, setExtractSource] = useState<'website' | 'documents'>('website');
+  const [websiteUrl, setWebsiteUrl] = useState(deal.website_url || '');
 
   const toggleSection = (section: string) => {
     const newExpanded = new Set(expandedSections);
@@ -45,16 +48,35 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
     }
   };
 
-  const handleAIExtract = async (extractionType: AIExtractionRequest['extraction_type']) => {
+  const handleAIExtract = async () => {
     if (!onAIExtract) return;
     
     setIsExtracting(true);
     try {
-      await onAIExtract({
-        deal_id: deal.id,
-        extraction_type: extractionType,
-        override_existing: false
-      });
+      if (extractSource === 'website') {
+        // Extract from website URL
+        if (!websiteUrl) {
+          alert('Please enter a website URL');
+          setIsExtracting(false);
+          return;
+        }
+        
+        await onAIExtract({
+          deal_id: deal.id,
+          extraction_type: 'full',
+          override_existing: false,
+          website_url: websiteUrl
+        } as any);
+      } else {
+        // Extract from documents
+        await onAIExtract({
+          deal_id: deal.id,
+          extraction_type: 'full',
+          override_existing: false
+        });
+      }
+      
+      setShowExtractDialog(false);
       // Refresh form data after extraction
       window.location.reload(); // Simple refresh for now
     } catch (error) {
@@ -135,7 +157,7 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
           <div className="flex items-center space-x-2">
             {onAIExtract && (
               <button
-                onClick={() => handleAIExtract('full')}
+                onClick={() => setShowExtractDialog(true)}
                 disabled={isExtracting}
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors disabled:opacity-50"
               >
@@ -180,6 +202,116 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
           </div>
         </div>
       </div>
+
+      {/* AI Extraction Dialog */}
+      {showExtractDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                <Sparkles className="h-5 w-5 mr-2 text-purple-600" />
+                AI Auto-Fill Business Details
+              </h3>
+              <button
+                onClick={() => setShowExtractDialog(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                  Choose extraction source:
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setExtractSource('website')}
+                    className={`p-3 rounded-lg border-2 transition-colors ${
+                      extractSource === 'website'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    <Globe className="h-6 w-6 mx-auto mb-2 text-purple-600" />
+                    <div className="text-sm font-medium">Website</div>
+                    <div className="text-xs text-gray-500 mt-1">Extract from business website</div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setExtractSource('documents')}
+                    className={`p-3 rounded-lg border-2 transition-colors ${
+                      extractSource === 'documents'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    <FileText className="h-6 w-6 mx-auto mb-2 text-purple-600" />
+                    <div className="text-sm font-medium">Documents</div>
+                    <div className="text-xs text-gray-500 mt-1">Extract from uploaded files</div>
+                  </button>
+                </div>
+              </div>
+              
+              {extractSource === 'website' && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter the business website to extract company information
+                  </p>
+                </div>
+              )}
+              
+              {extractSource === 'documents' && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    AI will analyze all uploaded documents to extract business information.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Make sure you've uploaded relevant documents in the Documents tab.
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  onClick={() => setShowExtractDialog(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAIExtract}
+                  disabled={isExtracting || (extractSource === 'website' && !websiteUrl)}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Extracting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      <span>Start Extraction</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sections */}
       <div className="divide-y divide-gray-200 dark:divide-gray-700">
