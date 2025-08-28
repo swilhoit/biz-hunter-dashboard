@@ -5,6 +5,15 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install --force --legacy-peer-deps",
   "public": true,
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "v2": true
+    }
+  },
+  "github": {
+    "autoAlias": false
+  },
   "functions": {
     "api/listings/index.js": {
       "maxDuration": 30
