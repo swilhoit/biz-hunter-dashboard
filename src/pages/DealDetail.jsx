@@ -22,13 +22,15 @@ import {
   CheckCircle,
   Clock,
   Brain,
-  Database
+  Database,
+  BarChart3
 } from 'lucide-react';
 import { dealsAdapter } from '../lib/database-adapter';
 import { auth } from '../lib/firebase';
 import DealTasks from '../partials/deals/DealTasks';
 import DealFiles from '../partials/deals/DealFiles';
 import DealAnalysis from '../partials/deals/DealAnalysis';
+import DealFinancials from '../partials/deals/DealFinancials';
 import BusinessDetailsEditor from '../components/BusinessDetailsEditor';
 import { BusinessDataExtractor } from '../services/BusinessDataExtractor';
 
@@ -291,6 +293,7 @@ function DealDetail() {
               <nav className="-mb-px flex space-x-8">
                 {[
                   { id: 'overview', label: 'Overview', icon: Building2 },
+                  { id: 'financials', label: 'Financials', icon: BarChart3 },
                   { id: 'details', label: 'Business Details', icon: Database },
                   { id: 'analysis', label: 'AI Analysis', icon: Brain },
                   { id: 'tasks', label: 'Tasks', icon: CheckCircle },
@@ -570,6 +573,10 @@ function DealDetail() {
                   </div>
                 </div>
               </div>
+            )}
+            
+            {activeTab === 'financials' && deal && (
+              <DealFinancials deal={deal} />
             )}
             
             {activeTab === 'details' && deal && (

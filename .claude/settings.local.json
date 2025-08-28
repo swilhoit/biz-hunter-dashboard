@@ -172,7 +172,8 @@
       "Bash(firebase projects:get:*)",
       "Bash(gsutil mb:*)",
       "Bash(gsutil cors get:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": []
   }
