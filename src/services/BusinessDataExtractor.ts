@@ -12,16 +12,18 @@ export class BusinessDataExtractor {
   /**
    * Extract business details from website
    */
-  async extractFromWebsite(dealId: string, websiteUrl: string): Promise<AIExtractionResponse> {
+  async extractFromWebsite(dealId: string, websiteUrl: string, progressCallback?: (stage: string) => void): Promise<AIExtractionResponse> {
     try {
       if (!websiteUrl || !websiteUrl.startsWith('http')) {
         throw new Error('Invalid website URL');
       }
 
       // Fetch website content
+      progressCallback?.('Fetching website content...');
       const websiteContent = await this.fetchWebsiteContent(websiteUrl);
       
       // Extract business details from website
+      progressCallback?.('Analyzing website content with AI...');
       const extractedData = await this.analyzeWebsiteContent(websiteContent, websiteUrl);
       
       return {
@@ -187,13 +189,15 @@ export class BusinessDataExtractor {
   /**
    * Extract business details from documents or website
    */
-  async extract(request: AIExtractionRequest & { website_url?: string }): Promise<AIExtractionResponse> {
+  async extract(request: AIExtractionRequest): Promise<AIExtractionResponse> {
     // If website URL is provided, extract from website
     if (request.website_url) {
-      return this.extractFromWebsite(request.deal_id, request.website_url);
+      request.progress_callback?.('Fetching website content...');
+      return this.extractFromWebsite(request.deal_id, request.website_url, request.progress_callback);
     }
     
     // Otherwise, extract from documents
+    request.progress_callback?.('Loading documents...');
     return this.extractFromDocuments(request);
   }
 
@@ -206,23 +210,34 @@ export class BusinessDataExtractor {
         throw new Error('Deal not found');
       }
 
-      // Get documents if specific IDs provided, otherwise get all deal documents
-      let documents = [];
+      // Get all deal documents
+      const files = await filesAdapter.getFilesForDeal(request.deal_id);
+      
+      // Filter documents if specific IDs provided
+      let documents = files;
       if (request.document_ids && request.document_ids.length > 0) {
-        // For Firebase, we'll fetch files associated with the deal
-        const files = await filesAdapter.getFilesForDeal(request.deal_id);
         documents = files.filter((file: any) => 
           request.document_ids?.includes(file.id)
         );
       }
+      
+      if (!documents || documents.length === 0) {
+        throw new Error('No documents found for analysis');
+      }
 
+      // Process each document and extract text/content
+      request.progress_callback?.('Processing documents...');
+      const documentContents = await this.processDocuments(documents, request.progress_callback);
+      
       // Combine all available information
-      const context = this.buildContext(deal, documents);
+      const context = this.buildContext(deal, documentContents);
 
       // Extract based on type
       let extractedData: Partial<ExtendedDeal> = {};
       let confidenceScores: Record<string, number> = {};
 
+      request.progress_callback?.('Extracting business information with AI...');
+      
       switch (request.extraction_type) {
         case 'full':
           const results = await Promise.all([
@@ -287,7 +302,34 @@ export class BusinessDataExtractor {
     }
   }
 
-  private buildContext(deal: any, documents: any[]): string {
+  private async processDocuments(documents: any[], progressCallback?: (stage: string) => void): Promise<any[]> {
+    const processedDocs = [];
+    
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      progressCallback?.(`Processing document ${i + 1}/${documents.length}: ${doc.file_name}`);
+      
+      try {
+        // For now, we'll use document metadata
+        // In production, this would extract actual content from PDFs, etc.
+        processedDocs.push({
+          id: doc.id,
+          name: doc.file_name,
+          type: doc.category || 'other',
+          description: doc.description || '',
+          // In real implementation, extract text from PDF/docs
+          content: `Document: ${doc.file_name}\nType: ${doc.category}\nDescription: ${doc.description || 'No description'}`,
+          metadata: doc
+        });
+      } catch (error) {
+        console.error(`Error processing document ${doc.file_name}:`, error);
+      }
+    }
+    
+    return processedDocs;
+  }
+  
+  private buildContext(deal: any, documentContents: any[]): string {
     let context = `Business: ${deal.business_name}\n`;
     
     if (deal.description) {
@@ -304,11 +346,10 @@ export class BusinessDataExtractor {
     if (deal.annual_revenue) context += `Annual Revenue: $${deal.annual_revenue}\n`;
     if (deal.annual_profit) context += `Annual Profit: $${deal.annual_profit}\n`;
 
-    // Add document summaries if available
-    documents.forEach(doc => {
-      if (doc.description) {
-        context += `\nDocument (${doc.document_type}): ${doc.description}\n`;
-      }
+    // Add processed document content
+    context += '\n\nDocument Contents:\n';
+    documentContents.forEach(doc => {
+      context += `\n--- ${doc.name} ---\n${doc.content}\n`;
     });
 
     return context;

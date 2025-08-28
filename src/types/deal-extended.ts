@@ -244,6 +244,8 @@ export interface AIExtractionRequest {
   document_ids?: string[];
   extraction_type: 'full' | 'financial' | 'market' | 'operational' | 'legal';
   override_existing?: boolean;
+  website_url?: string;
+  progress_callback?: (stage: string) => void;
 }
 
 export interface AIExtractionResponse {

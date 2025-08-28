@@ -581,6 +581,7 @@ function DealDetail() {
                   try {
                     const extractor = new BusinessDataExtractor();
                     // Use the new extract method that handles both website and documents
+                    // The request already includes progress_callback from BusinessDetailsEditor
                     const result = await extractor.extract(request);
                     if (result.success) {
                       const updateResult = await dealsAdapter.updateDeal(id, result.extracted_fields);

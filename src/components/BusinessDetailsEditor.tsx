@@ -25,6 +25,7 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
   const [showExtractDialog, setShowExtractDialog] = useState(false);
   const [extractSource, setExtractSource] = useState<'website' | 'documents'>('website');
   const [websiteUrl, setWebsiteUrl] = useState(deal.website_url || '');
+  const [extractionProgress, setExtractionProgress] = useState<string>('');
 
   const toggleSection = (section: string) => {
     const newExpanded = new Set(expandedSections);
@@ -65,24 +66,29 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
           deal_id: deal.id,
           extraction_type: 'full',
           override_existing: false,
-          website_url: websiteUrl
+          website_url: websiteUrl,
+          progress_callback: (stage: string) => setExtractionProgress(stage)
         } as any);
       } else {
         // Extract from documents
         await onAIExtract({
           deal_id: deal.id,
           extraction_type: 'full',
-          override_existing: false
+          override_existing: false,
+          progress_callback: (stage: string) => setExtractionProgress(stage)
         });
       }
       
       setShowExtractDialog(false);
+      setExtractionProgress('');
       // Refresh form data after extraction
       window.location.reload(); // Simple refresh for now
     } catch (error) {
       console.error('Error extracting with AI:', error);
+      setExtractionProgress('');
     } finally {
       setIsExtracting(false);
+      setExtractionProgress('');
     }
   };
 
@@ -298,7 +304,7 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
                   {isExtracting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Extracting...</span>
+                      <span>{extractionProgress || 'Extracting...'}</span>
                     </>
                   ) : (
                     <>
@@ -308,6 +314,18 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
                   )}
                 </button>
               </div>
+              
+              {/* Progress indicator */}
+              {isExtracting && extractionProgress && (
+                <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                    <span className="text-sm text-purple-700 dark:text-purple-300">
+                      {extractionProgress}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
