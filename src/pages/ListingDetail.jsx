@@ -18,9 +18,15 @@ import {
   Star,
   Users,
   Globe,
-  Loader2 
+  Loader2,
+  Brain,
+  RefreshCw,
+  AlertTriangle,
+  Target,
+  Lightbulb
 } from 'lucide-react';
 import { dealsAdapter } from '../lib/database-adapter';
+import AIAnalysisService from '../services/AIAnalysisService';
 
 function ListingDetail() {
   const { id } = useParams();
@@ -37,6 +43,10 @@ function ListingDetail() {
   const { showSuccess, showError } = useToast();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [isAddingToPipeline, setIsAddingToPipeline] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   
   const handleAddToPipeline = async () => {
     if (!isAuthenticated || !user) {
@@ -106,6 +116,41 @@ function ListingDetail() {
       showError('Failed to add listing to pipeline');
     } finally {
       setIsAddingToPipeline(false);
+    }
+  };
+
+  const handleGenerateAnalysis = async () => {
+    if (!listing) return;
+    
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setShowAnalysis(true);
+    
+    try {
+      const aiService = new AIAnalysisService();
+      const dealData = {
+        id: listing.id,
+        business_name: listing.business_name || listing.name,
+        category: listing.category,
+        industry: listing.industry,
+        asking_price: listing.asking_price,
+        annual_revenue: listing.annual_revenue,
+        annual_profit: listing.annual_profit,
+        monthly_revenue: listing.monthly_revenue,
+        monthly_profit: listing.monthly_profit,
+        business_age: listing.business_age_years,
+        location: `${listing.city || ''}, ${listing.state || ''}`.trim().replace(/^,\s*/, ''),
+        description: listing.description
+      };
+      
+      const report = await aiService.generateDealAnalysis(dealData);
+      setAiAnalysis(report);
+    } catch (error) {
+      console.error('Error generating AI analysis:', error);
+      setAnalysisError(error.message || 'Failed to generate analysis');
+      showError('Failed to generate AI analysis. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
   
@@ -342,6 +387,176 @@ function ListingDetail() {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* AI Analysis Section */}
+                <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-stone-100 flex items-center">
+                      <Brain className="w-5 h-5 mr-2 text-indigo-600" />
+                      AI Analysis
+                    </h2>
+                    {!showAnalysis ? (
+                      <button
+                        onClick={handleGenerateAnalysis}
+                        disabled={isAnalyzing}
+                        className="btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400 text-sm"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="w-4 h-4 mr-2" />
+                            Generate Analysis
+                          </>
+                        )}
+                      </button>
+                    ) : aiAnalysis && (
+                      <button
+                        onClick={handleGenerateAnalysis}
+                        disabled={isAnalyzing}
+                        className="btn bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-200 text-sm"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh
+                      </button>
+                    )}
+                  </div>
+
+                  {!showAnalysis && !isAnalyzing && (
+                    <div className="text-center py-8">
+                      <Brain className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 dark:text-gray-400 mb-2">
+                        Get AI-powered insights about this business opportunity
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-500">
+                        Our AI will analyze market conditions, competition, and growth potential
+                      </p>
+                    </div>
+                  )}
+
+                  {isAnalyzing && (
+                    <div className="text-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-3" />
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Generating comprehensive analysis...
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                        This may take a few moments
+                      </p>
+                    </div>
+                  )}
+
+                  {analysisError && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+                        <p className="text-red-800 dark:text-red-200">
+                          {analysisError}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {aiAnalysis && showAnalysis && (
+                    <div className="space-y-6">
+                      {/* Summary */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Executive Summary</h3>
+                        <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                          {aiAnalysis.summary}
+                        </p>
+                      </div>
+
+                      {/* Opportunity Score */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Opportunity Score</h3>
+                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
+                              {aiAnalysis.opportunityScore.overall}/100
+                            </span>
+                            <Target className="w-6 h-6 text-indigo-600" />
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            {aiAnalysis.opportunityScore.reasoning}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Financial:</span>
+                              <span className="font-medium">{aiAnalysis.opportunityScore.breakdown.financial}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Market:</span>
+                              <span className="font-medium">{aiAnalysis.opportunityScore.breakdown.market}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Growth:</span>
+                              <span className="font-medium">{aiAnalysis.opportunityScore.breakdown.growth}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Risk:</span>
+                              <span className="font-medium">{aiAnalysis.opportunityScore.breakdown.risk}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Key Insights Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Growth Opportunities */}
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                            <TrendingUp className="w-4 h-4 mr-1 text-green-600" />
+                            Growth Opportunities
+                          </h3>
+                          <ul className="space-y-1">
+                            {aiAnalysis.growthOpportunities.slice(0, 3).map((opportunity, index) => (
+                              <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start">
+                                <span className="text-green-500 mr-2">•</span>
+                                {opportunity}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Risk Factors */}
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                            <AlertTriangle className="w-4 h-4 mr-1 text-amber-600" />
+                            Risk Factors
+                          </h3>
+                          <ul className="space-y-1">
+                            {aiAnalysis.riskFactors.slice(0, 3).map((risk, index) => (
+                              <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start">
+                                <span className="text-amber-500 mr-2">•</span>
+                                {risk}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* Recommendations */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                          <Lightbulb className="w-4 h-4 mr-1 text-indigo-600" />
+                          Key Recommendations
+                        </h3>
+                        <ul className="space-y-1">
+                          {aiAnalysis.recommendations.slice(0, 3).map((rec, index) => (
+                            <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start">
+                              <span className="text-indigo-500 mr-2">→</span>
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Amazon Metrics - Hidden until we have real data */}
