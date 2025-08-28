@@ -169,15 +169,6 @@ function Footer() {
                   support@bizhunter.ai
                 </a>
               </li>
-              <li className="flex items-start space-x-3">
-                <Phone className="w-4 h-4 text-gray-400 mt-0.5" />
-                <a 
-                  href="tel:+1-555-123-4567" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                >
-                  +1 (555) 123-4567
-                </a>
-              </li>
             </ul>
           </div>
         </div>
