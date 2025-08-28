@@ -21,13 +21,16 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  Brain
+  Brain,
+  Database
 } from 'lucide-react';
 import { dealsAdapter } from '../lib/database-adapter';
 import { auth } from '../lib/firebase';
 import DealTasks from '../partials/deals/DealTasks';
 import DealFiles from '../partials/deals/DealFiles';
 import DealAnalysis from '../partials/deals/DealAnalysis';
+import BusinessDetailsEditor from '../components/BusinessDetailsEditor';
+import { BusinessDataExtractor } from '../services/BusinessDataExtractor';
 
 function DealDetail() {
   const { id } = useParams();
@@ -76,6 +79,44 @@ function DealDetail() {
     }
   };
   
+  const calculateCompleteness = (dealData) => {
+    let score = 0;
+    let totalFields = 0;
+    let filledFields = 0;
+
+    // Critical fields (weighted 2x)
+    const criticalFields = ['business_name', 'asking_price', 'annual_revenue', 'annual_profit'];
+    criticalFields.forEach(field => {
+      totalFields += 2;
+      if (dealData[field]) filledFields += 2;
+    });
+
+    // Important fields
+    const importantFields = [
+      'brand_name', 'website_url', 'employee_count', 'gross_margin',
+      'customer_retention_rate', 'market_size', 'revenue_model',
+      'industry', 'category', 'location', 'description'
+    ];
+    importantFields.forEach(field => {
+      totalFields += 1;
+      if (dealData[field]) filledFields += 1;
+    });
+
+    // JSON fields
+    if (dealData.social_media && Object.keys(dealData.social_media).length > 0) {
+      filledFields += 1;
+    }
+    totalFields += 1;
+
+    if (dealData.marketing_channels && dealData.marketing_channels.length > 0) {
+      filledFields += 1;
+    }
+    totalFields += 1;
+
+    score = Math.round((filledFields / totalFields) * 100);
+    return score;
+  };
+
   const handleDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this deal?')) {
       return;
@@ -241,6 +282,7 @@ function DealDetail() {
               <nav className="-mb-px flex space-x-8">
                 {[
                   { id: 'overview', label: 'Overview', icon: Building2 },
+                  { id: 'details', label: 'Business Details', icon: Database },
                   { id: 'analysis', label: 'AI Analysis', icon: Brain },
                   { id: 'tasks', label: 'Tasks', icon: CheckCircle },
                   { id: 'documents', label: 'Documents', icon: FileText },
@@ -273,6 +315,72 @@ function DealDetail() {
                 
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-8">
+                  
+                  {/* Data Completeness Alert */}
+                  {(() => {
+                    const completeness = calculateCompleteness(deal);
+                    const isLow = completeness < 40;
+                    const isMedium = completeness >= 40 && completeness < 70;
+                    const isHigh = completeness >= 70;
+                    
+                    return (
+                      <div className={`rounded-lg p-4 border ${
+                        isHigh ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' :
+                        isMedium ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800' :
+                        'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Database className={`h-5 w-5 ${
+                              isHigh ? 'text-green-600' :
+                              isMedium ? 'text-yellow-600' :
+                              'text-orange-600'
+                            }`} />
+                            <div>
+                              <h3 className={`font-medium ${
+                                isHigh ? 'text-green-900 dark:text-green-100' :
+                                isMedium ? 'text-yellow-900 dark:text-yellow-100' :
+                                'text-orange-900 dark:text-orange-100'
+                              }`}>
+                                Data Completeness: {completeness}%
+                              </h3>
+                              <p className={`text-sm mt-1 ${
+                                isHigh ? 'text-green-700 dark:text-green-300' :
+                                isMedium ? 'text-yellow-700 dark:text-yellow-300' :
+                                'text-orange-700 dark:text-orange-300'
+                              }`}>
+                                {isHigh ? 'Excellent data quality for AI analysis' :
+                                 isMedium ? 'Good data, but adding more details will improve analysis' :
+                                 'Limited data available - add more details for better insights'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setActiveTab('details')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                              isHigh ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-800 dark:text-green-200' :
+                              isMedium ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-800 dark:text-yellow-200' :
+                              'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-800 dark:text-orange-200'
+                            }`}
+                          >
+                            {isHigh ? 'View Details' : 'Add Details'}
+                          </button>
+                        </div>
+                        <div className="mt-3">
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full transition-all duration-500 ${
+                                isHigh ? 'bg-green-500' :
+                                isMedium ? 'bg-yellow-500' :
+                                'bg-orange-500'
+                              }`}
+                              style={{ width: `${completeness}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   {/* Key Metrics */}
                   <div className="bg-white dark:bg-stone-800 rounded-lg shadow-sm border border-gray-200 dark:border-stone-700 p-6">
@@ -453,6 +561,43 @@ function DealDetail() {
                   </div>
                 </div>
               </div>
+            )}
+            
+            {activeTab === 'details' && deal && (
+              <BusinessDetailsEditor 
+                deal={deal}
+                onUpdate={async (updates) => {
+                  try {
+                    const result = await dealsAdapter.updateDeal(id, updates);
+                    if (result.error) throw result.error;
+                    setDeal({...deal, ...updates});
+                    showSuccess('Business details updated successfully');
+                  } catch (error) {
+                    console.error('Error updating business details:', error);
+                    showError('Failed to update business details');
+                  }
+                }}
+                onAIExtract={async (request) => {
+                  try {
+                    const extractor = new BusinessDataExtractor();
+                    const result = await extractor.extractFromDocuments(request);
+                    if (result.success) {
+                      const updateResult = await dealsAdapter.updateDeal(id, result.extracted_fields);
+                      if (updateResult.error) throw updateResult.error;
+                      setDeal({...deal, ...result.extracted_fields});
+                      showSuccess(`Extracted ${Object.keys(result.extracted_fields).length} fields with AI`);
+                      if (result.warnings && result.warnings.length > 0) {
+                        console.warn('AI extraction warnings:', result.warnings);
+                      }
+                    } else {
+                      throw new Error(result.errors?.join(', ') || 'AI extraction failed');
+                    }
+                  } catch (error) {
+                    console.error('Error with AI extraction:', error);
+                    showError('Failed to extract data with AI');
+                  }
+                }}
+              />
             )}
             
             {activeTab === 'analysis' && deal && (

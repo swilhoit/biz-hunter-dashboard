@@ -202,12 +202,36 @@ class AIAnalysisService {
   }
 
   private async analyzeCompetition(deal: DealData): Promise<CompetitiveAnalysis> {
-    const prompt = `
+    // Build comprehensive context including extended fields
+    let competitiveContext = `
       Analyze the competitive landscape for this business:
       - Business: ${deal.business_name}
+      - Brand Name: ${(deal as any).brand_name || deal.business_name}
+      - Website: ${(deal as any).website_url || 'Not specified'}
       - Industry/Category: ${deal.category || deal.industry || 'General Business'}
       - Annual Revenue: $${deal.annual_revenue?.toLocaleString() || 'N/A'}
       - Location: ${deal.location || 'Not specified'}
+    `;
+    
+    // Add market data if available
+    if ((deal as any).market_size) {
+      competitiveContext += `\n      - Market Size: $${(deal as any).market_size.toLocaleString()}`;
+    }
+    if ((deal as any).market_share) {
+      competitiveContext += `\n      - Market Share: ${(deal as any).market_share}%`;
+    }
+    
+    // Add existing competitors if known
+    if ((deal as any).competitors?.length > 0) {
+      competitiveContext += `\n      - Known Competitors: ${(deal as any).competitors.map((c: any) => c.name).join(', ')}`;
+    }
+    
+    // Add marketing channels for competitive insight
+    if ((deal as any).marketing_channels?.length > 0) {
+      competitiveContext += `\n      - Marketing Channels: ${(deal as any).marketing_channels.join(', ')}`;
+    }
+    
+    const prompt = competitiveContext + `
       
       Provide a JSON response with:
       1. Top 3 potential competitors (name, marketPosition, strengths array, threats array)
@@ -216,7 +240,7 @@ class AIAnalysisService {
       4. Critical risks array (if any)
       5. Red flags array (if any)
       
-      Focus on general business competition, not platform-specific.
+      Consider the business's digital presence, marketing channels, and market position in your analysis.
     `;
 
     const response = await this.callOpenAI([
@@ -443,20 +467,46 @@ class AIAnalysisService {
   }
 
   private calculateConfidenceLevel(deal: DealData): number {
-    let confidence = 50; // Base confidence
+    let confidence = 40; // Base confidence
     
-    // Increase confidence based on available data
+    // Critical data (high weight)
     if (deal.annual_revenue) confidence += 10;
     if (deal.annual_profit) confidence += 10;
-    if (deal.business_age) confidence += 5;
-    if (deal.description) confidence += 5;
-    if (deal.location) confidence += 5;
-    if (deal.category || deal.industry) confidence += 5;
+    if (deal.asking_price) confidence += 5;
     
-    // Penalize missing critical data
-    if (!deal.annual_revenue || !deal.annual_profit) confidence -= 15;
+    // Important business identity
+    if ((deal as any).brand_name) confidence += 3;
+    if ((deal as any).website_url) confidence += 3;
+    if (deal.business_age) confidence += 3;
+    if (deal.description) confidence += 3;
+    if (deal.location) confidence += 2;
+    if (deal.category || deal.industry) confidence += 3;
     
-    return Math.min(90, Math.max(30, confidence));
+    // Extended financial metrics
+    if ((deal as any).gross_margin) confidence += 3;
+    if ((deal as any).customer_acquisition_cost) confidence += 2;
+    if ((deal as any).customer_lifetime_value) confidence += 2;
+    if ((deal as any).revenue_model) confidence += 2;
+    
+    // Market data
+    if ((deal as any).market_size) confidence += 3;
+    if ((deal as any).competitors?.length > 0) confidence += 3;
+    if ((deal as any).marketing_channels?.length > 0) confidence += 2;
+    
+    // Customer metrics
+    if ((deal as any).total_customers) confidence += 2;
+    if ((deal as any).customer_retention_rate) confidence += 3;
+    
+    // Operational data
+    if ((deal as any).employee_count) confidence += 2;
+    if ((deal as any).key_employees?.length > 0) confidence += 2;
+    
+    // Digital presence
+    if ((deal as any).social_media && Object.keys((deal as any).social_media).length > 0) confidence += 2;
+    if ((deal as any).online_reviews) confidence += 2;
+    
+    // Cap at realistic maximum
+    return Math.min(95, Math.max(20, confidence));
   }
 
   // Static methods for backward compatibility

@@ -13,23 +13,10 @@ import {
   DollarSign
 } from 'lucide-react';
 import AIAnalysisService from '../../services/AIAnalysisService';
+import { ExtendedDeal } from '../../types/deal-extended';
 
 interface DealAnalysisProps {
-  deal: {
-    id: string;
-    business_name: string;
-    category?: string;
-    industry?: string;
-    asking_price: number;
-    annual_revenue: number;
-    annual_profit: number;
-    monthly_revenue?: number;
-    monthly_profit?: number;
-    business_age?: number;
-    location?: string;
-    description?: string;
-    [key: string]: unknown;
-  };
+  deal: ExtendedDeal | any; // Support both extended and basic deal types
 }
 
 interface AnalysisReport {
@@ -93,6 +80,35 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
   const generateAnalysis = async () => {
     if (!deal) return;
     
+    // Check for critical data required for basic analysis
+    const hasCriticalData = 
+      deal.annual_revenue && 
+      deal.annual_profit && 
+      deal.asking_price &&
+      (deal.business_name || deal.category || deal.industry);
+    
+    // Check for comprehensive data that enhances analysis quality
+    const hasComprehensiveData = hasCriticalData && (
+      deal.website_url ||
+      deal.brand_name ||
+      deal.market_size ||
+      deal.competitors?.length > 0 ||
+      deal.marketing_channels?.length > 0 ||
+      deal.customer_retention_rate ||
+      deal.gross_margin ||
+      deal.employee_count
+    );
+    
+    if (!hasCriticalData) {
+      setError('Insufficient data for AI analysis. Please ensure the deal has annual revenue, annual profit, asking price, and business information. Click "Edit Details" to add more data or use AI Auto-Fill.');
+      return;
+    }
+    
+    // Warn if data is minimal but proceed with analysis
+    if (!hasComprehensiveData) {
+      console.warn('Limited business data available. Analysis quality may be reduced. Consider adding more business details for better insights.');
+    }
+    
     setLoading(true);
     setError(null);
     setLoadingStage('Initializing analysis...');
@@ -143,18 +159,40 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
   }
 
   if (error) {
+    const isInsufficientData = error.includes('Insufficient data');
     return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+      <div className={`${isInsufficientData ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'} border rounded-lg p-6`}>
         <div className="flex items-center mb-4">
-          <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-          <h3 className="text-lg font-medium text-red-800 dark:text-red-200">Analysis Error</h3>
+          <AlertTriangle className={`h-5 w-5 ${isInsufficientData ? 'text-yellow-600' : 'text-red-600'} mr-2`} />
+          <h3 className={`text-lg font-medium ${isInsufficientData ? 'text-yellow-800 dark:text-yellow-200' : 'text-red-800 dark:text-red-200'}`}>
+            {isInsufficientData ? 'Insufficient Data' : 'Analysis Error'}
+          </h3>
         </div>
-        <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
+        <p className={`${isInsufficientData ? 'text-yellow-700 dark:text-yellow-300' : 'text-red-700 dark:text-red-300'} mb-4`}>{error}</p>
+        {isInsufficientData && (
+          <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-md">
+            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Required Data Fields:</h4>
+            <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <li className={deal.annual_revenue ? 'text-green-600' : 'text-red-600'}>
+                {deal.annual_revenue ? '✓' : '✗'} Annual Revenue
+              </li>
+              <li className={deal.annual_profit ? 'text-green-600' : 'text-red-600'}>
+                {deal.annual_profit ? '✓' : '✗'} Annual Profit
+              </li>
+              <li className={deal.asking_price ? 'text-green-600' : 'text-red-600'}>
+                {deal.asking_price ? '✓' : '✗'} Asking Price
+              </li>
+              <li className={(deal.business_name || deal.category || deal.industry) ? 'text-green-600' : 'text-red-600'}>
+                {(deal.business_name || deal.category || deal.industry) ? '✓' : '✗'} Business Information (Name, Category, or Industry)
+              </li>
+            </ul>
+          </div>
+        )}
         <button
           onClick={generateAnalysis}
-          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+          className={`mt-4 ${isInsufficientData ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'} text-white px-4 py-2 rounded-md transition-colors`}
         >
-          Retry Analysis
+          {isInsufficientData ? 'Check Again' : 'Retry Analysis'}
         </button>
       </div>
     );
@@ -249,30 +287,30 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         </div>
         
         {/* Major Concerns and Deal Breakers */}
-        {(analysis.opportunityScore.majorConcerns?.length > 0 || analysis.opportunityScore.dealBreakers?.length > 0) && (
+        {((analysis.opportunityScore.majorConcerns?.length ?? 0) > 0 || (analysis.opportunityScore.dealBreakers?.length ?? 0) > 0) && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {analysis.opportunityScore.majorConcerns?.length > 0 && (
+            {(analysis.opportunityScore.majorConcerns?.length ?? 0) > 0 && (
               <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Major Concerns
                 </h5>
                 <ul className="space-y-1">
-                  {analysis.opportunityScore.majorConcerns.map((concern, index) => (
+                  {analysis.opportunityScore.majorConcerns?.map((concern, index) => (
                     <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {concern}</li>
                   ))}
                 </ul>
               </div>
             )}
             
-            {analysis.opportunityScore.dealBreakers?.length > 0 && (
+            {(analysis.opportunityScore.dealBreakers?.length ?? 0) > 0 && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                 <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Potential Deal Breakers
                 </h5>
                 <ul className="space-y-1">
-                  {analysis.opportunityScore.dealBreakers.map((breaker, index) => (
+                  {analysis.opportunityScore.dealBreakers?.map((breaker, index) => (
                     <li key={index} className="text-sm text-red-700 dark:text-red-300">• {breaker}</li>
                   ))}
                 </ul>
@@ -337,30 +375,30 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
         </div>
         
         {/* Critical Risks and Red Flags from Competitive Analysis */}
-        {(analysis.competitiveAnalysis.criticalRisks?.length > 0 || analysis.competitiveAnalysis.redFlags?.length > 0) && (
+        {((analysis.competitiveAnalysis.criticalRisks?.length ?? 0) > 0 || (analysis.competitiveAnalysis.redFlags?.length ?? 0) > 0) && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {analysis.competitiveAnalysis.criticalRisks?.length > 0 && (
+            {(analysis.competitiveAnalysis.criticalRisks?.length ?? 0) > 0 && (
               <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <h5 className="font-medium text-orange-800 dark:text-orange-200 mb-2 flex items-center">
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Critical Market Risks
                 </h5>
                 <ul className="space-y-1">
-                  {analysis.competitiveAnalysis.criticalRisks.map((risk, index) => (
+                  {analysis.competitiveAnalysis.criticalRisks?.map((risk, index) => (
                     <li key={index} className="text-sm text-orange-700 dark:text-orange-300">• {risk}</li>
                   ))}
                 </ul>
               </div>
             )}
             
-            {analysis.competitiveAnalysis.redFlags?.length > 0 && (
+            {(analysis.competitiveAnalysis.redFlags?.length ?? 0) > 0 && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                 <h5 className="font-medium text-red-800 dark:text-red-200 mb-2 flex items-center">
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Red Flags
                 </h5>
                 <ul className="space-y-1">
-                  {analysis.competitiveAnalysis.redFlags.map((flag, index) => (
+                  {analysis.competitiveAnalysis.redFlags?.map((flag, index) => (
                     <li key={index} className="text-sm text-red-700 dark:text-red-300">• {flag}</li>
                   ))}
                 </ul>
@@ -478,7 +516,7 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
       </div>
 
       {/* Due Diligence Priorities */}
-      {analysis.dueDiligencePriorities?.length > 0 && (
+      {(analysis.dueDiligencePriorities?.length ?? 0) > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
             <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
@@ -487,7 +525,7 @@ function DealAnalysis({ deal }: DealAnalysisProps) {
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">Critical items to verify before proceeding:</p>
             <ul className="space-y-2">
-              {analysis.dueDiligencePriorities.map((priority, index) => (
+              {analysis.dueDiligencePriorities?.map((priority, index) => (
                 <li key={index} className="text-sm text-yellow-700 dark:text-yellow-300 flex items-start">
                   <span className="font-bold mr-2">{index + 1}.</span>
                   {priority}
