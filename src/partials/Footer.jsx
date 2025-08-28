@@ -1,10 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Building2, 
+  Crosshair, 
   Mail, 
-  Phone, 
-  MapPin,
+  Phone,
   Linkedin,
   Twitter,
   Facebook,
@@ -24,9 +23,9 @@ function Footer() {
           {/* Company Info */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <Building2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+              <Crosshair className="w-6 h-6 text-orange-500" />
               <span className="text-xl font-bold text-gray-900 dark:text-white">
-                BizHunter.ai
+                bizhunter.ai
               </span>
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -37,7 +36,7 @@ function Footer() {
                 href="https://linkedin.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                className="text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 aria-label="LinkedIn"
               >
                 <Linkedin className="w-5 h-5" />
@@ -46,7 +45,7 @@ function Footer() {
                 href="https://twitter.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                className="text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 aria-label="Twitter"
               >
                 <Twitter className="w-5 h-5" />
@@ -55,7 +54,7 @@ function Footer() {
                 href="https://facebook.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                className="text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 aria-label="Facebook"
               >
                 <Facebook className="w-5 h-5" />
@@ -64,7 +63,7 @@ function Footer() {
                 href="https://instagram.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                className="text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 aria-label="Instagram"
               >
                 <Instagram className="w-5 h-5" />
@@ -81,7 +80,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/listings" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Browse Listings
                 </Link>
@@ -89,7 +88,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/deals" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Deal Pipeline
                 </Link>
@@ -97,7 +96,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/pricing" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Pricing
                 </Link>
@@ -105,7 +104,7 @@ function Footer() {
               <li>
                 <a 
                   href="/api-docs" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors inline-flex items-center"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-flex items-center"
                 >
                   API Documentation
                   <ExternalLink className="w-3 h-3 ml-1" />
@@ -123,7 +122,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/help" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Help Center
                 </Link>
@@ -131,7 +130,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/guides" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Buyer's Guide
                 </Link>
@@ -139,7 +138,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/blog" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Blog
                 </Link>
@@ -147,7 +146,7 @@ function Footer() {
               <li>
                 <Link 
                   to="/contact" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   Contact Support
                 </Link>
@@ -165,7 +164,7 @@ function Footer() {
                 <Mail className="w-4 h-4 text-gray-400 mt-0.5" />
                 <a 
                   href="mailto:support@bizhunter.ai" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   support@bizhunter.ai
                 </a>
@@ -174,17 +173,10 @@ function Footer() {
                 <Phone className="w-4 h-4 text-gray-400 mt-0.5" />
                 <a 
                   href="tel:+1-555-123-4567" 
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                 >
                   +1 (555) 123-4567
                 </a>
-              </li>
-              <li className="flex items-start space-x-3">
-                <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  San Francisco, CA<br />
-                  United States
-                </span>
               </li>
             </ul>
           </div>
@@ -196,14 +188,14 @@ function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="md:flex md:items-center md:justify-between">
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              © {currentYear} BizHunter.ai. All rights reserved.
+              © {currentYear} bizhunter.ai. All rights reserved.
             </div>
             <div className="mt-4 md:mt-0">
               <ul className="flex flex-wrap gap-4 text-sm">
                 <li>
                   <Link 
                     to="/privacy" 
-                    className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     Privacy Policy
                   </Link>
@@ -211,7 +203,7 @@ function Footer() {
                 <li>
                   <Link 
                     to="/terms" 
-                    className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     Terms of Service
                   </Link>
@@ -219,7 +211,7 @@ function Footer() {
                 <li>
                   <Link 
                     to="/cookies" 
-                    className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     Cookie Policy
                   </Link>
@@ -227,7 +219,7 @@ function Footer() {
                 <li>
                   <Link 
                     to="/sitemap" 
-                    className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
                   >
                     Sitemap
                   </Link>
