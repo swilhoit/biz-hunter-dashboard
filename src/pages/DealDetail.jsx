@@ -84,11 +84,19 @@ function DealDetail() {
     let totalFields = 0;
     let filledFields = 0;
 
+    // Helper function to check if a field has meaningful data
+    const hasValue = (value) => {
+      if (value === null || value === undefined || value === '') return false;
+      if (typeof value === 'number') return value > 0;
+      if (typeof value === 'string') return value.trim().length > 0;
+      return true;
+    };
+
     // Critical fields (weighted 2x)
     const criticalFields = ['business_name', 'asking_price', 'annual_revenue', 'annual_profit'];
     criticalFields.forEach(field => {
       totalFields += 2;
-      if (dealData[field]) filledFields += 2;
+      if (hasValue(dealData[field])) filledFields += 2;
     });
 
     // Important fields
@@ -99,16 +107,17 @@ function DealDetail() {
     ];
     importantFields.forEach(field => {
       totalFields += 1;
-      if (dealData[field]) filledFields += 1;
+      if (hasValue(dealData[field])) filledFields += 1;
     });
 
-    // JSON fields
-    if (dealData.social_media && Object.keys(dealData.social_media).length > 0) {
-      filledFields += 1;
+    // JSON fields - check for actual content
+    if (dealData.social_media && typeof dealData.social_media === 'object') {
+      const hasSocialLinks = Object.values(dealData.social_media).some(url => hasValue(url));
+      if (hasSocialLinks) filledFields += 1;
     }
     totalFields += 1;
 
-    if (dealData.marketing_channels && dealData.marketing_channels.length > 0) {
+    if (Array.isArray(dealData.marketing_channels) && dealData.marketing_channels.length > 0) {
       filledFields += 1;
     }
     totalFields += 1;

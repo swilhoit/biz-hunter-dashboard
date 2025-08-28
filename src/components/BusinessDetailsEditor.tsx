@@ -97,11 +97,19 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
     let totalFields = 0;
     let filledFields = 0;
 
+    // Helper function to check if a field has meaningful data
+    const hasValue = (value: any): boolean => {
+      if (value === null || value === undefined || value === '') return false;
+      if (typeof value === 'number') return value > 0;
+      if (typeof value === 'string') return value.trim().length > 0;
+      return true;
+    };
+
     // Critical fields (weighted 2x)
     const criticalFields = ['business_name', 'asking_price', 'annual_revenue', 'annual_profit'];
     criticalFields.forEach(field => {
       totalFields += 2;
-      if (formData[field as keyof ExtendedDeal]) filledFields += 2;
+      if (hasValue(formData[field as keyof ExtendedDeal])) filledFields += 2;
     });
 
     // Important fields
@@ -111,16 +119,17 @@ export default function BusinessDetailsEditor({ deal, onUpdate, onAIExtract }: B
     ];
     importantFields.forEach(field => {
       totalFields += 1;
-      if (formData[field as keyof ExtendedDeal]) filledFields += 1;
+      if (hasValue(formData[field as keyof ExtendedDeal])) filledFields += 1;
     });
 
-    // JSON fields
-    if (formData.social_media && Object.keys(formData.social_media).length > 0) {
-      filledFields += 1;
+    // JSON fields - check for actual content
+    if (formData.social_media && typeof formData.social_media === 'object') {
+      const hasSocialLinks = Object.values(formData.social_media).some(url => hasValue(url));
+      if (hasSocialLinks) filledFields += 1;
     }
     totalFields += 1;
 
-    if (formData.marketing_channels && formData.marketing_channels.length > 0) {
+    if (Array.isArray(formData.marketing_channels) && formData.marketing_channels.length > 0) {
       filledFields += 1;
     }
     totalFields += 1;
