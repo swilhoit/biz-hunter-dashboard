@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAuth } from '../contexts/AuthContext';
+import { LayoutGrid, Table } from 'lucide-react';
 
 import Header from '../partials/Header';
 import Footer from '../partials/Footer';
 import PipelineColumn from '../partials/deals/PipelineColumn';
 import DealCard from '../partials/deals/DealCard';
+import DealTable from '../partials/deals/DealTable';
 import PipelineStats from '../partials/deals/PipelineStats';
 import { databaseAdapter } from '../lib/database-adapter';
 
@@ -29,6 +31,7 @@ function DealPipeline() {
   const [activeId, setActiveId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('kanban'); // 'kanban' or 'table'
   const { user } = useAuth();
 
   // Load user's deals on component mount
@@ -181,6 +184,35 @@ function DealPipeline() {
     }
   };
 
+  const handleStatusChange = async (dealId, newStatus) => {
+    try {
+      // Optimistically update the UI
+      setDeals(prevDeals =>
+        prevDeals.map(deal =>
+          deal.id === dealId
+            ? { ...deal, status: newStatus }
+            : deal
+        )
+      );
+
+      // Persist to database
+      const result = await databaseAdapter.updateDeal(dealId, { status: newStatus });
+      
+      if (result.error) {
+        console.error('Failed to update deal status:', result.error);
+        // Reload deals to get correct state
+        const refreshResult = await databaseAdapter.getUserDeals(user.uid);
+        if (!refreshResult.error) {
+          setDeals(refreshResult.data || []);
+        }
+        throw new Error(result.error.message || 'Failed to update deal status');
+      }
+    } catch (error) {
+      console.error('Error updating deal status:', error);
+      throw error;
+    }
+  };
+
   const activeDeal = activeId ? deals.find(deal => deal.id === activeId) : null;
 
   return (
@@ -197,6 +229,32 @@ function DealPipeline() {
               </div>
 
               <div className="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
+                {/* View Mode Toggle */}
+                <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                  <button
+                    onClick={() => setViewMode('kanban')}
+                    className={`px-3 py-2 text-sm font-medium rounded-l-lg flex items-center gap-2 transition-colors ${
+                      viewMode === 'kanban'
+                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-800'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span>Kanban</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`px-3 py-2 text-sm font-medium rounded-r-lg flex items-center gap-2 transition-colors ${
+                      viewMode === 'table'
+                        ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-800'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    <Table className="w-4 h-4" />
+                    <span>Table</span>
+                  </button>
+                </div>
+
                 <button className="btn bg-gray-900 text-gray-100 hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-800 dark:hover:bg-white">
                   <svg className="fill-current shrink-0 mr-2" width="16" height="16" viewBox="0 0 16 16">
                     <path d="M15 7H9V1c0-.6-.4-1-1-1S7 .4 7 1v6H1c-.6 0-1 .4-1 1s.4 1 1 1h6v6c0 .6.4 1 1 1s1-.4 1-1V9h6c.6 0 1-.4 1-1s-.4-1-1-1z" />
@@ -233,30 +291,41 @@ function DealPipeline() {
                 {/* Pipeline Stats */}
                 <PipelineStats deals={deals} />
 
-                {/* Pipeline Board */}
-                <DndContext
-                  collisionDetection={closestCorners}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                >
-                  <div className="flex gap-4 overflow-x-auto pb-4">
-                    <SortableContext items={dealStages.map(stage => stage.status)} strategy={horizontalListSortingStrategy}>
-                      {dealStages.map(stage => (
-                        <PipelineColumn
-                          key={stage.status}
-                          stage={stage}
-                          deals={deals.filter(deal => deal.status === stage.status)}
-                          onEditDeal={handleEditDeal}
-                          onDeleteDeal={handleDeleteDeal}
-                        />
-                      ))}
-                    </SortableContext>
-                  </div>
+                {/* View Mode Content */}
+                {viewMode === 'kanban' ? (
+                  /* Kanban Board View */
+                  <DndContext
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <div className="flex gap-4 overflow-x-auto pb-4">
+                      <SortableContext items={dealStages.map(stage => stage.status)} strategy={horizontalListSortingStrategy}>
+                        {dealStages.map(stage => (
+                          <PipelineColumn
+                            key={stage.status}
+                            stage={stage}
+                            deals={deals.filter(deal => deal.status === stage.status)}
+                            onEditDeal={handleEditDeal}
+                            onDeleteDeal={handleDeleteDeal}
+                          />
+                        ))}
+                      </SortableContext>
+                    </div>
 
-                  <DragOverlay>
-                    {activeDeal ? <DealCard deal={activeDeal} isDragging /> : null}
-                  </DragOverlay>
-                </DndContext>
+                    <DragOverlay>
+                      {activeDeal ? <DealCard deal={activeDeal} isDragging /> : null}
+                    </DragOverlay>
+                  </DndContext>
+                ) : (
+                  /* Table View */
+                  <DealTable
+                    deals={deals}
+                    onEditDeal={handleEditDeal}
+                    onDeleteDeal={handleDeleteDeal}
+                    onStatusChange={handleStatusChange}
+                  />
+                )}
               </>
             )}
           </div>
