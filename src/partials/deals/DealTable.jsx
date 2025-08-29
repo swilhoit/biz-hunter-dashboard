@@ -1,9 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp, Edit2, Trash2, ExternalLink, MoreVertical } from 'lucide-react';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import IconButton from '@mui/material/IconButton';
 
 const statusColors = {
   prospecting: 'bg-gray-100 text-gray-800',
@@ -30,8 +27,8 @@ const statusLabels = {
 function DealTable({ deals, onEditDeal, onDeleteDeal, onStatusChange }) {
   const [sortField, setSortField] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [selectedDeal, setSelectedDeal] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const menuRefs = useRef({});
 
   // Sort deals
   const sortedDeals = [...deals].sort((a, b) => {
@@ -84,37 +81,43 @@ function DealTable({ deals, onEditDeal, onDeleteDeal, onStatusChange }) {
     });
   };
 
-  const handleMenuOpen = (event, deal) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedDeal(deal);
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openMenuId && menuRefs.current[openMenuId] && !menuRefs.current[openMenuId].contains(event.target)) {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuId]);
+
+  const toggleMenu = (dealId) => {
+    setOpenMenuId(openMenuId === dealId ? null : dealId);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedDeal(null);
-  };
-
-  const handleStatusSelect = async (newStatus) => {
-    if (selectedDeal && onStatusChange) {
-      await onStatusChange(selectedDeal.id, newStatus);
+  const handleStatusSelect = async (dealId, newStatus) => {
+    if (onStatusChange) {
+      await onStatusChange(dealId, newStatus);
     }
-    handleMenuClose();
+    setOpenMenuId(null);
   };
 
-  const handleEdit = () => {
-    if (selectedDeal && onEditDeal) {
-      onEditDeal(selectedDeal);
+  const handleEdit = (deal) => {
+    if (onEditDeal) {
+      onEditDeal(deal);
     }
-    handleMenuClose();
+    setOpenMenuId(null);
   };
 
-  const handleDelete = () => {
-    if (selectedDeal && onDeleteDeal) {
+  const handleDelete = (dealId) => {
+    if (onDeleteDeal) {
       if (window.confirm('Are you sure you want to delete this deal?')) {
-        onDeleteDeal(selectedDeal.id);
+        onDeleteDeal(dealId);
       }
     }
-    handleMenuClose();
+    setOpenMenuId(null);
   };
 
   const SortIcon = ({ field }) => {
@@ -275,13 +278,51 @@ function DealTable({ deals, onEditDeal, onDeleteDeal, onStatusChange }) {
                   {formatDate(deal.created_at)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => handleMenuOpen(e, deal)}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </IconButton>
+                  <div className="relative" ref={el => menuRefs.current[deal.id] = el}>
+                    <button
+                      onClick={() => toggleMenu(deal.id)}
+                      className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+                    
+                    {openMenuId === deal.id && (
+                      <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50">
+                        <div className="py-1">
+                          <button
+                            onClick={() => handleEdit(deal)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Edit Deal
+                          </button>
+                          <button
+                            onClick={() => handleDelete(deal.id)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Deal
+                          </button>
+                          <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                          <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                            Change Status
+                          </div>
+                          {Object.entries(statusLabels).map(([value, label]) => (
+                            <button
+                              key={value}
+                              onClick={() => handleStatusSelect(deal.id, value)}
+                              className={`flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left ${
+                                deal.status === value ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-200'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${statusColors[value].split(' ')[0]}`} />
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -295,38 +336,6 @@ function DealTable({ deals, onEditDeal, onDeleteDeal, onStatusChange }) {
         )}
       </div>
 
-      {/* Actions Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-        PaperProps={{
-          className: 'dark:bg-gray-800 dark:text-gray-100',
-        }}
-      >
-        <MenuItem onClick={handleEdit} className="flex items-center gap-2">
-          <Edit2 className="w-4 h-4" />
-          Edit Deal
-        </MenuItem>
-        <MenuItem onClick={handleDelete} className="flex items-center gap-2 text-red-600 dark:text-red-400">
-          <Trash2 className="w-4 h-4" />
-          Delete Deal
-        </MenuItem>
-        <hr className="my-2 border-gray-200 dark:border-gray-700" />
-        <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
-          Change Status
-        </div>
-        {Object.entries(statusLabels).map(([value, label]) => (
-          <MenuItem
-            key={value}
-            onClick={() => handleStatusSelect(value)}
-            selected={selectedDeal?.status === value}
-          >
-            <span className={`w-2 h-2 rounded-full mr-2 ${statusColors[value].split(' ')[0]}`} />
-            {label}
-          </MenuItem>
-        ))}
-      </Menu>
     </div>
   );
 }
