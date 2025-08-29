@@ -82,50 +82,192 @@ function DealDetail() {
   };
   
   const calculateCompleteness = (dealData) => {
-    let score = 0;
-    let totalFields = 0;
-    let filledFields = 0;
+    let totalPoints = 0;
+    let earnedPoints = 0;
 
     // Helper function to check if a field has meaningful data
     const hasValue = (value) => {
       if (value === null || value === undefined || value === '') return false;
       if (typeof value === 'number') return value > 0;
       if (typeof value === 'string') return value.trim().length > 0;
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'object') return Object.keys(value).length > 0;
       return true;
     };
 
-    // Critical fields (weighted 2x)
-    const criticalFields = ['business_name', 'asking_price', 'annual_revenue', 'annual_profit'];
-    criticalFields.forEach(field => {
-      totalFields += 2;
-      if (hasValue(dealData[field])) filledFields += 2;
+    // Helper to check complex objects
+    const hasComplexValue = (obj) => {
+      if (!obj || typeof obj !== 'object') return false;
+      return Object.values(obj).some(v => hasValue(v));
+    };
+
+    // Critical Business Info (30 points total - these are essential)
+    const criticalFields = {
+      'business_name': 5,
+      'asking_price': 5,
+      'annual_revenue': 5,
+      'annual_profit': 5,
+      'industry': 3,
+      'location': 3,
+      'description': 4
+    };
+    
+    Object.entries(criticalFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
     });
 
-    // Important fields
-    const importantFields = [
-      'brand_name', 'website_url', 'employee_count', 'gross_margin',
-      'customer_retention_rate', 'market_size', 'revenue_model',
-      'industry', 'category', 'location', 'description'
+    // Financial Details (25 points)
+    const financialFields = {
+      'monthly_revenue': 2,
+      'monthly_profit': 2,
+      'ebitda': 3,
+      'sde': 3,
+      'gross_margin': 3,
+      'valuation_multiple': 2,
+      'inventory_value': 2,
+      'customer_acquisition_cost': 2,
+      'customer_lifetime_value': 2,
+      'monthly_burn_rate': 1,
+      'cash_on_hand': 1,
+      'accounts_receivable': 1,
+      'total_debt': 1
+    };
+    
+    Object.entries(financialFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
+
+    // Business Identity & Digital Presence (15 points)
+    const digitalFields = {
+      'website_url': 3,
+      'brand_name': 2,
+      'domain_authority': 1,
+      'founding_year': 1,
+      'year_established': 1,
+      'legal_entity_type': 1,
+      'ein_tax_id': 1
+    };
+    
+    Object.entries(digitalFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
+
+    // Social Media & Online Presence (5 points)
+    totalPoints += 5;
+    if (hasComplexValue(dealData.social_media)) {
+      const socialCount = Object.values(dealData.social_media || {}).filter(hasValue).length;
+      earnedPoints += Math.min(5, socialCount); // Cap at 5 points
+    }
+
+    // Online Reviews (5 points)
+    totalPoints += 5;
+    if (hasComplexValue(dealData.online_reviews)) {
+      earnedPoints += 5;
+    }
+
+    // Operations & Team (15 points)
+    const operationsFields = {
+      'employee_count': 3,
+      'contractors_count': 1,
+      'revenue_model': 2,
+      'support_training': 1,
+      'reason_for_sale': 2,
+      'seller_financing_available': 1,
+      'seller_involvement_required': 1
+    };
+    
+    Object.entries(operationsFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
+
+    // Arrays - check if populated (4 points each, 20 total)
+    const arrayFields = [
+      'marketing_channels',
+      'sales_channels',
+      'physical_locations',
+      'key_assets',
+      'technology_stack'
     ];
-    importantFields.forEach(field => {
-      totalFields += 1;
-      if (hasValue(dealData[field])) filledFields += 1;
+    
+    arrayFields.forEach(field => {
+      totalPoints += 4;
+      if (Array.isArray(dealData[field]) && dealData[field].length > 0) {
+        earnedPoints += 4;
+      }
     });
 
-    // JSON fields - check for actual content
-    if (dealData.social_media && typeof dealData.social_media === 'object') {
-      const hasSocialLinks = Object.values(dealData.social_media).some(url => hasValue(url));
-      if (hasSocialLinks) filledFields += 1;
-    }
-    totalFields += 1;
+    // Complex Objects (5 points each, 15 total)
+    const complexFields = [
+      'key_employees',
+      'competitors',
+      'licenses_permits'
+    ];
+    
+    complexFields.forEach(field => {
+      totalPoints += 5;
+      if (Array.isArray(dealData[field]) && dealData[field].length > 0) {
+        earnedPoints += 5;
+      }
+    });
 
-    if (Array.isArray(dealData.marketing_channels) && dealData.marketing_channels.length > 0) {
-      filledFields += 1;
-    }
-    totalFields += 1;
+    // Customer Metrics (10 points)
+    const customerFields = {
+      'total_customers': 2,
+      'customer_retention_rate': 2,
+      'customer_churn_rate': 1,
+      'net_promoter_score': 1,
+      'average_order_value': 1,
+      'purchase_frequency': 1,
+      'monthly_active_users': 1,
+      'customer_satisfaction_score': 1
+    };
+    
+    Object.entries(customerFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
 
-    score = Math.round((filledFields / totalFields) * 100);
-    return score;
+    // Market Analysis (10 points)
+    const marketFields = {
+      'market_size': 2,
+      'market_growth_rate': 2,
+      'market_share': 2,
+      'total_addressable_market': 2,
+      'serviceable_addressable_market': 1,
+      'serviceable_obtainable_market': 1
+    };
+    
+    Object.entries(marketFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
+
+    // Legal & Compliance (5 points)
+    const legalFields = {
+      'intellectual_property': 2,
+      'pending_litigation': 1,
+      'compliance_issues': 2
+    };
+    
+    Object.entries(legalFields).forEach(([field, points]) => {
+      totalPoints += points;
+      if (hasValue(dealData[field])) earnedPoints += points;
+    });
+
+    // Calculate percentage (total should be ~150 points)
+    const percentage = Math.round((earnedPoints / totalPoints) * 100);
+    
+    // Apply a more realistic curve - most deals will have 5-30% completion
+    // unless they're really well documented
+    if (percentage > 80) return percentage; // Exceptional documentation
+    if (percentage > 60) return Math.round(percentage * 0.8); // Very good
+    if (percentage > 40) return Math.round(percentage * 0.6); // Good
+    if (percentage > 20) return Math.round(percentage * 0.4); // Basic
+    return Math.round(percentage * 0.3); // Minimal
   };
 
   const handleDelete = async () => {
